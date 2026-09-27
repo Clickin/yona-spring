@@ -1,5 +1,21 @@
 # yona product bug fixes — TDD tracking
 
+## 2026-09-27 — Transactional durable queue store
+
+- Added caller-transaction enqueue/query, exact-byte scoped idempotency, assigned IDs, payload ownership
+  and retained-attempt schema. No worker, administrator endpoint or existing callback migration is included.
+- Registered payload decoding rejects UTF-16/32 and malformed UTF-8 rather than accepting Jackson's
+  byte-stream encoding autodetection. The new admission regression failed before strict UTF-8 decoding.
+- Database scheduling uses UTC epoch values; CUBRID computes epoch differences in SQL because its JDBC
+  driver ignores timestamp Calendar arguments. Health still enforces the independent 250 ms bound.
+- Health refresh runs outside business transactions every second; failed queries and samples older than
+  five monotonic seconds disable admission. Real-H2 outage/recovery regression and stale-sample JVM smoke passed.
+- Reducer guards leave future unsupported work queued and reject resource contention without advancing
+  attempts. Both boundary regressions failed before correction and passed afterward.
+- Process smoke: a committed job survived termination and reopening the same persistent H2 database
+  from a separate JVM, retaining its ID, type, QUEUED state and zero attempt count.
+- Contract and verification commands: [durable queue](docs/guide/technical/durable-queue.md).
+
 ## 2026-09-27 — CUBRID security column and schema-restart portability
 
 - CUBRID rejects literal `TEXT` and `NOT NULL` LOB columns. Profile-specific Hibernate mappings
