@@ -21,6 +21,7 @@ data class QueueControlResult(
     val jobId: Long,
     val status: QueueStatus,
     val commandId: String,
+    val changed: Boolean,
     val deduplicated: Boolean = false,
 )
 
@@ -32,6 +33,7 @@ class QueueControl(
     private val registry: TaskRegistry,
     private val store: QueueWorkerStore,
     private val runtime: QueueWorkerRuntime,
+    private val queue: Queue,
 ) {
     private val transactions = TransactionTemplate(transactionManager)
 
@@ -75,6 +77,11 @@ class QueueControl(
             QueueTransitionPolicy(task.maxAttempts, handlerRegistered = true, replaySafe = task.replaySafe),
         )
         if (!decision.accepted) throw QueueControlException(decision.errorCode ?: "INVALID_TRANSITION")
+        try {
+            queue.requirePendingCapacity()
+        } catch (full: QueueAdmissionException) {
+            throw QueueControlException(full.code)
+        }
         apply(job, decision, now)
         false
     }
@@ -99,7 +106,7 @@ class QueueControl(
             val existing = findAudit(commandId) ?: throw failure
             if (existing.commandHash != hash) throw QueueControlException("COMMAND_ID_CONFLICT")
             val current = findJobStatus(jobId) ?: throw QueueControlException("NOT_FOUND")
-            return QueueControlResult(jobId, current, commandId, deduplicated = true)
+            return QueueControlResult(jobId, current, commandId, changed = false, deduplicated = true)
         }
         return result
     }
@@ -116,12 +123,15 @@ class QueueControl(
     ): QueueControlResult = inTransaction {
         val actor = entityManager.find(User::class.java, actorId, LockModeType.PESSIMISTIC_READ)
         if (actor?.state != UserState.SITE_ADMIN) throw QueueControlException("FORBIDDEN")
+        if (action == "RETRY") {
+            entityManager.find(QueueCounter::class.java, "next-id", LockModeType.PESSIMISTIC_WRITE)
+        }
 
         val already = entityManager.find(QueueAdminAudit::class.java, commandId, LockModeType.PESSIMISTIC_WRITE)
         if (already != null) {
             if (already.commandHash != hash) throw QueueControlException("COMMAND_ID_CONFLICT")
             val job = entityManager.find(QueueJob::class.java, jobId) ?: throw QueueControlException("NOT_FOUND")
-            return@inTransaction QueueControlResult(jobId, job.status, commandId, true)
+            return@inTransaction QueueControlResult(jobId, job.status, commandId, changed = false, deduplicated = true)
         }
 
         val job = entityManager.find(QueueJob::class.java, jobId, LockModeType.PESSIMISTIC_WRITE)
@@ -130,7 +140,7 @@ class QueueControl(
         val afterLock = entityManager.find(QueueAdminAudit::class.java, commandId, LockModeType.PESSIMISTIC_WRITE)
         if (afterLock != null) {
             if (afterLock.commandHash != hash) throw QueueControlException("COMMAND_ID_CONFLICT")
-            return@inTransaction QueueControlResult(jobId, job.status, commandId, true)
+            return@inTransaction QueueControlResult(jobId, job.status, commandId, changed = false, deduplicated = true)
         }
 
         val definition = registry.find(job.taskType, job.payloadVersion)
@@ -147,7 +157,7 @@ class QueueControl(
         if (signal) TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() = runtime.signalCancellation(jobId)
         })
-        QueueControlResult(jobId, job.status, commandId)
+        QueueControlResult(jobId, job.status, commandId, changed = prior != job.status)
     }
 
     private fun ensureRetryPayloadAndResources(job: QueueJob, definition: TaskDefinition) {
@@ -188,6 +198,7 @@ class QueueControl(
 
     private fun apply(job: QueueJob, decision: QueueTransitionDecision, now: Long) {
         val oldStatus = job.status
+        QueueMetrics.transition(entityManager, oldStatus, decision.status)
         job.status = decision.status
         job.executionGeneration = decision.executionGeneration
         job.generationAttemptNo = decision.generationAttemptNo
@@ -209,7 +220,7 @@ class QueueControl(
     }
 
     private fun validateReason(reason: String?) {
-        if (reason != null && (reason.toByteArray(Charsets.UTF_8).size > 1024 || reason.any { it.code < 0x20 && it != '\t' })) {
+        if (reason != null && !validQueueText(reason, 300)) {
             throw QueueControlException("INVALID_REASON")
         }
     }

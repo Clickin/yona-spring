@@ -32,17 +32,17 @@ class QueueControlAcceptanceTest {
             )
             val clock = fixture.contextQueueClock()
             val store = QueueWorkerStore(manager, fixture.transactionManager, clock, registry,
-                fixture.dataSource, fixture.dataDirectory.toString())
+                fixture.dataSource, fixture.dataDirectory.toString(), meterRegistry = io.micrometer.core.instrument.simple.SimpleMeterRegistry())
             val actor = fixture.contextUserService().createUser(User(
                 loginId = "queue-retry-${UUID.randomUUID()}", name = "Recovery admin",
                 email = "${UUID.randomUUID()}@example.invalid", state = UserState.SITE_ADMIN,
             ))
             val actorId = actor.id!!
             val job = fixture.queue.enqueue(definition.type, 1, "{}".toByteArray(), Instant.EPOCH, null, "manual").jobId
-            QueueWorkerRuntime(store, registry, clock, workers = 1, pollMillis = 20,
+            QueueWorkerRuntime(store, registry, clock, io.micrometer.core.instrument.simple.SimpleMeterRegistry(), workers = 1, pollMillis = 20,
                 shutdownGraceMillis = 1000, dataDirectory = fixture.dataDirectory.toString(),
                 dbConnectionBudget = 4).use { runtime ->
-                val control = QueueControl(manager, fixture.transactionManager, clock, registry, store, runtime)
+                val control = QueueControl(manager, fixture.transactionManager, clock, registry, store, runtime, fixture.queue)
                 runtime.start()
                 awaitStatus(fixture, job, "FAILED")
                 val retryId = UUID.randomUUID().toString()

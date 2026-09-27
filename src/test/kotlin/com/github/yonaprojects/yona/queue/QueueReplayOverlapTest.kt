@@ -35,9 +35,9 @@ class QueueReplayOverlapTest {
             )
             val clock = fixture.contextQueueClock()
             val store = QueueWorkerStore(manager, fixture.transactionManager, clock, registry,
-                fixture.dataSource, fixture.dataDirectory.toString())
+                fixture.dataSource, fixture.dataDirectory.toString(), meterRegistry = io.micrometer.core.instrument.simple.SimpleMeterRegistry())
             val job = fixture.queue.enqueue(definition.type, 1, "{}".toByteArray(), Instant.EPOCH, null, "overlap").jobId
-            QueueWorkerRuntime(store, registry, clock, workers = 2, pollMillis = 20,
+            QueueWorkerRuntime(store, registry, clock, io.micrometer.core.instrument.simple.SimpleMeterRegistry(), workers = 2, pollMillis = 20,
                 shutdownGraceMillis = 1000, dataDirectory = fixture.dataDirectory.toString(),
                 dbConnectionBudget = 4).use { runtime ->
                 runtime.start()

@@ -44,16 +44,16 @@ class QueueTransactionBoundaryTest {
             )
             val clock = fixture.contextQueueClock()
             val store = QueueWorkerStore(entityManager, fixture.transactionManager, clock, registry,
-                fixture.dataSource, fixture.dataDirectory.toString())
+                fixture.dataSource, fixture.dataDirectory.toString(), meterRegistry = io.micrometer.core.instrument.simple.SimpleMeterRegistry())
             val actor = fixture.contextUserService().createUser(User(
                 loginId = "queue-tx-${UUID.randomUUID()}", name = "Transaction admin",
                 email = "${UUID.randomUUID()}@example.invalid", state = UserState.SITE_ADMIN,
             ))
             val receipt = fixture.queue.enqueue(definition.type, 1, "{}".toByteArray(), Instant.EPOCH, null, "boundary")
-            QueueWorkerRuntime(store, registry, clock, workers = 1, pollMillis = 20,
+            QueueWorkerRuntime(store, registry, clock, io.micrometer.core.instrument.simple.SimpleMeterRegistry(), workers = 1, pollMillis = 20,
                 shutdownGraceMillis = 1000, dataDirectory = fixture.dataDirectory.toString(),
                 dbConnectionBudget = 4).use { runtime ->
-                val control = QueueControl(entityManager, fixture.transactionManager, clock, registry, store, runtime)
+                val control = QueueControl(entityManager, fixture.transactionManager, clock, registry, store, runtime, fixture.queue)
                 runtime.start()
                 try {
                     assertTrue(entered.await(10, TimeUnit.SECONDS), "Real handler did not enter")
@@ -97,7 +97,7 @@ class QueueTransactionBoundaryTest {
                 (delegate as JpaTransactionManager).entityManagerFactory!!,
             )
             val store = QueueWorkerStore(entityManager, transactions, fixture.contextQueueClock(), registry,
-                fixture.dataSource, fixture.dataDirectory.toString())
+                fixture.dataSource, fixture.dataDirectory.toString(), meterRegistry = io.micrometer.core.instrument.simple.SimpleMeterRegistry())
             val receipt = fixture.queue.enqueue(definition.type, 1, "{}".toByteArray(), Instant.EPOCH, null, "boundary")
             val candidate = checkNotNull(store.candidate(receipt.jobId))
             val token = checkNotNull(store.claim(candidate, definition,
@@ -145,7 +145,8 @@ class QueueTransactionBoundaryTest {
                 (delegate as JpaTransactionManager).entityManagerFactory!!,
             )
             val store = QueueWorkerStore(entityManager, transactions, fixture.contextQueueClock(), registry,
-                fixture.dataSource, fixture.dataDirectory.toString(), leaseMillis = 2000)
+                fixture.dataSource, fixture.dataDirectory.toString(), leaseMillis = 2000,
+                meterRegistry = io.micrometer.core.instrument.simple.SimpleMeterRegistry())
             val receipt = fixture.queue.enqueue(definition.type, 1, "{}".toByteArray(), Instant.EPOCH, null, "boundary")
             val candidate = checkNotNull(store.candidate(receipt.jobId))
             val token = checkNotNull(store.claim(candidate, definition,

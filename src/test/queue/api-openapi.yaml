@@ -1,0 +1,556 @@
+openapi: 3.1.0
+info:
+  title: Yona site-admin durable queue API
+  version: 0.1.0-draft
+  description: >-
+    Independent M0 contract. All paths are relative to the deployed application
+    context path (which may be empty). Session-authenticated site-manager API;
+    not a public enqueue API. Admin HTML entrypoint is /site/admin/queue. See functional-spec.md and sse-protocol.md.
+    Queue authorization requires a fully authenticated session and a fresh DB
+    SITE_ADMIN check on every request. A Pre2faAuthenticationToken MUST be denied
+    even when isAuthenticated=true; do not rely on generic authenticated() or
+    the catch-all Pre2faGateFilter. Personal API token headers MUST NOT grant
+    queue access or satisfy CSRF. The exact queue chain precedes legacy /api/**.
+    Response producers MUST satisfy schema bounds; they MUST NOT silently omit
+    resource or progress-counter entries to fit a response.
+servers:
+  - url: /
+    description: Application context path is deployment-specific.
+tags:
+  - name: Queue jobs
+    description: Read-only durable job projections.
+  - name: Queue commands
+    description: CSRF-protected, audited state transitions.
+paths:
+  /api/admin/queue/v1/jobs:
+    get:
+      tags: [Queue jobs]
+      operationId: listQueueJobs
+      summary: List bounded queue job projections
+      description: >-
+        Uses stable keyset paging. IDs are decimal strings; do not parse them as
+        JavaScript Number. Payload bytes and secrets are never returned.
+      security: [{ yonaSession: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/JobStatus' }
+          style: form
+          explode: true
+        - name: type
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: resource
+          in: query
+          description: Exact normalized resource key (not a substring search); uses the shared ResourceKey grammar.
+          schema: { $ref: '#/components/schemas/ResourceKey' }
+        - name: cursor
+          in: query
+          description: Opaque keyset cursor returned by the preceding page.
+          schema: { type: string, maxLength: 512 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Current DB snapshot page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    parameters: []
+  /api/admin/queue/v1/jobs/{jobId}:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      summary: Read one job and a bounded page of its retained attempt history
+      parameters:
+        - name: attemptCursor
+          in: query
+          required: false
+          description: Opaque keyset cursor continues strictly below the prior page's oldest attemptNo for this job; omitted starts at the newest attempts.
+          schema: { type: string, maxLength: 512 }
+        - name: attemptLimit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      operationId: getQueueJob
+      security: [{ yonaSession: [] }]
+      responses:
+        '200':
+          description: Job state and one bounded newest-first attempt page; continue with nextAttemptCursor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/admin/queue/v1/jobs/{jobId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [Queue commands]
+      operationId: cancelQueueJob
+      summary: Cancel a pending job or request cooperative running cancellation
+      description: >-
+        Requires X-XSRF-TOKEN for the authenticated cookie session. Pending
+        jobs transition directly to CANCELLED. RUNNING jobs only transition to
+        CANCEL_REQUESTED; they remain active until the worker confirms stop.
+        Reuse of commandId is idempotent and creates one audit record.
+      security: [{ yonaSession: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelCommand' }
+      responses:
+        '200':
+          description: Idempotent command already reached/was in requested state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommandResult' }
+        '202':
+          description: Running cancellation accepted; actual stop is pending.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommandResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/admin/queue/v1/jobs/{jobId}/retry:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [Queue commands]
+      operationId: retryQueueJob
+      summary: Start an audited manual retry generation
+      description: >-
+        Retry is allowed for FAILED/RECOVERY_REQUIRED jobs when the registered
+        exact type/payload version can run. BLOCKED_UNSUPPORTED is eligible only
+        after that exact version is registered and explicit operator action is
+        recorded. RECOVERY_REQUIRED requires recoveryAcknowledged=true and a
+        bounded reason. This does not prove an old attempt stopped; resource and
+        side-effect guards still apply. Previous attempt rows/global attemptNo
+        remain retained.
+      security: [{ yonaSession: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RetryCommand' }
+      responses:
+        '200':
+          description: The same commandId already committed; no second generation or audit row is added.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommandResult' }
+        '202':
+          description: New generation committed to QUEUED.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommandResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/admin/queue/v1/jobs/{jobId}/result:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [Queue jobs]
+      operationId: downloadQueueJobResult
+      summary: Stream an authorized immutable result artifact
+      description: >-
+        The artifact path is resolved by an opaque DB reference, checksum is
+        checked, and bytes are streamed without whole-file heap buffering. Only
+        the validated basename is exposed; Content-Disposition uses the
+        framework's safe filename encoder, never the relative artifact path.
+      security: [{ yonaSession: [] }]
+      responses:
+        '200':
+          description: Result bytes.
+          headers:
+            Content-Disposition:
+              description: Framework-encoded validated basename only.
+              schema: { type: string }
+            X-Content-SHA256: { schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/admin/queue/v1/events:
+    get:
+      tags: [Queue jobs]
+      operationId: streamQueueEvents
+      summary: Receive admin queue change notifications
+      description: >-
+        Cookie-authenticated SSE invalidation stream. Initial connection and
+        reconnect send reset; clients refetch the durable snapshot. Last-Event-ID
+        is not a durable replay cursor. See sse-protocol.md.
+      security: [{ yonaSession: [] }]
+      responses:
+        '200':
+          description: SSE stream.
+          headers:
+            Cache-Control: { schema: { type: string, const: no-cache } }
+            X-Accel-Buffering: { schema: { type: string, const: 'no' } }
+          content:
+            text/event-stream:
+              schema: { type: string }
+              examples:
+                reset:
+                  value: |-
+                    event: reset
+                    data: {"reason":"connect"}
+
+                changed:
+                  value: |-
+                    event: changed
+                    data: {"generation":"3021"}
+
+                heartbeat:
+                  value: |-
+                    : heartbeat
+
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/ServerError' }
+components:
+  securitySchemes:
+    yonaSession:
+      type: apiKey
+      in: cookie
+      name: SESSION
+      description: >-
+        Placeholder cookie name: actual Yona session-cookie name is an
+        implementation integration point. Browser uses same-origin secure
+        session cookies; every request checks current database SITE_ADMIN state.
+        This requires fully completed authentication, not just isAuthenticated:
+        a Pre2faAuthenticationToken (ROLE_PRE_2FA only) and personal API token
+        headers never authorize this API. No username or project/organization
+        role shortcut.
+  parameters:
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      description: >-
+        Canonical positive signed-64-bit queue ID as a decimal string, with no
+        leading zero. The pattern enforces canonical positive spelling; this
+        contract treats format: int64 as an assertion of the full range
+        1..9223372036854775807, not a documentation-only annotation. The route
+        MUST repeat that range check and return JSON 400 for zero, noncanonical
+        forms, or overflow. An unknown in-range ID returns 404.
+      schema:
+        type: string
+        format: int64
+        x-format-assertion: true
+        pattern: '^(?![\s\S]*[\x00-\x1F\x7F])[1-9][0-9]{0,18}$'
+        maxLength: 19
+    CsrfHeader:
+      name: X-XSRF-TOKEN
+      in: header
+      required: true
+      description: Value from the application's CSRF cookie for this session.
+      schema: { type: string, minLength: 1, maxLength: 4096 }
+  responses:
+    BadRequest:
+      description: Invalid filter/command shape or noncanonical/out-of-range signed-64-bit job ID; returns JSON 400.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    Unauthenticated:
+      description: Missing, expired, or invalid full session authentication; returns JSON and never redirects to HTML login.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    Forbidden:
+      description: Not a current site manager, pending pre-2FA authentication, CSRF failure, or revoked authority; returns JSON and never redirects.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    NotFound:
+      description: Job/result does not exist or is unavailable.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    Conflict:
+      description: Current state disallows this command or a command ID conflicts.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    PayloadTooLarge:
+      description: Request exceeds bounded API limits.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    RateLimited:
+      description: Bounded connection/request quota exceeded.
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 } }
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    ServerError:
+      description: Internal/DB failure; response contains no credentials or stack trace.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+  schemas:
+    JobStatus:
+      type: string
+      enum: [QUEUED, RUNNING, RETRY_WAIT, CANCEL_REQUESTED, SUCCEEDED, FAILED, RECOVERY_REQUIRED, BLOCKED_UNSUPPORTED, CANCELLED]
+    ResourceKey:
+      type: string
+      maxLength: 300
+      pattern: '^(?![\s\S]*[\x00-\x1F\x7F])[a-z0-9._-]+:[a-z0-9._-]+$'
+      description: >-
+        Normalized lowercase ASCII kind:key token, at most 300 ASCII bytes.
+        Trusted producers may use decimal IDs, lowercase digests, or opaque
+        lowercase hyphenated identifiers such as UUID-based fixture keys.
+    FailureDisposition:
+      type: [string, 'null']
+      enum: [PERMANENT, RETRY_EXHAUSTED, null]
+    Progress:
+      type: [object, 'null']
+      additionalProperties: false
+      required: [stage, counters]
+      properties:
+        stage:
+          type: [string, 'null']
+          maxLength: 160
+          pattern: '^(?![\s\S]*[\x00-\x1F\x7F])'
+          description: >-
+            Producer bound: at most 160 Unicode code points after safe-text
+            validation. An oversized/invalid progress update is rejected; it is
+            never silently truncated.
+        counters:
+          type: object
+          description: >-
+            Typed counts/bytes, not a guessed percent. Producer bound: at most
+            16 counters, each a decimal string of 1..20 digits. Invalid updates
+            are rejected atomically; counters are never silently omitted.
+          propertyNames:
+            type: string
+            pattern: '^(?![\s\S]*[\x00-\x1F\x7F])'
+          additionalProperties: { type: string, pattern: '^(?![\s\S]*[\x00-\x1F\x7F])[0-9]{1,20}$' }
+          maxProperties: 16
+    ResultSummary:
+      type: [object, 'null']
+      additionalProperties: false
+      description: >-
+        At most one immutable downloadable artifact per job. A second artifact
+        write is rejected before publication; the producer never selects an
+        arbitrary first/latest artifact or silently omits another artifact.
+      properties:
+        fileName:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 255
+          pattern: '^(?![\s\S]*[\x00-\x1F\x7F])[^/\\]+$'
+          description: >-
+            Safe artifact basename, at most 255 Unicode code points. Before
+            publication the producer also rejects a basename over 255 UTF-8
+            bytes; it never truncates or returns a relative path.
+        mediaType: { type: [string, 'null'], maxLength: 120 }
+        sizeBytes: { type: [string, 'null'], pattern: '^[0-9]{1,20}$' }
+        sha256: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        downloadAvailable: { type: boolean }
+    AttemptSummary:
+      type: object
+      additionalProperties: false
+      required: [attemptNo, executionGeneration, generationAttemptNo, fence, status, startedAt, ownerInstance]
+      properties:
+        attemptNo: { type: string, pattern: '^[0-9]{1,19}$', description: Monotonic across all retries for this job. }
+        executionGeneration: { type: string, pattern: '^[0-9]{1,19}$' }
+        generationAttemptNo:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: >-
+            One-based attempt number within this execution generation. Default
+            generation budget is 5 attempts including the first; each task may
+            configure a different finite positive signed-32-bit maxAttempts.
+        fence: { type: string, pattern: '^[0-9]{1,19}$' }
+        status: { type: string, enum: [RUNNING, SUCCEEDED, RETRYABLE_FAILURE, PERMANENT_FAILURE, CANCELLED, LEASE_LOST, RECOVERY_REQUIRED] }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        ownerInstance: { type: [string, 'null'], maxLength: 128 }
+        errorCode:
+          type: [string, 'null']
+          maxLength: 80
+          pattern: '^(?![\s\S]*[\x00-\x1F\x7F])'
+          description: Bounded safe diagnostic code; producer limit is 80 Unicode code points.
+        errorSummary:
+          type: [string, 'null']
+          maxLength: 2048
+          pattern: '^(?![\s\S]*[\x00-\x1F\x7F])'
+          description: >-
+            Sanitized safe error text, at most 2048 Unicode code points. The
+            producer stores/emits a bounded safe summary, never an unsanitized
+            stack trace or an over-limit string.
+        progress: { $ref: '#/components/schemas/Progress' }
+    JobFields:
+      type: object
+      required: [id, type, payloadVersion, status, createdAt, updatedAt, attemptCount, progress, resources]
+      properties:
+        id: { $ref: '#/components/parameters/JobId/schema' }
+        type: { type: string, maxLength: 120 }
+        payloadVersion: { type: integer, minimum: 1 }
+        status: { $ref: '#/components/schemas/JobStatus' }
+        failureDisposition: { $ref: '#/components/schemas/FailureDisposition' }
+        resources:
+          type: array
+          description: >-
+            Complete list of normalized distinct resource keys; producer bound
+            is 16 per job. The producer rejects excess registration/enqueue
+            input and never drops keys to fit this projection.
+          maxItems: 16
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ResourceKey' }
+        scheduledAt: { type: string, format: date-time }
+        nextAttemptAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        attemptCount:
+          type: string
+          pattern: '^[0-9]{1,19}$'
+          description: All-time retained attempts across every execution generation.
+        executionGeneration: { type: string, pattern: '^[0-9]{1,19}$' }
+        ownerInstance: { type: [string, 'null'], maxLength: 128 }
+        progress: { $ref: '#/components/schemas/Progress' }
+        errorCode:
+          type: [string, 'null']
+          maxLength: 80
+          pattern: '^(?![\s\S]*[\x00-\x1F\x7F])'
+          description: Bounded safe diagnostic code; producer limit is 80 Unicode code points.
+        errorSummary:
+          type: [string, 'null']
+          maxLength: 2048
+          pattern: '^(?![\s\S]*[\x00-\x1F\x7F])'
+          description: >-
+            Sanitized safe error text, at most 2048 Unicode code points. The
+            producer stores/emits a bounded safe summary, never an unsanitized
+            stack trace or an over-limit string.
+        result: { $ref: '#/components/schemas/ResultSummary' }
+    JobSummary:
+      allOf:
+        - $ref: '#/components/schemas/JobFields'
+      unevaluatedProperties: false
+    JobPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor, snapshotGeneration]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/JobSummary' }
+        nextCursor: { type: [string, 'null'], maxLength: 512 }
+        snapshotGeneration: { type: string, pattern: '^[0-9]{1,19}$' }
+    JobDetail:
+      allOf:
+        - $ref: '#/components/schemas/JobFields'
+        - type: object
+          required: [attempts, nextAttemptCursor, attemptHistoryCount]
+          properties:
+            attempts:
+              type: array
+              description: Newest-first page of retained attempts; each continuation page has attemptNo strictly below the previous page's oldest row.
+              maxItems: 100
+              items: { $ref: '#/components/schemas/AttemptSummary' }
+            nextAttemptCursor:
+              type: [string, 'null']
+              maxLength: 512
+              description: Null only after the oldest retained attempt page; otherwise continue with this opaque keyset cursor.
+            attemptHistoryCount:
+              type: string
+              pattern: '^[0-9]{1,19}$'
+              description: Current all-time retained attempt count across generations; history is never automatically pruned in M0.
+      unevaluatedProperties: false
+      example:
+        id: '9007199254740993'
+        type: queue.fixture.v1
+        payloadVersion: 1
+        status: QUEUED
+        failureDisposition: null
+        resources: []
+        scheduledAt: '2026-01-01T00:00:00Z'
+        nextAttemptAt: null
+        createdAt: '2026-01-01T00:00:00Z'
+        startedAt: null
+        updatedAt: '2026-01-01T00:00:00Z'
+        finishedAt: null
+        attemptCount: '0'
+        executionGeneration: '0'
+        ownerInstance: null
+        progress: null
+        errorCode: null
+        errorSummary: null
+        result: null
+        attempts: []
+        nextAttemptCursor: null
+        attemptHistoryCount: '0'
+    CancelCommand:
+      type: object
+      additionalProperties: false
+      required: [commandId]
+      properties:
+        commandId: { type: string, format: uuid }
+        reason:
+          type: [string, 'null']
+          maxLength: 300
+          pattern: '^(?![\s\S]*[\x00-\x1F\x7F])'
+          description: Optional audited reason, at most 300 Unicode code points.
+    RetryCommand:
+      type: object
+      additionalProperties: false
+      required: [commandId]
+      properties:
+        commandId: { type: string, format: uuid }
+        recoveryAcknowledged:
+          type: boolean
+          default: false
+          description: >-
+            Required true when retrying RECOVERY_REQUIRED after the operator
+            verifies prior effects/process; the queue cannot prove an old task stopped.
+        reason:
+          type: [string, 'null']
+          maxLength: 300
+          pattern: '^(?![\s\S]*[\x00-\x1F\x7F])'
+          description: Required nonempty audited reason when recovery is acknowledged; at most 300 Unicode code points.
+      allOf:
+        - if:
+            properties:
+              recoveryAcknowledged: { const: true }
+            required: [recoveryAcknowledged]
+          then:
+            required: [reason]
+            properties:
+              reason: { type: string, minLength: 1, maxLength: 300 }
+    CommandResult:
+      type: object
+      additionalProperties: false
+      required: [job, commandId, changed]
+      properties:
+        job: { $ref: '#/components/schemas/JobSummary' }
+        commandId: { type: string, format: uuid }
+        changed: { type: boolean }
+    ApiError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: { type: string, maxLength: 80 }
+        message: { type: string, maxLength: 500 }
+        requestId: { type: [string, 'null'], maxLength: 80 }

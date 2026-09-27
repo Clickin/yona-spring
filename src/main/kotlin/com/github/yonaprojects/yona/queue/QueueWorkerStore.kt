@@ -1,5 +1,7 @@
 package com.github.yonaprojects.yona.queue
 
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
 import jakarta.persistence.EntityManager
 import jakarta.persistence.LockModeType
 import org.hibernate.exception.ConstraintViolationException
@@ -10,6 +12,8 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import tools.jackson.databind.json.JsonMapper
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -39,6 +43,8 @@ class QueueWorkerStore(
     dataSource: javax.sql.DataSource,
     @Value("\${yona.queue.data-dir:\${yona.data:data}/queue}") dataDirectory: String,
     @Value("\${yona.queue.lease-millis:60000}") private val leaseMillis: Long = 60_000,
+    @Value("\${yona.queue.error-summary-codepoints:2048}") private val errorSummaryCodePoints: Int = 2048,
+    meterRegistry: MeterRegistry,
 ) {
     private val transactions = TransactionTemplate(transactionManager)
     private val jdbc = JdbcTemplate(dataSource)
@@ -47,9 +53,14 @@ class QueueWorkerStore(
     private val stagingRoot = root.resolve("staging")
     private val artifactRoot = root.resolve("artifacts")
     private val progressMapper = JsonMapper.builder().build()
+    private val retryCounter = meterRegistry.counter("yona.queue.retries")
+    private val outcomeCounters = AttemptOutcome.entries.filter { it != AttemptOutcome.RUNNING }.associateWith {
+        meterRegistry.counter("yona.queue.attempts", "outcome", it.name)
+    }
 
     init {
         require(leaseMillis > 0)
+        require(errorSummaryCodePoints in 1..2048)
         Files.createDirectories(stagingRoot)
         Files.createDirectories(artifactRoot)
     }
@@ -133,7 +144,7 @@ class QueueWorkerStore(
         if (!decision.accepted) return@inTransaction false
         applyDecision(job, decision, now)
         job.errorCode = "UNSUPPORTED_HANDLER"
-        job.errorSummary = "No compatible executable handler is registered for this task version."
+        job.errorSummary = boundedSummary("No compatible executable handler is registered for this task version.")
         bumpProjectionChange()
         entityManager.flush()
         true
@@ -206,6 +217,7 @@ class QueueWorkerStore(
                 entityManager.persist(attempt)
                 bumpProjectionChange()
                 entityManager.flush()
+                if (attemptNo > 1) countAfterCommit(retryCounter)
                 QueueAttemptToken(
                     job.id, attemptNo, job.executionGeneration, fence, ownerInstance,
                     resourceFences, definition, decoded.node,
@@ -266,8 +278,8 @@ class QueueWorkerStore(
     }
 
     internal fun progress(token: QueueAttemptToken, stage: String, counters: Map<String, Long>): Unit = inTransaction {
-        require(stage.isNotBlank() && stage.toByteArray(Charsets.UTF_8).size <= 256) { "Invalid progress stage" }
-        require(counters.size <= 512 && counters.all { (key, value) ->
+        require(stage.isNotBlank() && validQueueText(stage, 160)) { "Invalid progress stage" }
+        require(counters.size <= 16 && counters.all { (key, value) ->
             key.matches(Regex("[a-zA-Z0-9_.-]{1,64}")) && value >= 0
         }) { "Invalid progress counters" }
         val json = progressMapper.writeValueAsString(counters.toSortedMap())
@@ -377,17 +389,17 @@ class QueueWorkerStore(
                     is QueueCompletion.Retryable -> {
                         setFailure(attempt, completion.code, completion.summary)
                         job.errorCode = completion.code
-                        job.errorSummary = completion.summary
+                        job.errorSummary = attempt.errorSummary
                     }
                     is QueueCompletion.Permanent -> {
                         setFailure(attempt, completion.code, completion.summary)
                         job.errorCode = completion.code
-                        job.errorSummary = completion.summary
+                        job.errorSummary = attempt.errorSummary
                     }
                     is QueueCompletion.RecoveryRequired -> {
                         setFailure(attempt, completion.code, completion.summary)
                         job.errorCode = completion.code
-                        job.errorSummary = completion.summary
+                        job.errorSummary = attempt.errorSummary
                     }
                     QueueCompletion.CooperativeCancel -> {
                         if (decision.activeOutcome == AttemptOutcome.CANCELLED) {
@@ -397,7 +409,7 @@ class QueueWorkerStore(
                         } else {
                             setFailure(attempt, "UNEXPECTED_CANCELLATION", "Task stopped without a queue cancellation request.")
                             job.errorCode = "UNEXPECTED_CANCELLATION"
-                            job.errorSummary = "Task stopped without a queue cancellation request."
+                            job.errorSummary = attempt.errorSummary
                         }
                     }
                     QueueCompletion.Success -> {
@@ -412,6 +424,7 @@ class QueueWorkerStore(
                 bumpProjectionChange()
                 entityManager.flush()
                 if (attempt.leaseExpiresAt <= clock.leaseNow()) throw StaleAttempt()
+                countAfterCommit(outcomeCounters.getValue(attempt.outcome))
                 true
         }
     }
@@ -463,13 +476,14 @@ class QueueWorkerStore(
         attempt.finishedAt = now
         setFailure(attempt, "LEASE_LOST", "Worker lease expired before completion was confirmed.")
         job.errorCode = "LEASE_LOST"
-        job.errorSummary = "Worker lease expired before completion was confirmed."
+        job.errorSummary = attempt.errorSummary
         applyDecision(job, decision, now)
         job.activeAttemptNo = null
         job.nextAttemptAt = if (job.status == QueueStatus.RETRY_WAIT) retryAt(job, now) else null
         job.finishedAt = if (isTerminal(job.status)) now else null
         bumpProjectionChange()
         entityManager.flush()
+        countAfterCommit(outcomeCounters.getValue(attempt.outcome))
         true
     }
 
@@ -539,6 +553,7 @@ class QueueWorkerStore(
     )
 
     private fun applyDecision(job: QueueJob, decision: QueueTransitionDecision, now: Long) {
+        QueueMetrics.transition(entityManager, job.status, decision.status)
         job.status = decision.status
         job.executionGeneration = decision.executionGeneration
         job.generationAttemptNo = decision.generationAttemptNo
@@ -554,8 +569,12 @@ class QueueWorkerStore(
 
     private fun setFailure(attempt: QueueAttempt, code: String, summary: String) {
         attempt.errorCode = code.take(80)
-        attempt.errorSummary = summary.take(4096)
+        attempt.errorSummary = boundedSummary(summary)
     }
+
+    private fun boundedSummary(value: String): String =
+        if (value.length <= errorSummaryCodePoints || value.codePointCount(0, value.length) <= errorSummaryCodePoints) value
+        else value.substring(0, value.offsetByCodePoints(0, errorSummaryCodePoints))
 
     private fun classify(failure: Throwable?): QueueCompletion = when (failure) {
         null -> QueueCompletion.Success
@@ -564,7 +583,7 @@ class QueueWorkerStore(
         is PermanentTaskFailure -> QueueCompletion.Permanent(failure.code, failure.safeSummary)
         is RecoveryRequiredTaskFailure -> QueueCompletion.RecoveryRequired(failure.code, failure.safeSummary)
         is ClassifiedTaskFailure -> QueueCompletion.RecoveryRequired(failure.code, failure.safeSummary)
-        else -> QueueCompletion.RecoveryRequired("UNEXPECTED_EXCEPTION", failure.javaClass.simpleName.take(4096))
+        else -> QueueCompletion.RecoveryRequired("UNEXPECTED_EXCEPTION", boundedSummary(failure.javaClass.simpleName))
     }
 
     private fun retryAt(job: QueueJob, now: Long): Long {
@@ -580,6 +599,12 @@ class QueueWorkerStore(
     }
 
     private fun isTerminal(status: QueueStatus): Boolean = status in TERMINAL
+
+    private fun countAfterCommit(counter: Counter) {
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() = counter.increment()
+        })
+    }
 
     private fun <T> inTransaction(block: () -> T): T {
         var value: Any? = null

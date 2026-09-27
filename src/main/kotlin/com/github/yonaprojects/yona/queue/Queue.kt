@@ -79,6 +79,16 @@ class Queue(
             }
             if (initialized != true) throw race
         }
+        transaction.executeWithoutResult {
+            entityManager.find(QueueCounter::class.java, "change-generation", LockModeType.PESSIMISTIC_WRITE)
+            if (entityManager.find(QueueCounter::class.java, QueueMetrics.FAILED_COUNTER) == null) {
+                // Cold upgrade only: all old nodes must be stopped before this one-time backfill.
+                val failed = entityManager.createQuery(
+                    "select count(j.id) from QueueJob j where j.status = :status", Long::class.javaObjectType,
+                ).setParameter("status", QueueStatus.FAILED).singleResult
+                entityManager.persist(QueueCounter(QueueMetrics.FAILED_COUNTER, failed))
+            }
+        }
     }
 
     @Transactional
@@ -133,7 +143,7 @@ class Queue(
                 return ProvisionalQueueReceipt(job.id, job.status, Instant.ofEpochMilli(job.scheduledAt))
             }
         }
-        if (pendingJobs() >= maxPending) throw QueueAdmissionException("QUEUE_FULL")
+        requirePendingCapacity()
         val resources = registry.find(type, version)?.let { definition ->
             try {
                 registry.validate(definition, admittedPayload)
@@ -173,6 +183,11 @@ class Queue(
             "j.executionGeneration,j.generationAttemptNo,j.attemptCount,j.rowVersion) " +
             "from QueueJob j where j.id = :id", QueueJobSnapshot::class.java
     ).setParameter("id", jobId).singleResultOrNull
+
+    /** Caller holds the next-id row lock shared by admission and manual retry. */
+    internal fun requirePendingCapacity() {
+        if (pendingJobs() >= maxPending) throw QueueAdmissionException("QUEUE_FULL")
+    }
 
     private fun pendingJobs(): Long = jdbc.execute(ConnectionCallback { connection ->
         val product = connection.metaData.databaseProductName
