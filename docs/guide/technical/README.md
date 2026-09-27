@@ -6,7 +6,7 @@ legacy Yona의 `docs/ko/technical/` + `docs/technical/`(두 세트를 합침, �
 
 ## Yona 2 전용 설계
 
-- [durable-queue.md](durable-queue.md) — transactional enqueue/query, 저장 스키마와 DB clock
+- [durable-queue.md](durable-queue.md) — transactional enqueue/query, bounded worker, lease/fence와 복구
 
 ## 지금도 그대로 적용되는 문서 (코드로 확인)
 
