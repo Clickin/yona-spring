@@ -4,6 +4,10 @@ legacy Yona의 `docs/ko/technical/` + `docs/technical/`(두 세트를 합침, �
 서로 다른 11개 + 5개 문서였다)를 yona 기준으로 옮긴 기술 참고 문서. 성격이 다른 두 부류로
 나뉜다.
 
+## Yona 2 전용 설계
+
+- [durable-queue.md](durable-queue.md) — transactional enqueue/query, 저장 스키마와 DB clock
+
 ## 지금도 그대로 적용되는 문서 (코드로 확인)
 
 - [access-control.md](access-control.md) — 권한 규칙(비즈니스 로직, 프레임워크 무관)
