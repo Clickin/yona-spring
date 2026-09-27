@@ -53,11 +53,13 @@ class TaskRegistry(definitions: List<TaskDefinition>) {
         definition.validate(node)
         val keys = definition.resourceKeys(node)
         require(keys.all { it.length <= 300 && RESOURCE.matches(it) }) { "Invalid queue resource identity" }
-        return DecodedTaskPayload(node, if (keys.size < 2) keys else keys.toSortedSet().toList())
+        val normalized = if (keys.size < 2) keys else keys.toSortedSet().toList()
+        require(normalized.size <= 16) { "Too many queue resource identities" }
+        return DecodedTaskPayload(node, normalized)
     }
 
     companion object {
         internal val TYPE = Regex("[a-z0-9._-]{1,120}")
-        private val RESOURCE = Regex("[a-z][a-z0-9-]*:[a-z0-9]+")
+        internal val RESOURCE = Regex("[a-z0-9._-]+:[a-z0-9._-]+")
     }
 }

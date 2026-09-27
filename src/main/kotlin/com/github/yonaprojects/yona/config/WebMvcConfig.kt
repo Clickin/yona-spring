@@ -1,5 +1,6 @@
 package com.github.yonaprojects.yona.config
 
+import com.github.yonaprojects.yona.queue.QUEUE_API
 import jakarta.annotation.PostConstruct
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
@@ -46,6 +47,7 @@ class WebMvcConfig(
     override fun addInterceptors(registry: InterceptorRegistry) {
         registry.addInterceptor(bootstrapSetupInterceptor)
             .addPathPatterns("/**")
+            .excludePathPatterns(QUEUE_API, "$QUEUE_API/**")
         registry.addInterceptor(errorViewStatusInterceptor)
             .addPathPatterns("/**")
     }

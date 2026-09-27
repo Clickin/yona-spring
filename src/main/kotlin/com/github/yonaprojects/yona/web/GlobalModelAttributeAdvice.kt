@@ -8,11 +8,14 @@ import com.github.yonaprojects.yona.domain.user.UserSettingRepository
 import com.github.yonaprojects.yona.domain.support.MarkdownService
 import com.github.yonaprojects.yona.domain.support.YonaUpdateService
 import com.github.yonaprojects.yona.config.TemplateHelper
+import com.github.yonaprojects.yona.queue.QUEUE_ACTOR_ATTRIBUTE
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ModelAttribute
+import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.context.request.ServletRequestAttributes
 
 @ControllerAdvice
 class GlobalModelAttributeAdvice(
@@ -38,6 +41,8 @@ class GlobalModelAttributeAdvice(
 
     @ModelAttribute("currentUser")
     fun currentUser(): User? {
+        val request = (RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes)?.request
+        if (request?.getAttribute(QUEUE_ACTOR_ATTRIBUTE) != null) return null
         val authentication = SecurityContextHolder.getContext().authentication
         if (authentication == null || !authentication.isAuthenticated || authentication.name == "anonymousUser") {
             return null

@@ -1,6 +1,6 @@
-# Durable queue: store and executor
+# Durable queue: store, executor and administrator API
 
-트랜잭션 queue 저장소, 순수 상태 전이, fenced 실행기와 내부 관리자 명령을 제공한다. 관리자 REST/SSE/UI와 archive exporter/importer는 아직 포함하지 않는다. 기존 메일·웹훅 callback 경로는 변경하지 않는다.
+트랜잭션 queue 저장소, fenced 실행기와 관리자 REST API를 제공한다. SSE·관리 UI는 다음 스택 계층에서 추가하며 archive exporter/importer는 제외한다. 기존 메일·웹훅 callback 경로는 변경하지 않는다.
 
 ## 애플리케이션 인터페이스
 
@@ -13,7 +13,7 @@ Spring이 주입한 `Queue.enqueue(type, version, payload, dueAt, idempotencyKey
 - callerScope와 nullable idempotencyKey는 각각 최대 200 UTF-8 bytes의 대소문자 구분 식별자다.
 - 같은 type/scope/key 요청은 version과 **정확한 payload bytes**가 같을 때만 기존 job을 반환한다. JSON 의미가 같아도 bytes가 다르면 `IDEMPOTENCY_CONFLICT`다. key가 없으면 매번 별도 job이다.
 - dueAt의 sub-millisecond 값은 다음 millisecond로 올림한다. 저장 정밀도 때문에 요청 시각보다 먼저 실행하도록 만들지 않는다.
-- resource key: ASCII `[a-z][a-z0-9-]*:[a-z0-9]+`, 각 300 bytes 이하이며 정렬·중복 제거한 안정적인 opaque ID를 사용한다. 관리자 API 계층에서 허용 문자 집합을 확장하고 서로 다른 resource 16개 상한을 적용한다.
+- resource key: 소문자 ASCII `[a-z0-9._-]+:[a-z0-9._-]+`, 각 300 bytes 이하. UUID 등 안정적인 opaque ID도 허용하며 정렬·중복 제거 후 최대 16개다. Lock 파일명에는 원문 대신 hash를 사용한다.
 
 `yona.queue.max-pending` 기본값은 10,000이며 QUEUED/RUNNING/RETRY_WAIT/CANCEL_REQUESTED를 센다. `yona.queue.max-payload-bytes`는 기본 1,048,576이고 더 작게 설정할 수 있다. admission 실패는 `QueueAdmissionException.code`로 구분한다.
 
@@ -58,6 +58,7 @@ Quartz 등 별도 scheduler의 실행 상태와 업무 DB 상태를 중복 관�
 | `data-dir` | `${yona.data:data}/queue` |
 | `instance-id` | 매 프로세스 UUID |
 | `error-summary-codepoints` | 2048 (1–2048) |
+| `metrics-refresh-millis` | 30000 |
 
 Worker slot 수는 설정된 Hikari maximum-pool-size를 넘지 않아야 한다. Type별 lane 기본값은 1이며, **lane 제한과 worker slot은 노드별**이다. 여러 노드가 같은 DB를 공유해도 claim/resource fence는 DB에서 검증한다. 매 poll은 우선순위 내림차순·ID 오름차순 `(priority, id)` keyset으로 맨 위부터 최대 4 × 64건을 확인하고, lane이 찬 type은 SQL에서 제외한다. Resource에 막힌 앞쪽 작업을 건너뛰어 뒤쪽의 실행 가능한 작업을 찾는다.
 
@@ -97,7 +98,44 @@ Orphan 정리는 기동을 동기로 막지 않고 poller 시작 뒤 전용 단�
 `resource-guards/*.lock`은 resource 수에 비례해 쌓이는 0바이트 파일이며 삭제하지 않는다. 삭제하면 다른 프로세스가 서로 다른 inode를 잠가 resource 배타성이 깨질 수 있다.
 
 Job 하나에는 다운로드할 결과 파일 하나만 게시할 수 있다. 작성 중이거나 staging을 마친 결과가 있으면 추가 writer는 실행 전에 거부한다. 상대 경로는 정상 Unicode·최대 1024 UTF-8 bytes, basename은 최대 255 UTF-8 bytes이며 control 문자·경로 이탈을 거부한다.
-## 스키마 업그레이드
+## 관리자 REST
+
+모든 경로는 배포 context path에 상대적이다.
+
+| 경로 | 동작 |
+|---|---|
+| `GET /api/admin/queue/v1/jobs` | status/type/resource filter와 ID 내림차순 keyset 목록 |
+| `GET /api/admin/queue/v1/jobs/{jobId}` | 현재 상태와 최신 attempt부터 시작하는 이력 page |
+| `POST /api/admin/queue/v1/jobs/{jobId}/cancel` | 대기 작업 취소 또는 실행 중 협력 취소 요청 |
+| `POST /api/admin/queue/v1/jobs/{jobId}/retry` | 지원되는 실패·복구 대상의 새 generation |
+| `POST /api/admin/queue/v1/jobs/{jobId}/abandon` | 실패·복구 필요·지원 불가 작업 종결 |
+| `POST /api/admin/queue/v1/jobs/{jobId}/prioritize` | 대기 작업 우선 실행 지정 |
+| `POST /api/admin/queue/v1/jobs/{jobId}/deprioritize` | 대기 작업 우선 실행 해제 |
+| `GET /api/admin/queue/v1/jobs/{jobId}/result` | 권한·파일 무결성 확인 후 streaming 다운로드 |
+
+목록 `limit`과 상세 `attemptLimit`은 기본 50, 최대 100이다. 반환된 opaque cursor를 그대로 전달한다. Attempt cursor는 해당 job에 묶여 있고 이전 page의 마지막 번호보다 작은 이력만 반환한다. 새 attempt가 생겨도 이미 읽은 이력을 중복하지 않으며 새로 조회하면 최신 page부터 시작한다. ID, `attemptNo`, `fence`, `executionGeneration`, 이력 건수와 `snapshotGeneration`은 decimal string이므로 JavaScript `Number`로 변환하지 않는다. `payloadVersion`과 generation 내부 순번 `generationAttemptNo`는 정수다. Payload·idempotency 원문·내부 storage path는 반환하지 않는다.
+
+완료된 로그인 session 또는 메인 로그인과 같은 remember-me cookie를 허용하며 매 요청 DB의 `SITE_ADMIN` 상태를 확인한다. 익명 API 요청은 JSON 401, 일반/조직·프로젝트 관리자와 2FA 대기 session은 JSON 403이다. 익명 HTML 페이지 요청은 로그인 폼으로 이동하며 기존 request cache로 원래 URL을 보존한다. Frame 정책은 메인 체인과 같은 SAMEORIGIN이다. Queue 체인은 Pre2faGate·ApiToken·formLogin·oauth2·saml2·httpBasic을 의도적으로 포함하지 않으며 별도 로그인 경로를 만들지 않는다. PAT는 이 API의 인증 수단이 아니다. Mutation에는 실제 cookie와 일치하는 `X-XSRF-TOKEN`이 필요하며 `Authorization`/`Yona-Token` 헤더가 있다고 CSRF를 생략하지 않는다. `GET /jobs`가 필요한 XSRF cookie를 발급한다.
+
+명령 body는 최대 4096 bytes이며 UUID `commandId`를 포함한다. 같은 명령의 재전송은 감사·generation을 중복하지 않고 `changed=false`를 반환한다. 새로운 retry와 실행 중 취소 요청은 202, 대기 취소·이미 처리한 명령은 200이다. 잘못된 입력은 400, 없는 대상은 404, 상태·command ID·용량 충돌은 409, body 한도 초과는 413이며 오류는 JSON이다.
+
+우선 실행/해제 body는 `{commandId}`이며 QUEUED/RETRY_WAIT에만 허용한다. 그 외 상태는 409 `INVALID_TRANSITION`이다. 종결 body는 `{commandId, reason, recoveryAcknowledged}`이며 성공하면 200이다. 목록·상세의 `prioritized`는 boolean이다.
+
+다운로드는 조회 전용 EntityManager를 별도로 만들고 transaction과 연결을 닫은 뒤 파일을 연다. 요청의 OSIV EntityManager를 재사용하지 않으며, 큐 JSON API에서는 HTML용 초기 설정·사용자 모델 조회도 실행하지 않는다. 크기와 SHA-256을 확인한 **같은 열린 handle**에서 고정 크기 buffer로 전송한다. 파일 누락은 404, 무결성 불일치는 409이며 실패 응답에 이전 파일의 길이·다운로드 헤더를 남기지 않는다.
+
+`SecureDirectoryStream`을 지원하는 파일시스템은 descriptor 기준으로 탐색한다. macOS 등 미지원 환경은 symlink/real-path 점검과 `NOFOLLOW_LINKS`를 사용한다. 이 경로는 악의적인 OS 사용자의 ancestor 교체 경합을 막는다고 주장하지 않는다. **Queue data directory와 그 상위 경로는 신뢰할 수 없는 OS principal이 수정할 수 없어야 하며, 게시한 파일을 제자리에서 수정하지 않아야 한다.**
+## 관측과 업그레이드
+
+- `yona.queue.jobs{status=...}`: QUEUED/RUNNING/RETRY_WAIT/CANCEL_REQUESTED/FAILED 현재 수.
+- `yona.queue.oldest.due.age`: 실행 가능 시각이 지난 대기 작업의 가장 오래된 지연, seconds.
+- `yona.queue.attempts{outcome=...}`와 `yona.queue.retries`: 이 프로세스가 commit을 확인한 완료 outcome·재실행 claim 수. 프로세스 재시작 시 초기화하며 과거 이력을 다시 세지 않는다.
+- `yona.queue.execution`: 실제 handler 실행·정리 시간 timer.
+- `yona.queue.worker.slots.used/capacity/utilization`: 해당 프로세스의 물리 실행 slot. Lease를 잃어도 handler가 남아 있으면 계속 센다.
+- `yona.queue.clock.trusted`: 현재 clock 신뢰 상태, 0 또는 1.
+
+DB 기반 gauge는 `yona-queue-metrics` 전용 daemon 스레드가 기본 30초 간격으로 갱신하며 아직 확인하지 못했거나 DB 조회가 실패하면 NaN으로 표시한다. Browser/scrape마다 DB를 조회하지 않는다. Pending 집계는 admission 한도 안의 상태만 읽고, 무한히 보존되는 terminal job/attempt 이력을 주기적으로 훑지 않는다. FAILED 현재 수는 기존 `queue_meta`의 파생 `failed-jobs` row에 상태 변경과 같은 transaction으로 유지한다. Metric label에 job ID를 넣지 않는다.
+
+Metrics lifecycle phase는 clock과 같은 `Int.MAX_VALUE - 200`이며 worker보다 먼저 시작하고 나중에 종료된다.
 
 기존 큐 설치 업그레이드는 **모든 이전 버전 node를 중지한 뒤** 새 버전 node 하나를 먼저 시작한다. 최초 초기화에서 기존 FAILED 수를 한 번 집계하고 worker·HTTP serving 전에 commit한다. 이 일회성 backfill은 데이터량에 따라 시간이 걸릴 수 있다. 완료 후 나머지 새 node를 시작한다. 이후 시작은 해당 row만 확인한다. 이전/새 버전을 섞은 rolling upgrade는 이 파생 counter를 유지하지 못하므로 지원하지 않는다.
 
@@ -110,6 +148,8 @@ Job 하나에는 다운로드할 결과 파일 하나만 게시할 수 있다. �
 ```
 
 `yona.it.db`는 h2/mariadb/postgres/mysql/mssql/cubrid를 지원한다. H2 외에는 Docker가 필요하다. DB SQL/schema 변경은 각 DB의 clock/timezone, admission, populated-schema upgrade와 스캔 계획을 함께 검증한다. H2 fixture는 기존 domain의 value 컬럼 때문에 NON_KEYWORDS=VALUE를 사용한다.
+
+수동 HTTP 검증은 Java 21/Python 3.10 이상에서 `python3 support-script/queue-acceptance/run.py`로 실행한다. 두 loopback JVM과 private H2/storage를 만들고 결과 다운로드 무결성·connection 반환·production fixture 부재도 확인한다. [OpenAPI 계약](queue/api-openapi.yaml)을 참고한다. 출력한 private 환경 파일과 trace에는 인증 정보가 있으므로 공개하지 않는다.
 
 ## 향후 계획
 
