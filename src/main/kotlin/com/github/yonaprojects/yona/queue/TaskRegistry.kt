@@ -14,7 +14,14 @@ data class TaskDefinition(
     val payloadVersion: Int,
     val validate: (JsonNode) -> Unit,
     val resourceKeys: (JsonNode) -> List<String> = { emptyList() },
+    /** Validation-only registrations are never executable. */
+    val handler: ((TaskContext, JsonNode) -> Unit)? = null,
+    val replaySafe: Boolean = false,
+    val maxAttempts: Int = 5,
+    val laneLimit: Int = 1,
 )
+
+internal data class DecodedTaskPayload(val node: JsonNode, val resourceKeys: List<String>)
 
 @Component
 class TaskRegistry(definitions: List<TaskDefinition>) {
@@ -28,13 +35,17 @@ class TaskRegistry(definitions: List<TaskDefinition>) {
 
     fun register(definition: TaskDefinition) {
         require(TYPE.matches(definition.type) && definition.payloadVersion > 0)
+        require(definition.maxAttempts > 0 && definition.laneLimit > 0)
         check(types.computeIfAbsent(definition.type) { ConcurrentHashMap() }
             .putIfAbsent(definition.payloadVersion, definition) == null) { "Duplicate queue task registration" }
     }
 
     fun find(type: String, version: Int): TaskDefinition? = types[type]?.get(version)
 
-    internal fun validate(definition: TaskDefinition, payload: ByteArray): List<String> {
+    internal fun validate(definition: TaskDefinition, payload: ByteArray): List<String> =
+        decodeAndValidate(definition, payload).resourceKeys
+
+    internal fun decodeAndValidate(definition: TaskDefinition, payload: ByteArray): DecodedTaskPayload {
         require(!(payload.size >= 3 && payload[0] == 0xef.toByte() &&
             payload[1] == 0xbb.toByte() && payload[2] == 0xbf.toByte())) { "Payload BOM is not allowed" }
         val node = InputStreamReader(payload.inputStream(), Charsets.UTF_8.newDecoder()).use { json.readTree(it) }
@@ -42,7 +53,7 @@ class TaskRegistry(definitions: List<TaskDefinition>) {
         definition.validate(node)
         val keys = definition.resourceKeys(node)
         require(keys.all { it.length <= 300 && RESOURCE.matches(it) }) { "Invalid queue resource identity" }
-        return if (keys.size < 2) keys else keys.toSortedSet().toList()
+        return DecodedTaskPayload(node, if (keys.size < 2) keys else keys.toSortedSet().toList())
     }
 
     companion object {

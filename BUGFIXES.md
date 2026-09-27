@@ -1,5 +1,25 @@
 # yona product bug fixes — TDD tracking
 
+## 2026-09-28 — Fenced durable queue executor
+
+- Added bounded in-process workers, retained attempt generations, lease recovery, typed retry outcomes,
+  cooperative cancellation/shutdown, resource fences and cross-process file guards. Existing callbacks stay unchanged.
+- Cancellation signals now follow the outermost commit. A real rollback regression previously changed
+  a still-running job to recovery-required; the corrected after-commit path preserves successful execution.
+- Commit acknowledgment failure no longer deletes already-published immutable bytes. A real commit-then-error
+  regression verifies that the durable artifact pointer still resolves to its original bytes.
+- Lease checks use fresh DB time after row locks, not PostgreSQL/H2 transaction-start timestamps.
+  A lock-wait regression demonstrated an expired write before correction and rejection afterward.
+- Hibernate 7.4.5's CUBRID dialect emitted an empty pessimistic-lock clause. The local dialect now emits native
+  `FOR UPDATE`; the competing writer previously bypassed a 2.5-second holder in 75 ms. The corrected CUBRID
+  run passed 47 queue checks plus the existing security/schema-preservation check without skips.
+- Active worker accounting now keys physical attempts rather than jobs. A replay-safe successor with a second
+  available lane no longer commits an attempt that cannot be dispatched while the expired handler remains alive.
+- Actual separate-JVM smoke published exact artifact bytes, restarted the worker, preserved the artifact and
+  advanced the resource fence from 1 to 2. Normal servlet startup and the rendered bootstrap form were also checked;
+  servlet-only MVC/SVN configuration is excluded only from headless worker contexts.
+- Contract, configuration and verification command: [durable queue](docs/guide/technical/durable-queue.md).
+
 ## 2026-09-27 — Transactional durable queue store
 
 - Added caller-transaction enqueue/query, exact-byte scoped idempotency, assigned IDs, payload ownership

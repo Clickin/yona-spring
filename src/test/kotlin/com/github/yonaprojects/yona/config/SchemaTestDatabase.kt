@@ -42,8 +42,8 @@ internal object SchemaTestDatabase {
     init { container?.start() }
 
     fun dataSource() = HikariDataSource().apply {
-        // Existing Property.value requires this H2 compatibility option; no schema errors are suppressed.
-        jdbcUrl = container?.jdbcUrl ?: "jdbc:h2:file:$h2File;NON_KEYWORDS=VALUE"
+        // H2 AUTO_SERVER lets separate worker JVMs share this persistent fixture database.
+        jdbcUrl = container?.jdbcUrl ?: "jdbc:h2:file:$h2File;NON_KEYWORDS=VALUE;AUTO_SERVER=TRUE"
         username = container?.username ?: "sa"
         password = container?.password ?: ""
         driverClassName = container?.driverClassName ?: "org.h2.Driver"

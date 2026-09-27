@@ -14,11 +14,14 @@ import java.util.TimeZone
 import javax.sql.DataSource
 
 @Component
-class QueueClock(dataSource: DataSource) {
+open class QueueClock(dataSource: DataSource) {
     private val jdbc = JdbcTemplate(dataSource)
     @Volatile private var lastTrustedAtNanos = Long.MIN_VALUE
 
-    fun now(): Long = jdbc.execute(ConnectionCallback { connection -> databaseTime(connection, precise = false) })
+    open fun now(): Long = jdbc.execute(ConnectionCallback { connection -> databaseTime(connection, precise = false) })
+
+    /** Lease authority needs a fresh DB reading after lock waits, not transaction-start time. */
+    open fun leaseNow(): Long = jdbc.execute(ConnectionCallback { connection -> databaseTime(connection, precise = true) })
 
     /** Runs outside business transactions; transaction-start clocks must not measure their age as skew. */
     @Synchronized
@@ -62,11 +65,13 @@ class QueueClock(dataSource: DataSource) {
             val sql = when {
                 product == "PostgreSQL" -> {
                     statement.execute("SET TIME ZONE 'UTC'")
-                    "SELECT CURRENT_TIMESTAMP"
+                    if (precise) "SELECT clock_timestamp()" else "SELECT CURRENT_TIMESTAMP"
                 }
                 product == "H2" -> {
                     statement.execute("SET TIME ZONE 'UTC'")
-                    "SELECT CURRENT_TIMESTAMP"
+                    if (precise) {
+                        "SELECT EXECUTING_STATEMENT_START FROM INFORMATION_SCHEMA.SESSIONS WHERE SESSION_ID = SESSION_ID()"
+                    } else "SELECT CURRENT_TIMESTAMP"
                 }
                 product == "MariaDB" || product == "MySQL" -> "SELECT UTC_TIMESTAMP(3)"
                 product.contains("Microsoft SQL Server") -> "SELECT SYSUTCDATETIME()"
@@ -78,7 +83,7 @@ class QueueClock(dataSource: DataSource) {
                         check(rules.isFixedOffset && rules.getOffset(java.time.Instant.EPOCH) == ZoneOffset.UTC)
                     }
                     // getTimestamp ignores Calendar here; native arithmetic avoids JVM-zone/DST reinterpretation.
-                    // Health needs millisecond precision; scheduling retains the specified whole-second clock.
+                    // Health and lease checks need milliseconds; scheduling retains the whole-second clock.
                     val currentTime = if (precise) "CURRENT_DATETIME" else "CAST(CURRENT_TIMESTAMP AS DATETIME)"
                     "SELECT $currentTime - DATETIME '1970-01-01 00:00:00'"
                 }
