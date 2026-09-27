@@ -54,6 +54,10 @@ class QueueJob(
     @Column(name = "attempt_count", nullable = false) var attemptCount: Long = 0,
     @Column(name = "active_attempt_no") var activeAttemptNo: Long? = null,
     @Column(name = "next_fence", nullable = false) var nextFence: Long = 0,
+    @Column(name = "error_code", length = 80) var errorCode: String? = null,
+    @Column(name = "error_summary", length = 4096) var errorSummary: String? = null,
+    @Column(name = "progress_stage", length = 320) var progressStage: String? = null,
+    @Column(name = "progress_json", length = 16_384) var progressJson: String? = null,
     @Enumerated(EnumType.STRING) @Column(name = "failure_disposition", length = 24)
     var failureDisposition: FailureDisposition? = null,
     @Version @Column(name = "row_version", nullable = false) var rowVersion: Long = 0,
@@ -98,6 +102,8 @@ class QueueAttempt(
     @Column(name = "lease_expires_at_epoch_ms", nullable = false) var leaseExpiresAt: Long = 0,
     @Column(name = "error_code", length = 80) var errorCode: String? = null,
     @Column(name = "error_summary", length = 4096) var errorSummary: String? = null,
+    @Column(name = "progress_stage", length = 320) var progressStage: String? = null,
+    @Column(name = "progress_json", length = 16_384) var progressJson: String? = null,
 )
 
 @Embeddable
@@ -112,4 +118,48 @@ class QueueJobResource(
     @EmbeddedId var id: QueueJobResourceId = QueueJobResourceId(),
     @MapsId("jobId") @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "job_id", nullable = false)
     var job: QueueJob? = null,
+)
+
+/** Tombstones retain the monotonically increasing resource fence after ownership is released. */
+@Entity
+@Table(name = "queue_resource_lock")
+class QueueResourceLock(
+    @Id @Column(name = "resource_key", length = 300) var resourceKey: String = "",
+    @Column(name = "fence_counter", nullable = false) var fenceCounter: Long = 0,
+    @Column(name = "current_job_id") var currentJobId: Long? = null,
+    @Column(name = "current_attempt_no") var currentAttemptNo: Long? = null,
+    @Column(name = "current_fence") var currentFence: Long? = null,
+    @Column(name = "lease_expires_at_epoch_ms") var leaseExpiresAt: Long? = null,
+)
+
+@Entity
+@Table(name = "queue_admin_audit", indexes = [Index(name = "queue_audit_job", columnList = "job_id,created_at_epoch_ms")])
+class QueueAdminAudit(
+    @Id @Column(name = "command_id", length = 36) var commandId: String = "",
+    @Column(name = "command_hash", nullable = false, length = 64) var commandHash: String = "",
+    @Column(name = "job_id", nullable = false) var jobId: Long = 0,
+    @Column(name = "actor_user_id", nullable = false) var actorUserId: Long = 0,
+    @Column(nullable = false, length = 16) var action: String = "",
+    @Column(name = "recovery_acknowledged", nullable = false) var recoveryAcknowledged: Boolean = false,
+    @Column(length = 1024) var reason: String? = null,
+    @Enumerated(EnumType.STRING) @Column(name = "prior_status", nullable = false, length = 24)
+    var priorStatus: QueueStatus = QueueStatus.QUEUED,
+    @Enumerated(EnumType.STRING) @Column(name = "new_status", nullable = false, length = 24)
+    var newStatus: QueueStatus = QueueStatus.QUEUED,
+    @Column(name = "created_at_epoch_ms", nullable = false) var createdAt: Long = 0,
+)
+
+/** A pointer is visible only when this row commits with the fenced successful attempt. */
+@Entity
+@Table(name = "queue_artifact", indexes = [Index(name = "queue_artifact_job", columnList = "job_id,attempt_no")])
+class QueueArtifact(
+    @Id @Column(name = "artifact_id", length = 36) var artifactId: String = "",
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "job_id", nullable = false) var job: QueueJob? = null,
+    @Column(name = "execution_generation", nullable = false) var executionGeneration: Long = 1,
+    @Column(name = "attempt_no", nullable = false) var attemptNo: Long = 0,
+    @Column(nullable = false) var fence: Long = 0,
+    @Column(name = "relative_path", nullable = false, length = 1024) var relativePath: String = "",
+    @Column(name = "storage_path", nullable = false, length = 2048) var storagePath: String = "",
+    @Column(name = "size_bytes", nullable = false) var sizeBytes: Long = 0,
+    @Column(name = "sha256", nullable = false, length = 64) var sha256: String = "",
 )

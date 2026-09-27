@@ -265,6 +265,7 @@ tasks.withType<Test> {
 	// AbstractIntegrationTest의 DB 컨테이너 선택 스위치(mariadb|postgres|mysql|mssql|cubrid).
 	// -Dyona.it.db=... 로 gradle CLI에 준 값을 포크된 테스트 JVM까지 그대로 전달한다.
 	systemProperty("yona.it.db", System.getProperty("yona.it.db", "mariadb"))
+	systemProperty("yona.test.runtime-classpath", sourceSets["test"].runtimeClasspath.asPath)
 	environment("DOCKER_API_VERSION", "1.44")
 	environment("TESTCONTAINERS_RYUK_DISABLED", "true")
 	environment("TESTCONTAINERS_CONTAINER_STARTUP_TIMEOUT", "120")
