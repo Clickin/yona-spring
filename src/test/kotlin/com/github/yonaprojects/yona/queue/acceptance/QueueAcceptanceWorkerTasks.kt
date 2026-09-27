@@ -11,6 +11,7 @@ import com.github.yonaprojects.yona.queue.QueueCandidateSnapshot
 import com.github.yonaprojects.yona.queue.QueueClock
 import com.github.yonaprojects.yona.queue.QueueWorkerStore
 import com.github.yonaprojects.yona.queue.TaskRegistry
+import io.micrometer.core.instrument.MeterRegistry
 import jakarta.persistence.EntityManager
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.beans.factory.annotation.Value
@@ -50,8 +51,9 @@ class QueueAcceptanceWorkerProcessConfiguration {
         @Value("\${yona.queue.data-dir}") dataDirectory: String,
         @Value("\${yona.queue.acceptance.control-dir}") control: String,
         @Value("\${yona.queue.lease-millis}") leaseMillis: Long,
+        meterRegistry: MeterRegistry,
     ): QueueWorkerStore = ContendedQueueWorkerStore(
-        entityManager, transactions, clock, registry, dataSource, dataDirectory, leaseMillis, Path.of(control),
+        entityManager, transactions, clock, registry, dataSource, dataDirectory, leaseMillis, Path.of(control), meterRegistry,
     )
 
     @Bean fun unguardedClaimTask(dataSource: DataSource, @Value("\${yona.queue.acceptance.control-dir}") control: String) =
@@ -85,7 +87,8 @@ private class ContendedQueueWorkerStore(
     entityManager: EntityManager, transactions: PlatformTransactionManager, clock: QueueClock,
     registry: TaskRegistry, dataSource: DataSource, dataDirectory: String, leaseMillis: Long,
     private val control: Path,
-) : QueueWorkerStore(entityManager, transactions, clock, registry, dataSource, dataDirectory, leaseMillis) {
+    meterRegistry: MeterRegistry,
+) : QueueWorkerStore(entityManager, transactions, clock, registry, dataSource, dataDirectory, leaseMillis, meterRegistry = meterRegistry) {
     internal override fun claim(
         candidate: QueueCandidateSnapshot, definition: TaskDefinition,
         decoded: DecodedTaskPayload, ownerInstance: String,

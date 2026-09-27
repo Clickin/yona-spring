@@ -1,5 +1,26 @@
 # yona product bug fixes — TDD tracking
 
+## 2026-09-28 — Site-admin queue REST and bounded observability
+
+- Added session-only queue list/detail/history, audited cancel/retry and verified artifact download.
+  Every request resolves the current database site-admin state; pending 2FA and legacy token-header CSRF bypasses are rejected.
+- Read projections omit payload/storage paths, preserve large IDs as strings and page attempt history newest-first.
+  Producer limits now match the API, including Unicode code-point bounds and one immutable result per job.
+- Manual retry now shares enqueue's pending-capacity lock and current-read check. A real regression first
+  demonstrated that retry could overfill a one-slot queue; the fix preserves the failed job and creates no audit on rejection.
+- File-path validation now measures the full UTF-8 byte length. The non-BMP over-limit regression failed before correction.
+- Uncommitted stream errors clear file headers before returning JSON; the regression previously retained a 1 MiB Content-Length.
+- macOS Java 21 does not provide SecureDirectoryStream on the exercised filesystem. Downloads now use the documented
+  private/immutable-namespace path checks there, retain descriptor-relative access where supported, and verify size/digest on one open handle.
+- A real stalled 16 MiB download exposed an OSIV connection leak. Metadata reads now own and close a separate
+  EntityManager; queue JSON requests skip HTML-only bootstrap/model loading. The corrected slow-client probe
+  retains no extra DB connection, and the read-context regression passes on all six supported databases.
+- Observability no longer rescans retained history. Pending gauges are admission-bounded, FAILED has a transactional
+  derived counter with a documented cold-upgrade backfill, and process-local outcome counters publish only after commit.
+- Real two-node HTTP acceptance passed all 16 REST scenarios, including 105 retained attempts, at root and nonroot context paths.
+  The repository runner also checks corrupt/missing/symlinked results, slow clients, and absence of test routes/handlers on the main classpath.
+- Configuration, filesystem trust boundary and cold-upgrade procedure: [durable queue](docs/guide/technical/durable-queue.md).
+
 ## 2026-09-28 — Fenced durable queue executor
 
 - Added bounded in-process workers, retained attempt generations, lease recovery, typed retry outcomes,

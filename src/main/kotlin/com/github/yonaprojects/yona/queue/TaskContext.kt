@@ -24,8 +24,7 @@ sealed class ClassifiedTaskFailure(
     message: String,
     val code: String,
 ) : RuntimeException(message) {
-    val safeSummary: String = message.filter { it == '\t' || it == ' ' || it >= ' ' }
-        .replace(Regex("\\s+"), " ").take(4096)
+    val safeSummary: String = safeQueueError(message)
 
     init {
         require(code.matches(Regex("[A-Z0-9_.-]{1,80}")))
@@ -72,7 +71,7 @@ class TaskContext internal constructor(
 ) {
     private val lifetime = ReentrantReadWriteLock()
     private val artifacts = mutableListOf<StagedQueueArtifact>()
-    private val artifactPaths = mutableSetOf<String>()
+    private var artifactReserved = false
     private var closed = false
 
     fun checkpoint() = lifetime.read {
@@ -98,7 +97,8 @@ class TaskContext internal constructor(
         store.assertCurrent(token)
         val path = normalizeRelativePath(relativePath)
         synchronized(artifacts) {
-            check(artifactPaths.add(path)) { "Artifact path was already written by this attempt" }
+            check(!artifactReserved) { "A queue job may publish only one result artifact" }
+            artifactReserved = true
         }
         val directory = store.stagingDirectory(token)
         var staging: Path? = null
@@ -132,7 +132,7 @@ class TaskContext internal constructor(
             }
         } catch (failure: Throwable) {
             staging?.let { runCatching { Files.deleteIfExists(it) } }
-            synchronized(artifacts) { artifactPaths.remove(path) }
+            synchronized(artifacts) { artifactReserved = false }
             throw failure
         }
     }
@@ -148,12 +148,44 @@ class TaskContext internal constructor(
 
     private fun normalizeRelativePath(value: String): String {
         require(value.isNotBlank() && value.length <= 1024 && '\\' !in value) { "Invalid artifact path" }
+        require(validQueueText(value, 1024)) { "Invalid artifact path text" }
+        require(value.toByteArray(Charsets.UTF_8).size <= 1024) { "Artifact path exceeds the byte limit" }
         val path = Path.of(value)
         require(!path.isAbsolute) { "Artifact path must be relative" }
         val normalized = path.normalize()
         require(normalized.nameCount > 0 && normalized.none { it.toString() == ".." }) { "Invalid artifact path" }
+        require(normalized.fileName.toString().toByteArray(Charsets.UTF_8).size <= 255) { "Artifact filename exceeds the portable byte limit" }
         val result = normalized.joinToString("/") { it.toString() }
         require(result.isNotBlank() && result.length <= 1024) { "Invalid artifact path" }
         return result
+    }
+}
+
+internal fun validQueueText(value: String, maximumCodePoints: Int): Boolean {
+    var index = 0
+    var count = 0
+    while (index < value.length) {
+        val point = value.codePointAt(index)
+        if (point < 0x20 || point == 0x7f || point in 0xd800..0xdfff || ++count > maximumCodePoints) return false
+        index += Character.charCount(point)
+    }
+    return true
+}
+
+private fun safeQueueError(value: String): String = buildString(minOf(value.length, 4096)) {
+    var index = 0
+    var count = 0
+    while (index < value.length && count < 2048) {
+        val point = value.codePointAt(index)
+        index += Character.charCount(point)
+        require(point !in 0xd800..0xdfff) { "Invalid error text" }
+        if ((point < 0x20 && point != 0x09) || point == 0x7f) continue
+        if (point == 0x09 || point == 0x20) {
+            if (isNotEmpty() && last() == ' ') continue
+            append(' ')
+        } else {
+            appendCodePoint(point)
+        }
+        count++
     }
 }

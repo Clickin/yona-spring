@@ -1,0 +1,110 @@
+package com.github.yonaprojects.yona.queue
+
+import com.github.yonaprojects.yona.config.Pre2faAuthenticationToken
+import com.github.yonaprojects.yona.config.SpaCsrfTokenRequestHandler
+import com.github.yonaprojects.yona.domain.user.UserState
+import jakarta.persistence.EntityManager
+import jakarta.servlet.FilterChain
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.core.annotation.Order
+import org.springframework.security.authentication.AnonymousAuthenticationToken
+import org.springframework.security.config.annotation.web.builders.HttpSecurity
+import org.springframework.security.core.context.SecurityContext
+import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository
+import org.springframework.security.web.csrf.CsrfFilter
+import org.springframework.security.web.csrf.CsrfToken
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler
+import org.springframework.stereotype.Component
+import org.springframework.web.filter.OncePerRequestFilter
+import tools.jackson.databind.json.JsonMapper
+import java.util.function.Supplier
+
+internal const val QUEUE_API = "/api/admin/queue/v1"
+internal const val QUEUE_ACTOR_ATTRIBUTE = "yona.queue.admin.actor"
+
+internal data class QueueApiError(val code: String, val message: String)
+
+@Component
+internal class QueueAdminAccess(private val entityManager: EntityManager) {
+    fun actor(request: HttpServletRequest): Long {
+        val context = request.getSession(false)
+            ?.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY) as? SecurityContext
+        val authentication = context?.authentication
+        if (authentication == null || !authentication.isAuthenticated || authentication is AnonymousAuthenticationToken) {
+            throw QueueHttpFailure(401, "UNAUTHENTICATED", "A signed-in session is required")
+        }
+        if (authentication is Pre2faAuthenticationToken) {
+            throw QueueHttpFailure(403, "FORBIDDEN", "Complete authentication before accessing the queue")
+        }
+        // Scalar query bypasses cached principal authorities and managed User instances.
+        return entityManager.createQuery(
+            "select u.id from User u where u.loginId = :login and u.state = :state", Long::class.javaObjectType,
+        ).setParameter("login", authentication.name).setParameter("state", UserState.SITE_ADMIN)
+            .setMaxResults(1).resultList.firstOrNull()
+            ?: throw QueueHttpFailure(403, "FORBIDDEN", "Current site administrator access is required")
+    }
+}
+
+internal class QueueHttpFailure(val status: Int, val code: String, override val message: String) : RuntimeException(message)
+
+@Configuration
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+internal class QueueAdminSecurity(private val access: QueueAdminAccess) {
+    private val json = JsonMapper.builder().build()
+
+    @Bean
+    @Order(0)
+    fun queueAdminSecurityFilterChain(http: HttpSecurity): SecurityFilterChain {
+        val csrfHandler = SpaCsrfTokenRequestHandler()
+        // Keep this filter local to this chain, not a globally registered servlet filter.
+        val authorization = object : OncePerRequestFilter() {
+            override fun doFilterInternal(request: HttpServletRequest, response: HttpServletResponse, chain: FilterChain) {
+                try {
+                    request.setAttribute(QUEUE_ACTOR_ATTRIBUTE, access.actor(request))
+                } catch (failure: QueueHttpFailure) {
+                    error(response, failure.status, failure.code, failure.message)
+                    return
+                } catch (_: Exception) {
+                    error(response, 500, "INTERNAL_ERROR", "Queue authorization is temporarily unavailable")
+                    return
+                }
+                chain.doFilter(request, response)
+            }
+        }
+        http.securityMatcher(QUEUE_API, "$QUEUE_API/**")
+            .requestCache { it.disable() }
+            .csrf {
+                it.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    .csrfTokenRequestHandler(object : CsrfTokenRequestHandler by csrfHandler {
+                        override fun handle(request: HttpServletRequest, response: HttpServletResponse, csrfToken: Supplier<CsrfToken>) {
+                            csrfHandler.handle(request, response, csrfToken)
+                            csrfToken.get() // REST snapshots have no Thymeleaf form to materialize the cookie.
+                        }
+                    })
+            }
+            .exceptionHandling {
+                it.authenticationEntryPoint { _, response, _ ->
+                    error(response, 401, "UNAUTHENTICATED", "A signed-in session is required")
+                }.accessDeniedHandler { _, response, _ ->
+                    error(response, 403, "FORBIDDEN", "Access denied or invalid CSRF token")
+                }
+            }
+            .authorizeHttpRequests { it.anyRequest().permitAll() }
+            .addFilterBefore(authorization, CsrfFilter::class.java)
+        return http.build()
+    }
+
+    private fun error(response: HttpServletResponse, status: Int, code: String, message: String) {
+        response.status = status
+        response.contentType = "application/json"
+        response.characterEncoding = "UTF-8"
+        response.setHeader("Cache-Control", "no-store")
+        json.writeValue(response.outputStream, QueueApiError(code, message))
+    }
+}

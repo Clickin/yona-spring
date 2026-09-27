@@ -1,0 +1,10 @@
+gradle.projectsEvaluated {
+    def root = gradle.rootProject
+    root.tasks.register('queueAcceptanceClasspaths') {
+        doLast {
+            def sources = root.extensions.getByType(org.gradle.api.tasks.SourceSetContainer)
+            println 'QUEUE_TEST_CP=' + sources.getByName('test').runtimeClasspath.asPath
+            println 'QUEUE_MAIN_CP=' + sources.getByName('main').runtimeClasspath.asPath
+        }
+    }
+}

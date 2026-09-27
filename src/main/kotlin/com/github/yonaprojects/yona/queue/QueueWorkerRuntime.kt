@@ -1,5 +1,7 @@
 package com.github.yonaprojects.yona.queue
 
+import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -31,6 +33,7 @@ class QueueWorkerRuntime(
     private val store: QueueWorkerStore,
     private val registry: TaskRegistry,
     private val clock: QueueClock,
+    meterRegistry: MeterRegistry,
     @Value("\${yona.queue.workers:4}") private val workers: Int = 4,
     @Value("\${yona.queue.poll-millis:250}") private val pollMillis: Long = 250,
     @Value("\${yona.queue.lease-millis:60000}") private val leaseMillis: Long = 60_000,
@@ -39,6 +42,7 @@ class QueueWorkerRuntime(
     @Value("\${yona.queue.data-dir:\${yona.data:data}/queue}") dataDirectory: String,
     @Value("\${yona.queue.instance-id:}") configuredInstanceId: String = "",
     @Value("\${spring.datasource.hikari.maximum-pool-size:10}") private val dbConnectionBudget: Int = 10,
+    @Value("\${yona.queue.claim-batch:64}") private val claimBatch: Int = 64,
 ) : SmartLifecycle, AutoCloseable {
     val instanceId: String = configuredInstanceId.ifBlank { java.util.UUID.randomUUID().toString() }
     private val claiming = AtomicBoolean(true)
@@ -56,10 +60,12 @@ class QueueWorkerRuntime(
     }
     private val heartbeatPool = java.util.concurrent.ScheduledThreadPoolExecutor(1, threadFactory("yona-queue-heartbeat"))
     @Volatile private var poller: Thread? = null
+    private val executionTimer = meterRegistry.timer("yona.queue.execution")
 
     init {
         require(workers > 0 && workers <= dbConnectionBudget) { "Queue worker count exceeds the configured DB connection budget" }
         require(dbConnectionBudget > 0)
+        require(claimBatch in 1..64)
         require(pollMillis in 1L..1_000L) { "Queue poll interval must be between 1 and 1000 milliseconds" }
         require(leaseMillis > 0 && heartbeatMillis > 0 && heartbeatMillis < leaseMillis) {
             "Queue heartbeat must be positive and shorter than its lease"
@@ -67,6 +73,9 @@ class QueueWorkerRuntime(
         require(shutdownGraceMillis > 0)
         require(instanceId.matches(Regex("[A-Za-z0-9._:-]{1,128}")))
         Files.createDirectories(guardRoot)
+        Gauge.builder("yona.queue.worker.slots.used", this) { it.active.size.toDouble() }.register(meterRegistry)
+        Gauge.builder("yona.queue.worker.slots.capacity", this) { it.workers.toDouble() }.register(meterRegistry)
+        Gauge.builder("yona.queue.worker.slots.utilization", this) { it.active.size.toDouble() / it.workers }.register(meterRegistry)
     }
 
     override fun start() {
@@ -145,7 +154,7 @@ class QueueWorkerRuntime(
     }
 
     private fun recoverAndClaim() {
-        val expired = store.expiredAttemptIds(recoveryCursor.get(), 64)
+        val expired = store.expiredAttemptIds(recoveryCursor.get(), claimBatch)
         if (expired.isNotEmpty()) {
             recoveryCursor.set(expired.last())
             for (id in expired) {
@@ -157,7 +166,7 @@ class QueueWorkerRuntime(
         if (!claiming.get() || closing.get()) return
         val freeSlots = workers - active.size
         if (freeSlots <= 0) return
-        val limit = min(64, maxOf(16, freeSlots.coerceAtMost(8) * 8))
+        val limit = min(claimBatch, maxOf(16, freeSlots.coerceAtMost(8) * 8))
         val ids = store.dueCandidateIds(scanCursor.get(), limit)
         if (ids.isEmpty()) return
         scanCursor.set(ids.last())
@@ -214,6 +223,7 @@ class QueueWorkerRuntime(
     }
 
     private fun runHandler(execution: WorkerExecution) {
+        val startedAt = System.nanoTime()
         val token = execution.token
         var failure: Throwable? = null
         try {
@@ -238,6 +248,7 @@ class QueueWorkerRuntime(
                 .onFailure { logger.warn("Queue resource-owner cleanup failed for job {}", token.jobId, it) }
             execution.guardSet.close()
             active.remove(execution.key, execution)
+            executionTimer.record(System.nanoTime() - startedAt, TimeUnit.NANOSECONDS)
         }
     }
 

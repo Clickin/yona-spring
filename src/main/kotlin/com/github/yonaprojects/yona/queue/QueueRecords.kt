@@ -52,7 +52,7 @@ class QueueJob(
     @Column(name = "next_fence", nullable = false) var nextFence: Long = 0,
     @Column(name = "error_code", length = 80) var errorCode: String? = null,
     @Column(name = "error_summary", length = 4096) var errorSummary: String? = null,
-    @Column(name = "progress_stage", length = 256) var progressStage: String? = null,
+    @Column(name = "progress_stage", length = 320) var progressStage: String? = null,
     @Column(name = "progress_json", length = 16_384) var progressJson: String? = null,
     @Enumerated(EnumType.STRING) @Column(name = "failure_disposition", length = 24)
     var failureDisposition: FailureDisposition? = null,
@@ -98,7 +98,7 @@ class QueueAttempt(
     @Column(name = "lease_expires_at_epoch_ms", nullable = false) var leaseExpiresAt: Long = 0,
     @Column(name = "error_code", length = 80) var errorCode: String? = null,
     @Column(name = "error_summary", length = 4096) var errorSummary: String? = null,
-    @Column(name = "progress_stage", length = 256) var progressStage: String? = null,
+    @Column(name = "progress_stage", length = 320) var progressStage: String? = null,
     @Column(name = "progress_json", length = 16_384) var progressJson: String? = null,
 )
 
