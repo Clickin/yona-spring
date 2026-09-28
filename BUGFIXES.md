@@ -1,5 +1,24 @@
 # yona product bug fixes — TDD tracking
 
+## 2026-09-28 — Bounded administrator SSE and queue progress coalescing
+
+- Same-stage progress retains one validated snapshot and writes at most once per five seconds; stage changes remain immediate.
+  The worker poller flushes pending progress without another producer call, and fenced completion merges the final snapshot
+  into both the job and attempt in the existing outcome transaction.
+- The independent burst regression failed before the change. A standalone Java 21 worker smoke observed 1,000 updates
+  coalesce to the first value, then flush the latest value, and persist value 1,001 on successful completion.
+- A real nested `fencedDb` rollback reproduced suppression of the next stage transition. Progress state now rolls back
+  with the fenced operation, and both paths acquire the progress gate before the database fence.
+- Added session-only reset/changed/heartbeat streams with 32-per-node and two-per-principal/session limits.
+  One shared schedule rechecks current authority and reads committed generation; no stream owns a DB connection.
+- Native nonblocking Tomcat output keeps one pending frame and closes through the normal ERROR lifecycle.
+  Unsupported protocols or SSE compression return JSON 503; deployment-specific proxy/TLS closure remains a release gate.
+- Real HTTP checks passed all 16 REST and 18 SSE scenarios at both root and `/queue-it`, including stopped/drip-reader OS-FD deadlines,
+  authority revocation, 32-stream capacity, gzip exclusion, real shutdown async-count recovery and JVM restart.
+  Artifact guards, a stalled 16 MiB download with pool usage 0→0, and the main-only classpath boundary also passed.
+- All 59 queue tests passed without skips on H2, MariaDB, PostgreSQL, MySQL, SQL Server and CUBRID.
+  Each database also passed standalone projection, 1,000-update progress and rolled-back-stage worker smokes.
+
 ## 2026-09-28 — Site-admin queue REST and bounded observability
 
 - Added session-only queue list/detail/history, audited cancel/retry and verified artifact download.

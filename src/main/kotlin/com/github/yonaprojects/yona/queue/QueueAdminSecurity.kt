@@ -26,6 +26,8 @@ import tools.jackson.databind.json.JsonMapper
 import java.util.function.Supplier
 
 internal const val QUEUE_API = "/api/admin/queue/v1"
+internal const val QUEUE_EVENTS = "$QUEUE_API/events"
+internal const val QUEUE_AUTH_STARTED_ATTRIBUTE = "yona.queue.admin.auth-started"
 internal const val QUEUE_ACTOR_ATTRIBUTE = "yona.queue.admin.actor"
 
 internal data class QueueApiError(val code: String, val message: String)
@@ -33,8 +35,12 @@ internal data class QueueApiError(val code: String, val message: String)
 @Component
 internal class QueueAdminAccess(private val entityManager: EntityManager) {
     fun actor(request: HttpServletRequest): Long {
-        val context = request.getSession(false)
-            ?.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY) as? SecurityContext
+        val context = try {
+            request.getSession(false)
+                ?.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY) as? SecurityContext
+        } catch (_: IllegalStateException) {
+            null // A concurrently invalidated servlet session is unauthenticated, not a database failure.
+        }
         val authentication = context?.authentication
         if (authentication == null || !authentication.isAuthenticated || authentication is AnonymousAuthenticationToken) {
             throw QueueHttpFailure(401, "UNAUTHENTICATED", "A signed-in session is required")
@@ -43,10 +49,12 @@ internal class QueueAdminAccess(private val entityManager: EntityManager) {
             throw QueueHttpFailure(403, "FORBIDDEN", "Complete authentication before accessing the queue")
         }
         // Scalar query bypasses cached principal authorities and managed User instances.
-        return entityManager.createQuery(
+        val query = entityManager.createQuery(
             "select u.id from User u where u.loginId = :login and u.state = :state", Long::class.javaObjectType,
         ).setParameter("login", authentication.name).setParameter("state", UserState.SITE_ADMIN)
-            .setMaxResults(1).resultList.firstOrNull()
+            .setMaxResults(1)
+        if (request.servletPath == QUEUE_EVENTS) query.setHint("jakarta.persistence.query.timeout", 1_000)
+        return query.resultList.firstOrNull()
             ?: throw QueueHttpFailure(403, "FORBIDDEN", "Current site administrator access is required")
     }
 }
@@ -66,7 +74,14 @@ internal class QueueAdminSecurity(private val access: QueueAdminAccess) {
         val authorization = object : OncePerRequestFilter() {
             override fun doFilterInternal(request: HttpServletRequest, response: HttpServletResponse, chain: FilterChain) {
                 try {
-                    request.setAttribute(QUEUE_ACTOR_ATTRIBUTE, access.actor(request))
+                    val events = request.servletPath == QUEUE_EVENTS
+                    val started = if (events) System.nanoTime() else 0L
+                    if (events) request.setAttribute(QUEUE_AUTH_STARTED_ATTRIBUTE, started)
+                    val actor = access.actor(request)
+                    if (events && System.nanoTime() - started > 1_000_000_000L) {
+                        throw QueueHttpFailure(500, "INTERNAL_ERROR", "Queue authorization is temporarily unavailable")
+                    }
+                    request.setAttribute(QUEUE_ACTOR_ATTRIBUTE, actor)
                 } catch (failure: QueueHttpFailure) {
                     error(response, failure.status, failure.code, failure.message)
                     return

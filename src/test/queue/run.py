@@ -98,6 +98,8 @@ def main():
         'SPRING_JPA_OPEN_IN_VIEW': 'true',
         'SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE': 'UTC', 'SPRING_AI_MCP_SERVER_ENABLED': 'false',
         'SERVER_ADDRESS': '127.0.0.1', 'SERVER_SERVLET_CONTEXT_PATH': context,
+        'JAVA_TOOL_OPTIONS': '-Dh2.bindAddress=127.0.0.1',
+        'SERVER_COMPRESSION_ENABLED': 'true', 'SERVER_COMPRESSION_MIN_RESPONSE_SIZE': '1',
         'YONA_DATA': str(root / 'application-data'), 'YONA_QUEUE_DATA_DIR': str(root / 'queue'),
         'YONA_QUEUE_ACCEPTANCE_ENABLED': 'true', 'YONA_QUEUE_ACCEPTANCE_CONTROL_DIR': str(root / 'control'),
         'YONA_QUEUE_ACCEPTANCE_CONTROL_TOKEN': token, 'YONA_QUEUE_WORKERS': '2',
@@ -111,19 +113,24 @@ def main():
         for reservation in reservations:
             reservation.bind(('127.0.0.1', 0))
         ports = [reservation.getsockname()[1] for reservation in reservations]
-    finally:
+    except BaseException:
         for reservation in reservations:
             reservation.close()
+        raise
     bases = ['http://127.0.0.1:' + str(port) + context for port in ports]
     nodes = []
+    node_environments = []
     try:
         for index, (port, base) in enumerate(zip(ports, bases), 1):
             log = root / ('node-' + str(index) + '.log')
             stream = log.open('wb')
+            node_environment = dict(environment, YONA_QUEUE_INSTANCE_ID='queue-http-' + str(index),
+                                    YONA_BASE_URL=base)
+            node_environments.append(node_environment)
+            reservations[index - 1].close()
             process = subprocess.Popen([JAVA, '-cp', classpaths['QUEUE_TEST_CP'], MAIN,
                                         '--server.port=' + str(port), '--server.address=127.0.0.1'],
-                                       cwd=REPO, env=dict(environment, YONA_QUEUE_INSTANCE_ID='queue-http-' + str(index),
-                                                        YONA_BASE_URL=base), stdout=stream, stderr=subprocess.STDOUT)
+                                       cwd=REPO, env=node_environment, stdout=stream, stderr=subprocess.STDOUT)
             nodes.append((process, stream, log))
             deadline = time.monotonic() + 120
             while time.monotonic() < deadline:
@@ -138,7 +145,19 @@ def main():
                 time.sleep(0.1)
             else:
                 raise RuntimeError('Yona readiness failed; inspect ' + str(log))
-        settings = {'YONA_BASE_URL': bases[0], 'YONA_NODE_2_BASE_URL': bases[1], 'YONA_QUEUE_TEST_CONTROL_TOKEN': token}
+        settings = {
+            'YONA_BASE_URL': bases[0], 'YONA_NODE_2_BASE_URL': bases[1],
+            'YONA_QUEUE_TEST_CONTROL_TOKEN': token,
+            'YONA_QUEUE_NODE_1_PID': str(nodes[0][0].pid),
+            'YONA_QUEUE_NODE_2_PID': str(nodes[1][0].pid),
+            'YONA_QUEUE_NODE_2_ENV_JSON': json.dumps(node_environments[1]),
+            'YONA_QUEUE_NODE_2_PORT': str(ports[1]),
+            'YONA_QUEUE_NODE_2_LOG': str(root / 'node-2.log'),
+            'YONA_QUEUE_TEST_JAVA': JAVA,
+            'YONA_QUEUE_TEST_CP': classpaths['QUEUE_TEST_CP'],
+            'YONA_QUEUE_TEST_MAIN': MAIN,
+            'YONA_QUEUE_REPO_DIR': str(REPO),
+        }
         roles = [
             ('admin', 'YONA_ADMIN_COOKIE', 'YONA_CSRF_TOKEN'),
             ('member', 'YONA_MEMBER_COOKIE', 'YONA_MEMBER_CSRF_TOKEN'),
@@ -163,10 +182,15 @@ def main():
             threading.Event().wait()
             return
         test_environment = dict(environment, **settings)
-        subprocess.run([sys.executable, str(HERE / 'queue_admin_blackbox.py'), *(arguments or ['-k', 'test_pr03_'])],
-                       cwd=REPO, env=test_environment, check=True)
+        selections = [arguments] if arguments else [['-k', 'test_pr03_'], ['-k', 'test_pr04_']]
+        for selection in selections:
+            subprocess.run([sys.executable, str(HERE / 'queue_admin_blackbox.py'), *selection],
+                           cwd=REPO, env=test_environment, check=True)
         subprocess.run([sys.executable, str(HERE / 'download_guards.py')], cwd=REPO, env=test_environment, check=True)
         subprocess.run([sys.executable, str(HERE / 'slow_download.py')], cwd=REPO, env=test_environment, check=True)
+        if not arguments:
+            subprocess.run([sys.executable, str(HERE / 'sse_pr04_acceptance.py')],
+                           cwd=REPO, env=test_environment, check=True)
         stop(nodes)
         production_log = root / 'production-boundary.log'
         with production_log.open('wb') as stream:
@@ -177,8 +201,10 @@ def main():
             raise RuntimeError('Production boundary failed; inspect ' + str(production_log))
         if 'PRODUCTION_BOUNDARY_SMOKE_OK' not in production_log.read_text():
             raise RuntimeError('Production boundary did not report completion')
-        print('QUEUE_HTTP_ACCEPTANCE_OK: REST, artifact guards, slow download and production boundary; logs: ' + str(root), flush=True)
+        print('QUEUE_HTTP_ACCEPTANCE_OK: requested HTTP checks, artifact guards, slow download and production boundary; logs: ' + str(root), flush=True)
     finally:
+        for reservation in reservations:
+            reservation.close()
         stop(nodes)
         print('Queue fixture processes stopped; private evidence remains at ' + str(root), flush=True)
 

@@ -277,13 +277,7 @@ class QueueWorkerStore(
         result
     }
 
-    internal fun progress(token: QueueAttemptToken, stage: String, counters: Map<String, Long>): Unit = inTransaction {
-        require(stage.isNotBlank() && validQueueText(stage, 160)) { "Invalid progress stage" }
-        require(counters.size <= 16 && counters.all { (key, value) ->
-            key.matches(Regex("[a-zA-Z0-9_.-]{1,64}")) && value >= 0
-        }) { "Invalid progress counters" }
-        val json = progressMapper.writeValueAsString(counters.toSortedMap())
-        require(json.toByteArray(Charsets.UTF_8).size <= 16_384) { "Progress snapshot is too large" }
+    internal fun progress(token: QueueAttemptToken, snapshot: QueueProgress): Unit = inTransaction {
         val status = assertCurrentInTransaction(token)
         val now = clock.leaseNow()
         val job = entityManager.find(QueueJob::class.java, token.jobId, LockModeType.PESSIMISTIC_WRITE)
@@ -292,14 +286,19 @@ class QueueWorkerStore(
             QueueAttempt::class.java, QueueAttemptId(token.jobId, token.attemptNo), LockModeType.PESSIMISTIC_WRITE,
         ) ?: throw StaleAttempt()
         if (job.status != status || !isCurrent(token, job, attempt, now)) throw StaleAttempt()
-        job.progressStage = stage
-        job.progressJson = json
+        applyProgress(job, attempt, snapshot)
         job.updatedAt = now
-        attempt.progressStage = stage
-        attempt.progressJson = json
         bumpProjectionChange()
         entityManager.flush()
         assertCurrentInTransaction(token)
+    }
+
+    private fun applyProgress(job: QueueJob, attempt: QueueAttempt, snapshot: QueueProgress) {
+        val json = progressMapper.writeValueAsString(snapshot.counters)
+        job.progressStage = snapshot.stage
+        job.progressJson = json
+        attempt.progressStage = snapshot.stage
+        attempt.progressJson = json
     }
 
     internal fun stagingDirectory(token: QueueAttemptToken): Path = stagingRoot
@@ -310,6 +309,7 @@ class QueueWorkerStore(
         token: QueueAttemptToken,
         failure: Throwable?,
         artifacts: List<StagedQueueArtifact>,
+        finalProgress: QueueProgress? = null,
     ): Boolean {
         // A commit error may follow a durable commit. Retain immutable bytes for pointer-based reconciliation.
         return inTransaction {
@@ -383,6 +383,7 @@ class QueueWorkerStore(
                         ?: throw StaleAttempt()
                     if (!owns(lock, token, resourceFence) || (lock.leaseExpiresAt ?: 0L) <= finalNow) throw StaleAttempt()
                 }
+                finalProgress?.let { applyProgress(job, attempt, it) }
                 attempt.outcome = decision.activeOutcome ?: throw IllegalStateException("Missing attempt outcome")
                 attempt.finishedAt = finalNow
                 when (completion) {
