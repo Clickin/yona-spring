@@ -301,6 +301,15 @@ class QueueAdminHttpAcceptanceHarness(
         return mapOf("active" to pool.activeConnections, "idle" to pool.idleConnections, "total" to pool.totalConnections)
     }
 
+    @GetMapping("/sse/clock")
+    fun sseClock(
+        @RequestHeader("X-Yona-Queue-Test-Control", required = false) token: String?,
+        request: HttpServletRequest,
+    ): Map<String, String> {
+        authorize(token, request)
+        return mapOf("monotonicNanos" to System.nanoTime().toString())
+    }
+
     @PostMapping("/sessions")
     fun createSession(
         @RequestHeader("X-Yona-Queue-Test-Control", required = false) token: String?,
@@ -311,7 +320,7 @@ class QueueAdminHttpAcceptanceHarness(
         authorize(token, request)
         require(body.keys == setOf("role"))
         val role = body.getValue("role")
-        require(role in SESSION_ROLES)
+        require(role in SESSION_ROLES || isCapacityAdminRole(role))
         val user = fixtureUser(role)
         val principal = userDetailsService.loadUserByUsername(user.loginId)
         val complete = UsernamePasswordAuthenticationToken(principal, null, principal.authorities)
@@ -461,6 +470,7 @@ class QueueAdminHttpAcceptanceHarness(
     ): ResponseEntity<Void> {
         authorize(token, request)
         val run = runs[runId] ?: return ResponseEntity.status(HttpStatus.NOT_FOUND).build()
+        val startedAt = System.nanoTime()
         val accepted = when (action) {
             "release-gate" -> { run.jobIds.forEach(::releaseGate); true }
             "pause-old-attempt" -> {
@@ -478,7 +488,10 @@ class QueueAdminHttpAcceptanceHarness(
             "invalidate-test-manager-session" -> invalidateRunSession(run)
             else -> return conflict()
         }
-        return if (accepted) ResponseEntity.noContent().build() else conflict()
+        return if (accepted) ResponseEntity.noContent()
+            .header("X-Yona-Queue-Test-Action-Started-Monotonic-Nanos", startedAt.toString())
+            .header("X-Yona-Queue-Test-Commit-Monotonic-Nanos", System.nanoTime().toString())
+            .build() else conflict()
     }
 
     private fun enqueueScenario(body: Map<String, Any?>, scenario: String, run: HttpAcceptanceRun): List<Long> {
@@ -701,9 +714,12 @@ class QueueAdminHttpAcceptanceHarness(
         }
     }
 
+    private fun isCapacityAdminRole(role: String): Boolean =
+        role.startsWith("capacity-admin-") && role.removePrefix("capacity-admin-").toIntOrNull() in 0..33
+
     private fun fixtureUser(role: String): User {
         val login = "queue-http-${role.replace('-', '_')}"
-        val initialState = if (role in ADMIN_ROLES) UserState.SITE_ADMIN else UserState.ACTIVE
+        val initialState = if (role in ADMIN_ROLES || isCapacityAdminRole(role)) UserState.SITE_ADMIN else UserState.ACTIVE
         val user = userRepository.findByLoginId(login).orElseGet {
             userService.createUser(User(
                 loginId = login,
@@ -830,6 +846,7 @@ object QueueAdminHttpAcceptanceNodeMain {
         val application = org.springframework.boot.builder.SpringApplicationBuilder(
             YonaApplication::class.java,
             QueueAdminHttpAcceptanceConfiguration::class.java,
+            QueueSseHttpAcceptanceConfiguration::class.java,
         ).web(org.springframework.boot.WebApplicationType.SERVLET).run(*args)
         if (application.getBean(UserRepository::class.java).count() == 0L) {
             application.getBean(UserService::class.java).createUser(User(

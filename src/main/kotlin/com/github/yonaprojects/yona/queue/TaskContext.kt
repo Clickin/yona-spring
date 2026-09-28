@@ -46,6 +46,21 @@ internal data class StagedQueueArtifact(
     val sha256: String,
 )
 
+internal class QueueProgress(val stage: String, counters: Map<String, Long>) {
+    val counters = counters.also { require(it.size <= 16) { "Invalid progress counters" } }.toSortedMap()
+
+    init {
+        require(stage.isNotBlank() && validQueueText(stage, 160)) { "Invalid progress stage" }
+        require(this.counters.size <= 16 && this.counters.all { (key, value) ->
+            key.matches(COUNTER_KEY) && value >= 0
+        }) { "Invalid progress counters" }
+    }
+
+    private companion object {
+        val COUNTER_KEY = Regex("[a-zA-Z0-9_.-]{1,64}")
+    }
+}
+
 internal class QueueAttemptToken(
     val jobId: Long,
     val attemptNo: Long,
@@ -73,6 +88,10 @@ class TaskContext internal constructor(
     private val artifacts = mutableListOf<StagedQueueArtifact>()
     private var artifactReserved = false
     private var closed = false
+    private val progressLock = Any()
+    private var pendingProgress: QueueProgress? = null
+    private var lastProgressStage: String? = null
+    private var lastProgressAt = 0L
 
     fun checkpoint() = lifetime.read {
         ensureOpen()
@@ -83,12 +102,55 @@ class TaskContext internal constructor(
 
     fun progress(stage: String, counters: Map<String, Long> = emptyMap()) = lifetime.read {
         ensureOpen()
-        store.progress(token, stage, counters)
+        val snapshot = QueueProgress(stage, counters)
+        synchronized(progressLock) {
+            if (stage != lastProgressStage || progressDue()) {
+                persistProgress(snapshot)
+            } else {
+                pendingProgress = snapshot
+            }
+        }
+    }
+
+    internal fun flushProgressIfDue() = lifetime.read {
+        if (closed || token.stale.get()) return@read
+        synchronized(progressLock) {
+            pendingProgress?.takeIf { progressDue() }?.let { persistProgress(it) }
+        }
+    }
+
+    internal fun finalProgress(): QueueProgress? = lifetime.read {
+        check(closed)
+        pendingProgress
+    }
+
+    private fun progressDue(): Boolean = System.nanoTime() - lastProgressAt >= 5_000_000_000L
+
+    private fun persistProgress(snapshot: QueueProgress) {
+        store.progress(token, snapshot)
+        pendingProgress = null
+        lastProgressStage = snapshot.stage
+        lastProgressAt = System.nanoTime()
     }
 
     fun <T> fencedDb(block: (EntityManager) -> T): T = lifetime.read {
         ensureOpen()
-        store.fencedDb(token, block)
+        // Keep the progress gate before the DB fence, including reentrant progress calls.
+        synchronized(progressLock) {
+            val pendingBefore = pendingProgress
+            val stageBefore = lastProgressStage
+            val timeBefore = lastProgressAt
+            try {
+                store.fencedDb(token, block).also {
+                    if (lastProgressAt != timeBefore) lastProgressAt = System.nanoTime()
+                }
+            } catch (failure: Throwable) {
+                pendingProgress = pendingBefore
+                lastProgressStage = stageBefore
+                lastProgressAt = timeBefore
+                throw failure
+            }
+        }
     }
 
     /** Streams into private staging; only successful fenced completion can publish it. */

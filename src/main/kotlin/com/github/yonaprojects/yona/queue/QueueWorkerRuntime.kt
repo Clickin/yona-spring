@@ -138,6 +138,15 @@ class QueueWorkerRuntime(
         while (!closing.get()) {
             try {
                 clock.checkSynchronized()
+                for (execution in active.values) {
+                    try {
+                        execution.context.flushProgressIfDue()
+                    } catch (_: StaleAttempt) {
+                        execution.token.stale.set(true)
+                    } catch (failure: Exception) {
+                        logger.warn("Queue progress flush failed for job {}", execution.token.jobId, failure)
+                    }
+                }
                 recoverAndClaim()
             } catch (interrupted: InterruptedException) {
                 if (closing.get()) break
@@ -234,7 +243,7 @@ class QueueWorkerRuntime(
         try {
             val staged = execution.context.closeForHandlerReturn()
             try {
-                store.complete(token, failure, staged)
+                store.complete(token, failure, staged, execution.context.finalProgress())
             } catch (stale: StaleAttempt) {
                 token.stale.set(true)
             } catch (persistFailure: Exception) {

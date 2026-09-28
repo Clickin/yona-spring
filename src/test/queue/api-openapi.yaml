@@ -209,7 +209,14 @@ paths:
       description: >-
         Cookie-authenticated SSE invalidation stream. Initial connection and
         reconnect send reset; clients refetch the durable snapshot. Last-Event-ID
-        is not a durable replay cursor. See sse-protocol.md.
+        is not a durable replay cursor. Runtime eligibility requires the exact
+        instrumented QueueSseHttp11NioProtocol/QueueSseHttp11Processor pair,
+        an HTTP/1.1 request, non-secure backend connector/protocol handler, and
+        live connection-bound SocketWrapperBase handle. Unsupported server
+        paths return JSON 503 before async start or SSE headers. Successful
+        HTTP/1.1 SSE responses set Connection: close. A proxy/TLS-offload path
+        may be server-eligible but requires separate end-to-end release proof.
+        See sse-protocol.md and SPEC-CHANGE-003.md.
       security: [{ yonaSession: [] }]
       responses:
         '200':
@@ -217,6 +224,7 @@ paths:
           headers:
             Cache-Control: { schema: { type: string, const: no-cache } }
             X-Accel-Buffering: { schema: { type: string, const: 'no' } }
+            Connection: { schema: { type: string, const: close } }
           content:
             text/event-stream:
               schema: { type: string }
@@ -239,6 +247,19 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/ServerError' }
+        '503':
+          description: >-
+            Server-side connector/protocol, route capability, or response
+            compression/buffering for text/event-stream is unsupported. Returned
+            as JSON before async start or SSE headers. External proxy/TLS proof
+            remains a release gate, not a request-time 503 flag.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+              example:
+                code: SSE_TRANSPORT_UNSUPPORTED
+                message: SSE transport is unavailable on this deployment.
+                requestId: null
 components:
   securitySchemes:
     yonaSession:

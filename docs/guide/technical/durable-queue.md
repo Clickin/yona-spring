@@ -1,6 +1,6 @@
-# Durable queue: store, executor and administrator REST API
+# Durable queue: store, executor and administrator API
 
-enqueue/query, 순수 상태 전이 모델, 애플리케이션 내부 실행기와 관리자 REST API를 제공한다. SSE·관리 UI, archive exporter/importer는 아직 포함하지 않는다. 기존 메일·웹훅 등 callback 호출 경로는 변경하지 않는다. 실행할 수 있는 작업은 애플리케이션이 명시적으로 등록한 handler뿐이다.
+enqueue/query, 순수 상태 전이 모델, 애플리케이션 내부 실행기와 관리자 REST/SSE API를 제공한다. 관리 UI와 archive exporter/importer는 아직 포함하지 않는다. 기존 메일·웹훅 등 callback 호출 경로는 변경하지 않는다. 실행할 수 있는 작업은 애플리케이션이 명시적으로 등록한 handler뿐이다.
 
 ## 애플리케이션 인터페이스
 
@@ -58,6 +58,9 @@ Worker 수는 설정된 Hikari connection budget을 넘지 않아야 한다. Typ
 
 `progress(stage, counters)`의 stage는 최대 160 Unicode code points, counter는 최대 16개이며 음수가 아닌 `Long` 값이다. API에서는 정밀도를 보존하는 decimal string으로 반환한다. Control 문자·잘못된 Unicode·한도 초과 갱신은 기존 진행 상태를 변경하지 않고 거부한다. 안전한 오류 요약은 surrogate pair를 자르지 않고 설정된 길이로 제한한다. 원래 exception message나 stack trace를 API에 반환하지 않는다.
 
+같은 stage의 진행 갱신은 최신 snapshot 하나로 합쳐 DB에 5초당 최대 한 번 기록한다. 첫 갱신과 stage 변경은 즉시 기록하고, 이후 호출이 없어도 worker poller가 대기 snapshot을 반영한다. 입력 counter는 복사하여 호출자의 후속 변경과 분리한다. Handler 반환 시 남은 snapshot은 별도 progress transaction 없이 최종 상태와 같은 fenced transaction에서 job·attempt 양쪽에 반영한다.
+`fencedDb` 안의 진행 갱신은 해당 transaction이 실패하면 coalescing 상태도 되돌린다. 진행 갱신과 업무 transaction은 같은 순서로 progress gate와 DB fence를 얻어 서로의 잠금을 기다리는 역전을 피한다.
+
 명시적 `RetryableTaskFailure`만 자동 재시도한다. `PermanentTaskFailure`는 실패, `RecoveryRequiredTaskFailure`와 미분류 예외는 운영자 확인 상태가 된다. 기본 attempt 한도는 generation당 5회이며, 지연은 exponential ceiling의 1/2~1 사이 deterministic jitter다. 수동 retry는 generation만 새로 시작하고 전체 attempt 번호·fence·이력을 지우지 않는다.
 
 `QueueControl.cancel/retry`는 DB의 `SITE_ADMIN` 상태를 다시 확인하며 command UUID로 중복을 처리한다. 실행 중 취소는 `CANCEL_REQUESTED`일 뿐 종료가 아니다. 메모리 취소 신호는 외부 업무 트랜잭션까지 commit된 뒤에만 전달한다. `RECOVERY_REQUIRED` 재실행은 명시적 확인과 최대 300 Unicode code points의 사유가 필요하다. 수동 retry도 enqueue와 같은 admission lock·현재 pending 수를 사용하며, 용량이 가득 차면 `QUEUE_FULL`로 거부하고 상태·감사를 변경하지 않는다.
@@ -90,6 +93,18 @@ Job 하나에는 다운로드할 결과 파일 하나만 게시할 수 있다. �
 
 `SecureDirectoryStream`을 지원하는 파일시스템은 descriptor 기준으로 탐색한다. macOS 등 미지원 환경은 symlink/real-path 점검과 `NOFOLLOW_LINKS`를 사용한다. 이 경로는 악의적인 OS 사용자의 ancestor 교체 경합을 막는다고 주장하지 않는다. **Queue data directory와 그 상위 경로는 신뢰할 수 없는 OS principal이 수정할 수 없어야 하며, 게시한 파일을 제자리에서 수정하지 않아야 한다.**
 
+## 관리자 SSE
+
+`GET /api/admin/queue/v1/events`는 같은 origin의 로그인 session으로 연결한다. 매 연결의 첫 이벤트는 `reset`이며, 이후 committed queue generation이 바뀌면 decimal string을 담은 `changed`를 보낸다. 두 이벤트 모두 REST snapshot을 다시 읽으라는 신호다. Payload·결과 파일·사용자 정보는 전송하지 않고, `Last-Event-ID`는 받아도 과거 이벤트를 재생하지 않는다. 유휴 연결에는 15초 이내에 comment heartbeat를 보낸다.
+
+한 node에 최대 32개, principal과 session마다 각각 최대 2개 연결을 허용한다. 초과하면 SSE를 시작하기 전에 JSON 429와 `Retry-After`를 반환한다. Generation·현재 관리자 권한·session 검사는 node의 공유 주기로 실행하고, stream마다 DB 연결이나 poller를 보유하지 않는다.
+
+지원 경로는 Java 21, Tomcat 11.0.24의 계측된 HTTP/1.1 NIO와 암호화되지 않은 backend connector다. 기본 Tomcat protocol만 계측 클래스로 교체하며 socket IO·전체 HTTP timeout은 변경하지 않는다. 직접 TLS·HTTP/2·다른 protocol이나 검증되지 않은 transport는 인증 확인 후 JSON 503(`SSE_TRANSPORT_UNSUPPORTED`)을 반환한다. SSE MIME을 압축하는 설정과 `compression=force`도 지원하지 않는다. 일반 JSON 압축은 그대로 사용할 수 있다.
+
+응답은 `Connection: close`와 `X-Accel-Buffering: no`를 사용한다. HTTP/1.1에서 close-delimited body도 유효하므로 chunked 전송만 가정하지 않는다. TLS-offload proxy 뒤의 평문 origin은 지원 가능하지만, **실제 proxy/TLS 경로의 buffering과 client-facing 종료는 배포별 release gate**다. 로컬 origin 검증만으로 그 경로까지 통과했다고 간주하지 않는다.
+
+Stream은 pending frame 하나만 유지하며 밀린 변경은 `reset`으로 합친다. 출력이 계속 남아 있으면 부분 전송으로 타이머를 갱신하지 않고 최초 pending 시각 기준 2초 내 실제 연결을 종료한다. 권한·session 검사 실패 또는 lease 만료 뒤에는 쓰지 않으며 권한 회수부터 실제 종료까지 5초가 한도다. 종료는 별도 watchdog의 Tomcat ERROR 경로를 사용하고, 애플리케이션 종료 시에도 server stop 전에 해당 연결과 async 처리를 마친다.
+
 ## 관측과 업그레이드
 
 - `yona.queue.jobs{status=...}`: QUEUED/RUNNING/RETRY_WAIT/CANCEL_REQUESTED/FAILED 현재 수.
@@ -121,12 +136,12 @@ store 검증에는 업무 rollback, concurrent keyed/unkeyed admission, 기존 M
 
 PR03 검증은 실제 두 servlet JVM과 session cookie로 REST 16개 시나리오를 실행한다. Root 및 `/queue-it` context에서 권한/2FA/CSRF, 권한 회수, 105개 attempt paging, 두 node의 claim 경합, 취소·retry·정확한 결과 bytes를 검사했다. 조회/메트릭 경로는 위 6개 DB에서 별도 Java 프로세스로도 확인한다. SSE·Vue page 검증은 별도 단계이며 이 REST 통과에 포함하지 않는다.
 
-Java 21과 Python 3.10 이상으로 재현한다. 추가 Python package나 외부 DB는 필요하지 않다.
+Java 21, Python 3.10 이상과 `lsof`가 있는 macOS/Linux에서 재현한다. 추가 Python package나 외부 DB는 필요하지 않다.
 
 ```sh
 python3 src/test/queue/run.py
 ```
 
-Runner는 test class를 컴파일하고 private H2/storage와 두 loopback JVM을 만든다. REST 외에 checksum 손상·동일 bytes를 가리키는 파일/ancestor symlink·파일 누락, OSIV를 켠 상태의 16 MiB 느린 다운로드와 DB 연결 반환, main classpath에서 fixture route/handler 부재를 검사한다. 끝나면 소유한 JVM을 종료하고 mode-700 임시 directory에 증거를 남긴다. Cookie/control token을 출력하지 않으며 생성한 환경 파일은 mode 600이다.
+Runner는 test class를 컴파일하고 private H2/storage와 두 loopback JVM을 만든다. REST와 SSE 외에 checksum 손상·동일 bytes를 가리키는 파일/ancestor symlink·파일 누락, OSIV를 켠 상태의 16 MiB 느린 다운로드와 DB 연결 반환, main classpath에서 fixture route/handler 부재를 검사한다. SSE 검증은 실제 socket tuple의 FD 소멸, 멈춘 reader·drip reader, 권한 회수, 공유 polling, node 종료 시 실제 Tomcat async count와 재시작을 사용한다. 압력용 comment·관측 API는 test classpath에만 있으며 일반 JSON 압축을 켠 상태에서도 SSE는 압축하지 않는다. 끝나면 소유한 JVM을 종료하고 mode-700 임시 directory에 증거를 남긴다. Cookie/control token을 출력하지 않으며 생성한 환경 파일은 mode 600이다.
 
-`YONA_QUEUE_HTTP_CONTEXT_PATH`로 context를 변경하고 `--serve`로 수동 검증용 fixture만 유지할 수 있다. [독립 OpenAPI 계약](../../../src/test/queue/api-openapi.yaml)과 Python verifier는 test 디렉터리에 보존한다. 계약의 SSE/page 항목은 후속 단계용이다.
+`YONA_QUEUE_HTTP_CONTEXT_PATH`로 context를 변경하고 `--serve`로 수동 검증용 fixture만 유지할 수 있다. [독립 OpenAPI 계약](../../../src/test/queue/api-openapi.yaml)과 Python verifier는 test 디렉터리에 보존한다. Page 항목은 후속 단계용이다.

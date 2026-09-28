@@ -12,10 +12,12 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 
 class QueueProductionBoundarySmoke {
     public static void main(String[] args) throws Exception {
-        try {
-            Class.forName("com.github.yonaprojects.yona.queue.acceptance.QueueAdminHttpAcceptanceHarness");
-            throw new AssertionError("Test harness is present on the production-only classpath");
-        } catch (ClassNotFoundException expected) { }
+        for (String type : List.of("QueueAdminHttpAcceptanceHarness", "QueueSseAcceptanceProbe")) {
+            try {
+                Class.forName("com.github.yonaprojects.yona.queue.acceptance." + type);
+                throw new AssertionError("Test harness is present on the production-only classpath: " + type);
+            } catch (ClassNotFoundException expected) { }
+        }
         try (var app = new SpringApplicationBuilder(YonaApplication.class).run(args);
              var client = HttpClient.newHttpClient()) {
             var bootstrap = new User();
@@ -35,16 +37,22 @@ class QueueProductionBoundarySmoke {
             }
             String base = "http://127.0.0.1:" + app.getEnvironment().getRequiredProperty("local.server.port")
                 + app.getEnvironment().getProperty("server.servlet.context-path", "");
-            for (String path : List.of("/health", "/pool", "/sessions", "/runs", "/runs/00000000-0000-0000-0000-000000000000",
+            for (String path : List.of("/health", "/pool", "/sse/clock", "/sse/metrics", "/sse/lifecycle", "/sessions", "/runs", "/runs/00000000-0000-0000-0000-000000000000",
                     "/runs/00000000-0000-0000-0000-000000000000/actions/release-gate")) {
                 var response = client.send(HttpRequest.newBuilder(URI.create(base + "/__test__/queue/v1" + path))
                     .header("Accept", "application/json").GET().build(), HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() != 404) throw new AssertionError("Test route was not absent: " + path + " status=" + response.statusCode());
             }
-            var denied = client.send(HttpRequest.newBuilder(URI.create(base + "/api/admin/queue/v1/jobs"))
-                .header("Accept", "application/json").GET().build(), HttpResponse.BodyHandlers.ofString());
-            if (denied.statusCode() != 401 || !denied.body().contains("UNAUTHENTICATED")) throw new AssertionError("Production queue authentication boundary failed");
-            System.out.println("PRODUCTION_BOUNDARY_SMOKE_OK: fixture class absent, 14 fixture handler types absent, six test route shapes 404, queue anonymous JSON401");
+            for (String path : List.of("/jobs", "/events")) {
+                var denied = client.send(HttpRequest.newBuilder(URI.create(base + "/api/admin/queue/v1" + path))
+                    .header("Accept", "application/json")
+                    .header("X-Yona-Queue-Test-Pressure", "bounded-comments")
+                    .GET().build(), HttpResponse.BodyHandlers.ofString());
+                if (denied.statusCode() != 401 || !denied.body().contains("UNAUTHENTICATED") ||
+                        denied.headers().firstValue("X-Yona-Queue-Test-Stream-ID").isPresent())
+                    throw new AssertionError("Production queue authentication boundary failed: " + path);
+            }
+            System.out.println("PRODUCTION_BOUNDARY_SMOKE_OK: fixture classes/handlers absent, private routes404, REST/SSE anonymous JSON401");
         }
     }
 }

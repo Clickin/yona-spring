@@ -1,5 +1,7 @@
 package com.github.yonaprojects.yona.queue
 
+import com.github.yonaprojects.yona.domain.user.User
+import com.github.yonaprojects.yona.domain.user.UserState
 import com.github.yonaprojects.yona.queue.acceptance.JdbcQueueAcceptanceFixture
 import com.zaxxer.hikari.HikariDataSource
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
@@ -12,8 +14,60 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.nio.file.Files
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+import java.util.UUID
 
 class QueueReadConnectionAcceptanceTest {
+    @Test
+    fun eventSnapshotRechecksBatchedAuthorityOutsideTheOpenRequestContext() {
+        JdbcQueueAcceptanceFixture().use { fixture ->
+            val factory = (fixture.transactionManager as JpaTransactionManager).entityManagerFactory!!
+            val users = fixture.contextUserService()
+            val suffix = UUID.randomUUID().toString()
+            val admin = users.createUser(User(
+                loginId = "event-admin-$suffix", name = "Event admin",
+                email = "event-admin-$suffix@example.invalid", state = UserState.SITE_ADMIN,
+            ))
+            val member = users.createUser(User(
+                loginId = "event-member-$suffix", name = "Event member",
+                email = "event-member-$suffix@example.invalid", state = UserState.ACTIVE,
+            ))
+            val adminId = checkNotNull(admin.id)
+            val memberId = checkNotNull(member.id)
+            val queries = QueueAdminQueries(factory)
+            val before = queries.events(setOf(adminId, memberId))
+            fixture.registry.register(TaskDefinition("queue.acceptance.event-read-$suffix", 1, {}))
+            fixture.queue.enqueue("queue.acceptance.event-read-$suffix", 1, "{}".toByteArray(),
+                Instant.EPOCH, null, "event-read")
+            val pool = fixture.dataSource.unwrap(HikariDataSource::class.java).hikariPoolMXBean
+            fun minimumActive() = (1..20).minOf { Thread.sleep(10); pool.activeConnections }
+            fun changeState(id: Long, state: UserState) {
+                factory.createEntityManager().use { manager ->
+                    manager.transaction.begin()
+                    manager.find(User::class.java, id).state = state
+                    manager.transaction.commit()
+                }
+            }
+            factory.createEntityManager().use { requestContext ->
+                val cachedAdmin = requestContext.find(User::class.java, adminId)
+                val baseline = minimumActive()
+                TransactionSynchronizationManager.bindResource(factory, EntityManagerHolder(requestContext))
+                try {
+                    assertEquals(mapOf(adminId to admin.loginId), queries.events(setOf(adminId, memberId)).siteAdmins)
+                    changeState(adminId, UserState.ACTIVE)
+                    changeState(memberId, UserState.SITE_ADMIN)
+                    assertEquals(UserState.SITE_ADMIN, cachedAdmin.state, "The request still holds a stale User")
+                    assertEquals(mapOf(memberId to member.loginId), queries.events(setOf(adminId, memberId)).siteAdmins)
+                    changeState(memberId, UserState.DELETED)
+                    assertEquals(emptyMap<Long, String>(), queries.events(setOf(adminId, memberId)).siteAdmins)
+                    assertEquals(before.generation + 1, queries.events(setOf(adminId, memberId)).generation)
+                    assertEquals(baseline, minimumActive(), "No event snapshot retains a stream-owned connection")
+                } finally {
+                    TransactionSynchronizationManager.unbindResource(factory)
+                }
+            }
+        }
+    }
+
     @Test
     fun resultMetadataReleasesItsConnectionWhileTheRequestPersistenceContextRemainsOpen() {
         val meters = SimpleMeterRegistry()
