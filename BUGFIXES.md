@@ -1,5 +1,10 @@
 # yona product bug fixes — TDD tracking
 
+## 2026-09-28 — Shared site assets under servlet context paths
+
+- Resolve shell assets through Thymeleaf URL expressions instead of absolute root URLs.
+- The queue administration browser suite passed 16 scenarios under `/queue-it`, exercising the shared shell.
+
 ## 2026-09-28 — CUBRID pessimistic row locking
 
 - Hibernate's CUBRID dialect returned an empty locking clause. The local dialect now emits native `FOR UPDATE`.
