@@ -21,10 +21,7 @@ test.describe.serial('pull request lifecycle', () => {
     await expect(page.locator('#pull-request-form')).toBeVisible();
 
     await page.fill('#title', 'E2E seed pull request');
-    await page.locator('textarea[data-editor-mode="content-body"]').evaluate((el: HTMLTextAreaElement) => {
-      el.value = 'PR body written by the e2e suite.';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    await page.locator('textarea[data-editor-mode="content-body"]').fill('PR body written by the e2e suite.');
 
     // yona.pullrequest.Write.js submits this form via AJAX (no <form action=...> at all).
     // _getRedirectURL() for "new" mode always targets the LIST page (.../pulls), never the
@@ -62,11 +59,7 @@ test.describe.serial('pull request lifecycle', () => {
     // ReviewViewController.newPullRequestComment -- unlike the issue comment form, this one is
     // NOT AJAX-intercepted, so it does a real redirect back to .../pullRequest/{number}/changes.
     await page.goto(`/${owner}/${name}/pull/${pullRequestNumber}/changes`);
-    await page.locator('#comment-form-wrap textarea[data-editor-mode="code-review-body"]').evaluate((el: HTMLTextAreaElement, value: string) => {
-      el.value = value;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, commentBody);
+    await page.locator('#comment-form-wrap textarea[data-editor-mode="code-review-body"]').fill(commentBody);
 
     await page.locator('#comment-form-wrap button[type=submit]').click();
     await page.waitForURL(new RegExp(`/${owner}/${name}/pullRequest/${pullRequestNumber}/changes`));

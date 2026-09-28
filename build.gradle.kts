@@ -226,10 +226,11 @@ val buildMarkdown = tasks.register<Exec>("buildMarkdown") {
 	workingDir("frontend")
 	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "npm.cmd" else "npm",
 		"run", "build:markdown")
-	inputs.files("frontend/package.json", "frontend/package-lock.json")
+	inputs.files("frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig.json")
 	inputs.dir("frontend/src")
 	inputs.dir("frontend/scripts")
 	outputs.dir(markdownResources)
+	outputs.file(layout.buildDirectory.file("generated/frontend/markdown-meta.json"))
 }
 
 tasks.processResources {

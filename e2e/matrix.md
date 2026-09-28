@@ -250,8 +250,19 @@
 | /site/oauth-apps (관리자) | specs/13-admin/oauth-apps-admin.spec.ts | done | 13번 표 참고 |
 | /site/sso | specs/13-admin/sso-admin.spec.ts | done | 13번 표 참고 — SAML/OIDC 실제 IdP 연동은 스코프 밖, 설정 폼 저장/재렌더까지만 |
 
+## Markdown Web Components (P3-75)
+
+| 대상 | 스펙/실행 경로 | 검증 |
+|---|---|---|
+| Renderer/editor | `specs/15-misc/markdown-components.spec.ts` | immutable/clone snapshot, GFM/XSS, Edit/Preview, native textarea/toolbar/Tab/reset, `@/#/:`, Viewer dispose |
+| README/`.md` corpus | `specs/05-code/markdown-documents.spec.ts` | 실제 Git push 후 상대 링크 왕복/이미지 로딩, 한글·중복 heading, GFM/safe HTML/code, 200문단 |
+| Reference/structural plugins | `frontend/scripts/check-markdown-structure.mjs` | 100개 mount의 1 batch, cache/context/abort, unsafe metadata, 상대 URL, task PATCH |
+| Highlight/Mermaid | `frontend/scripts/check-markdown-enhancements.mjs` | legacy 59개 포함 162 identifier/alias, lazy loading, 10 diagrams, strict SVG/공격/크기/edge 제한 |
+
+위 경로는 Chromium/Firefox/WebKit에서 실행했다. 기존 Issue/Board/Wiki/Milestone/PR/code 테스트는 hidden-field 조작 대신 실제 textarea 입력을 사용한다. 기존 Turbo history/filter 회귀는 untouched upstream에서도 재현되며 이 전환의 green 결과로 포함하지 않는다. 측정 결과와 한계는 `docs/technical/markdown.md`에 기록한다.
+
 ---
 
 **범례**: 이 저장소에는 REST 전용(JSON) 엔드포인트(`ReviewApiController`, `CommentThreadController`,
-`MarkdownController`, `BranchApiController` 등)는 별도 화면이 없어 이 매트릭스에서 제외했다 —
+`MarkdownReferenceController`, `BranchApiController` 등)는 별도 화면이 없어 이 매트릭스에서 제외했다 —
 화면에 도달하려면 어차피 위 화면들의 버튼/폼을 거쳐 간접 호출된다.

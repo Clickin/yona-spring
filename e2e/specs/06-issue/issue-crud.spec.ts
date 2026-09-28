@@ -13,10 +13,7 @@ test.describe.serial('issue lifecycle', () => {
 
     await page.goto(`/${owner}/${name}/issueform`);
     await page.fill('#title', 'E2E seed issue');
-    // The markdown editor widget visually overlays this <textarea name="body"> (it's the real
-    // field the form submits), so Playwright's actionability check ("is it visible") never
-    // passes on it -- force bypasses that and sets the value the form actually reads.
-    await page.locator('textarea[data-editor-mode="content-body"]').fill('Body written by the e2e suite.', { force: true });
+    await page.locator('textarea[data-editor-mode="content-body"]').fill('Body written by the e2e suite.');
     await page.click('#button-save');
 
     await expect(page).toHaveURL(new RegExp(`/${owner}/${name}/issue/\\d+`));
@@ -46,11 +43,7 @@ test.describe.serial('issue lifecycle', () => {
     // handler says so): the real submission is a fetch() AJAX POST to commentApiBase
     // (/api/projects/{id}/issues/{number}/comments) wired by JS on the form's submit event,
     // which reloads the page on success.
-    await page.locator('#comment-form textarea[data-editor-mode="comment-body"]').evaluate((el: HTMLTextAreaElement, value: string) => {
-      el.value = value;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, commentBody);
+    await page.locator('#comment-form textarea[data-editor-mode="comment-body"]').fill(commentBody);
 
     const [response] = await Promise.all([
       page.waitForResponse((res) => res.url().includes('/comments') && res.request().method() === 'POST'),

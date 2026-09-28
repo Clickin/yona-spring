@@ -63,7 +63,7 @@ var v = { class: "attach-wrap" }, y = {
 			return `<!--_${e}_-->`;
 		}
 		function L(e) {
-			let t = e.closest("yona-markdown-editor, yona-markdown-editor-vue");
+			let t = e.closest("yona-markdown-editor");
 			t && (t.value = e.value);
 		}
 		function R(e, t) {

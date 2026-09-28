@@ -101,7 +101,10 @@ function references(root: HTMLElement, context: MarkdownContext, signal: AbortSi
       let value = token;
       let type: ReferenceType;
       if (token.includes('#')) { type = 'issue'; value = token.replace(/^@/, ''); }
-      else if (/^(?:[^@]+\/[^@]+@)?[a-f0-9]{7,40}$/.test(token)) type = 'commit';
+      else if (/^(?:[^@]+\/[^@]+@|@)?[a-f0-9]{7,40}$/.test(token)) {
+        type = 'commit';
+        value = token.replace(/^@/, '');
+      }
       else if (token.includes('/')) { type = 'project'; value = token.replace(/^@/, ''); }
       else type = 'user';
       fragment.append(document.createTextNode(text.slice(offset, match.index)));

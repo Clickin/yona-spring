@@ -431,7 +431,7 @@ test('cross-project "my issues" screen shows an issue actually assigned to the c
 
   await page.goto(`/${adminLoginId}/${projectName}/issueform`);
   await page.fill('#title', issueTitle);
-  await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for /user/issues verification.', { force: true });
+  await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for /user/issues verification.');
   await page.click('#button-save');
   await expect(page).toHaveURL(new RegExp(`/${adminLoginId}/${projectName}/issue/\\d+`));
 

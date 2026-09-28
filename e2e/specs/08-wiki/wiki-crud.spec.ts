@@ -22,19 +22,7 @@ test.describe.serial('wiki page lifecycle', () => {
 
     await page.goto(`/${owner}/${name}/wiki/_new`);
     await page.fill('#wiki-title', title);
-    // markdownEditor('content', ..., 'wiki-content') hides this real <textarea name="content">
-    // via display:none. `.fill(..., {force:true})` still tries to focus() the target first --
-    // focus() on a display:none element is a silent no-op, so the fill's subsequent
-    // select-all+type actually lands on whatever WAS focused (the title input above), appending
-    // this text into the title instead of setting the real (still-empty) body textarea.
-    // issue/board's own create forms happen not to hit this because of a CSS difference, but
-    // wiki/milestone's do. Setting the value directly and dispatching the events the editor
-    // listens for sidesteps focus() entirely.
-    await page.locator('textarea[data-editor-mode="wiki-content"]').evaluate((el: HTMLTextAreaElement) => {
-      el.value = 'Wiki body written by the e2e suite.';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await page.locator('textarea[data-editor-mode="wiki-content"]').fill('Wiki body written by the e2e suite.');
     // Scoped to this page's only content form (class="nm") -- the page header also renders a
     // <form name="gnb-search-form"> with its own submit button that an unscoped
     // `button[type=submit]` selector would hit instead.
@@ -59,11 +47,7 @@ test.describe.serial('wiki page lifecycle', () => {
     const title = requireSeed('wikiTitle');
 
     await page.goto(`/${owner}/${name}/wiki/_edit/${title}`);
-    await page.locator('textarea[data-editor-mode="wiki-content"]').evaluate((el: HTMLTextAreaElement) => {
-      el.value = 'Wiki body edited by the e2e suite.';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await page.locator('textarea[data-editor-mode="wiki-content"]').fill('Wiki body edited by the e2e suite.');
     await page.click('form.nm button[type=submit]');
 
     await expect(page).toHaveURL(new RegExp(`/${owner}/${name}/wiki/${title}$`));
@@ -87,11 +71,7 @@ test('create a throwaway wiki page and delete it', async ({ page }) => {
 
   await page.goto(`/${owner}/${name}/wiki/_new`);
   await page.fill('#wiki-title', title);
-  await page.locator('textarea[data-editor-mode="wiki-content"]').evaluate((el: HTMLTextAreaElement) => {
-    el.value = 'Throwaway wiki page, deleted by its own test.';
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  await page.locator('textarea[data-editor-mode="wiki-content"]').fill('Throwaway wiki page, deleted by its own test.');
   await page.click('form.nm button[type=submit]');
   await expect(page).toHaveURL(new RegExp(`/${owner}/${name}/wiki/${title}$`));
 

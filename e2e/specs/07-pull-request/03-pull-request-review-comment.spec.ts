@@ -25,11 +25,6 @@ test.describe.serial('pull request code review line comments', () => {
     await expect(firstLineCell).toBeVisible();
     await firstLineCell.click();
 
-    // Two elements share id="review-form": the <yona-review-form> custom element (stays put,
-    // effectively empty/hidden -- its content is a Vue <Teleport> source) and a plain <div
-    // id="review-form" class="review-form arrow-top"> that is the actual Teleport TARGET
-    // rendered in place next to the diff line, with the toolbar and textarea visible there
-    // while the custom element itself reports hidden. Target the div.
     const reviewForm = page.locator('div#review-form.review-form');
     await expect(reviewForm).toBeVisible();
 
@@ -39,11 +34,7 @@ test.describe.serial('pull request code review line comments', () => {
     const textarea = reviewForm.locator('textarea').first();
     await textarea.waitFor({ state: 'attached' });
     const commentBody = `Line comment from the e2e suite ${Date.now()}`;
-    await textarea.evaluate((el: HTMLTextAreaElement, value: string) => {
-      el.value = value;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, commentBody);
+    await textarea.fill(commentBody);
 
     const submitButton = reviewForm.locator('button[type="submit"]');
     await submitButton.click();

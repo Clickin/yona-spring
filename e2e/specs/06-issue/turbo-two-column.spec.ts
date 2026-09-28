@@ -23,10 +23,7 @@ test.describe.serial('Turbo issue two-column semantics', () => {
       const title = `Turbo issue ${letter}`;
       await page.goto(`${base}/issueform`);
       await page.fill('#title', title);
-      await page.locator('textarea[data-editor-mode="content-body"]').evaluate((el: HTMLTextAreaElement) => {
-        el.value = 'Issue body with **Markdown**\n\n- [ ] Persistent task';
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      });
+      await page.locator('textarea[data-editor-mode="content-body"]').fill('Issue body with **Markdown**\n\n- [ ] Persistent task');
       await page.click('#button-save');
       await expect(page).toHaveURL(/\/issue\/\d+$/);
       issues.push({ title, number: new URL(page.url()).pathname.split('/').pop()! });
@@ -103,24 +100,19 @@ test.describe.serial('Turbo issue two-column semantics', () => {
     await page.evaluate(({ key }) => localStorage.setItem(key, 'Existing 1.x draft A'), { key: `${base}/issue/${a.number}` });
     await page.reload();
     const editor = page.locator('#issue-detail #comment-form textarea[data-editor-mode="comment-body"]');
-    const visibleEditor = page.locator('#issue-detail #comment-form .cm-content');
     await expect(editor).toHaveValue('Existing 1.x draft A');
-    await expect(visibleEditor).toHaveText('Existing 1.x draft A');
-    await visibleEditor.fill('Fast unsent draft A');
+    await editor.fill('Fast unsent draft A');
     await page.locator(`#issue-list a.title[data-detail-url$="/issue/${b.number}"]`).last().click();
     await expect(page.locator('#issue-detail .board-header')).toContainText(b.title);
     await expect(page.locator('#issue-detail')).not.toHaveAttribute('aria-busy', 'true');
     await expect(editor).toHaveValue('');
-    await expect(visibleEditor).toHaveText('');
-    await visibleEditor.fill('Separate unsent draft B');
+    await editor.fill('Separate unsent draft B');
     await page.goBack();
     await expect(page.locator('#issue-detail .board-header')).toContainText(a.title);
     await expect(editor).toHaveValue('Fast unsent draft A');
-    await expect(visibleEditor).toHaveText('Fast unsent draft A');
     await page.goForward();
     await expect(page.locator('#issue-detail .board-header')).toContainText(b.title);
     await expect(editor).toHaveValue('Separate unsent draft B');
-    await expect(visibleEditor).toHaveText('Separate unsent draft B');
     await page.reload();
     await expect(editor).toHaveValue('Separate unsent draft B');
     expect(await page.evaluate(key => localStorage.getItem(key), `${base}/issues`)).toBeNull();
@@ -128,7 +120,6 @@ test.describe.serial('Turbo issue two-column semantics', () => {
     await expect(editor).toHaveValue('');
     await page.reload();
     await expect(editor).toHaveValue('');
-    await expect(visibleEditor).toHaveText('');
     expect(await page.evaluate(key => localStorage.getItem(key), `${base}/issue/${a.number}`)).toBe('Fast unsent draft A');
   });
 
@@ -178,9 +169,8 @@ test.describe.serial('Turbo issue two-column semantics', () => {
     const posts: string[] = [];
     page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/comments')) posts.push(request.url()); });
     await page.locator('#issue-detail #comment-form button[type="submit"]').click();
-    const visibleEditor = page.locator('#issue-detail #comment-form .cm-content');
-    await visibleEditor.fill('Comment submitted from the real Turbo detail');
-    await visibleEditor.press('Control+Shift+Enter');
+    await editor.fill('Comment submitted from the real Turbo detail');
+    await editor.press('Control+Shift+Enter');
     await expect(page.locator('#issue-detail #comments')).toContainText('Comment submitted from the real Turbo detail');
     expect(posts).toHaveLength(1);
     const rejected = await page.request.post(`${base}/issues`, { form: { title: 'Missing CSRF must fail' } });

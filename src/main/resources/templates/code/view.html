@@ -301,7 +301,7 @@
 
             <!-- Text(Code) -->
             <th:block th:unless="${fileInfo.get('isBinary').asBoolean()}">
-              <yona-markdown-renderer th:if="${markdownSource != null}" id="codeVal" class="markdown-wrap codebrowser-markdown" mode="document" th:owner="${project.owner}" th:project="${project.name}" th:ref="${branch}" th:path="${path}" th:text="${markdownSource}">Markdown source</yona-markdown-renderer>
+              <yona-markdown-renderer th:if="${markdownSource != null}" id="codeVal" class="markdown-wrap codebrowser-markdown" mode="document" th:owner="${project.owner}" th:project="${project.name}" th:attr="ref=${branch}" th:path="${path}" th:text="${markdownSource}">Markdown source</yona-markdown-renderer>
               <th:block th:if="${markdownSource == null}">
                 <pre id="showCode" class="code-wrap" th:data-mimetype="${fileInfo.get('mimeType').asText()}" th:data-path="${path}"><code th:text="${fileInfo.get('data').asText()}"></code></pre>
               </th:block>

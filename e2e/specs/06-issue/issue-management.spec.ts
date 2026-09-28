@@ -21,7 +21,7 @@ test.describe.serial('issue management actions', () => {
 
     await page.goto(`/${owner}/${name}/issueform`);
     await page.fill('#title', issueTitle);
-    await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for management actions.', { force: true });
+    await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for management actions.');
     await page.click('#button-save');
 
     await expect(page).toHaveURL(new RegExp(`/${owner}/${name}/issue/\\d+`));
@@ -42,11 +42,7 @@ test.describe.serial('issue management actions', () => {
     await page.goto(`/${owner}/${name}/milestone/new`);
     await page.fill('#title', `E2E management milestone ${uniqueSuffix()}`);
     await page.fill('#dueDate', '2099-12-31');
-    await page.locator('textarea[data-editor-mode="content-body"]').evaluate((el: HTMLTextAreaElement) => {
-      el.value = 'Milestone created for issue-management.spec.ts.';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await page.locator('textarea[data-editor-mode="content-body"]').fill('Milestone created for issue-management.spec.ts.');
     await page.check('#milestone-open');
     await page.click('#milestone-form button[type=submit]');
 
@@ -289,14 +285,7 @@ test.describe.serial('issue management actions', () => {
     // root cause below). Assert no such error before proceeding, so a regression here fails
     // fast with a clear message instead of a generic timeout waiting for the edit button.
     expect(pageErrors).toEqual([]);
-    await page.locator('#comment-form textarea[data-editor-mode="comment-body"]').evaluate(
-      (el: HTMLTextAreaElement, value: string) => {
-        el.value = value;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      },
-      commentBody
-    );
+    await page.locator('#comment-form textarea[data-editor-mode="comment-body"]').fill(commentBody);
     const [createResponse] = await Promise.all([
       page.waitForResponse((res) => res.url().includes('/comments') && res.request().method() === 'POST'),
       page.locator('#comment-form button[type=submit]').click(),
@@ -314,14 +303,7 @@ test.describe.serial('issue management actions', () => {
 
     await commentIdLocator.click();
     const editForm = page.locator('.comment-update-form:visible').last();
-    await editForm.locator('textarea[data-editor-mode="update-comment-body"]').evaluate(
-      (el: HTMLTextAreaElement, value: string) => {
-        el.value = value;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      },
-      editedBody
-    );
+    await editForm.locator('textarea[data-editor-mode="update-comment-body"]').fill(editedBody);
     const [updateResponse] = await Promise.all([
       page.waitForResponse((res) => res.request().method() === 'PUT' && res.url().includes('/comments/')),
       editForm.locator('button[type=submit]').click(),

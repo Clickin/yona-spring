@@ -145,7 +145,7 @@ test('issues/boards/pullrequests rollups actually show content from a real org-o
   const issueTitle = `e2e org rollup issue ${uniqueSuffix()}`;
   await page.goto(`/${orgName}/${projectName}/issueform`);
   await page.fill('#title', issueTitle);
-  await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for org rollup verification.', { force: true });
+  await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for org rollup verification.');
   await page.click('#button-save');
   await expect(page).toHaveURL(new RegExp(`/${orgName}/${projectName}/issue/\\d+`));
 
@@ -155,7 +155,7 @@ test('issues/boards/pullrequests rollups actually show content from a real org-o
   const postTitle = `e2e org rollup post ${uniqueSuffix()}`;
   await page.goto(`/${orgName}/${projectName}/postform`);
   await page.fill('#title', postTitle);
-  await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for org rollup verification.', { force: true });
+  await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for org rollup verification.');
   await page.click('#post-form button[type=submit]');
   await expect(page).toHaveURL(new RegExp(`/${orgName}/${projectName}/post/\\d+`));
 

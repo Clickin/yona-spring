@@ -190,7 +190,6 @@
                          th:data-can-review-comment="${canReviewComment}"
                          th:data-review-comment-post-url="${reviewCommentPostUrl}"
                          th:data-commit-id="${commitId}"
-                         th:data-markdown-render-url="@{/markdown/{owner}/{name}(owner=${project.owner}, name=${project.name})}"
                          th:data-mention-url="@{/api/{owner}/{name}/mentionList(owner=${project.owner}, name=${project.name})}">
                         <div id="commits" class="btn-group auto mb10">
                             <button class="btn dropdown-toggle auto" data-toggle="dropdown">

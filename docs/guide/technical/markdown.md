@@ -13,6 +13,16 @@
 
 source는 최초 mount에서 한 번만 읽는다. 다른 source를 표시하려면 새 element를 만든다. Turbo가 DOM을 `cloneNode(true)`로 캐시하므로 원문 snapshot을 비활성 `<template>`에 보존한다. 같은 element의 reconnect는 재파싱하지 않는다. source 감시용 MutationObserver나 renderer 내부 Turbo 의존성은 없다.
 
+## 편집기
+
+공통 `markdownEditor` fragment가 `<yona-markdown-editor>` 안에 실제 `<textarea>`를 서버 렌더링한다. JavaScript는 이 노드를 유지하며 `value`·`defaultValue`·selection·form reset을 그대로 사용한다. hidden textarea나 별도 editor document를 만들지 않는다.
+
+GitHub Markdown toolbar/text-expander를 사용한다. `@/#`는 기존 `mentionList` endpoint에 취소 가능한 요청을 보내고, `:`는 기존 65개 로컬 emoji에서 검색한다. 결과 label은 HTML이 아닌 text로 삽입한다. Tab/Shift+Tab, 첨부파일 삽입, draft 복구/삭제는 같은 textarea와 editor `.value` 계약을 사용한다.
+
+Preview 진입마다 textarea를 한 번 읽는 renderer를 새로 mount하고 Edit 복귀 시 제거한다. 입력 중 파싱/live preview는 없다. `.value` setter와 form reset은 stale preview를 종료한다. Wiki preview는 document 모드다. Inline review도 기존 vanilla CodeCommentBox와 SSR form을 사용한다.
+
+CM6·Vue Markdown editor/review-form bundle·Marked·전역 highlighter·서버 preview controller와 사용하지 않는 서버 상대경로 helper는 제거했다. 다른 Vue 위젯과 server-only renderer/cache, 호환성 API 응답은 유지한다.
+
 ## 보안과 비동기 처리
 
 - DOMPurify HTML profile을 사용하되 form, inline style, 이벤트 handler, SVG/MathML, 위험한 protocol은 허용하지 않는다. structural plugin은 안전한 DOM node/text를 생성한다.
@@ -28,4 +38,18 @@ Gradle `processResources`/`bootJar`가 pinned lockfile의 `npm ci --ignore-scrip
 
 실행 명령, 상세 정책, 이전 CM6/Marked/highlight gzip·Brotli baseline은 [영문 기술 문서](../../technical/markdown.md)를 참고한다. `frontend/scripts/check-markdown-{structure,enhancements}.mjs`는 기존 E2E Playwright로 Chromium/Firefox/WebKit을 검증한다.
 
+`e2e/specs/05-code/markdown-documents.spec.ts`는 실제 로컬 Git endpoint로 대표 원문 corpus를 넣고 README → 하위 `.md` → README 이동과 상대 이미지 로딩을 검증한다. 한글/중복 heading, GFM, safe HTML, Kotlin code, 200개 문단을 세 브라우저에서 확인했다. 저장소 ref는 Thymeleaf 예약 속성인 `th:ref`가 아니라 `th:attr`로 전달한다.
+
 조회 renderer 전환은 editor 교체보다 먼저 별도 commit으로 수행한다. 문서화되지 않은 옛 Marked quirk와 `yb-header-*` ID는 복원하지 않는다.
+
+## 검증 기록과 한계
+
+- Renderer 정적 dependency closure: gzip 50,383 bytes. Editor+renderer closure: gzip 61,381 bytes. 둘은 shared chunk를 공유하므로 합산하지 않는다.
+- 같은 Markdown을 표시하는 cold-context Chromium Issue 페이지의 JavaScript transfer는 upstream `a71722f`의 2,765,215 bytes에서 1,581,994 bytes로 줄었다. 로컬 HTTP 비압축 측정이며 gzip 수치와는 다른 지표다.
+- Chromium/Firefox/WebKit에서 component·XSS·자동완성·native reset·clone·Viewer dispose, reference batch/취소, task PATCH, 162개 language identifier/alias와 Mermaid 공격·크기/edge 제한 검증을 통과했다. 100개 renderer는 각각 22.8/41.0/36.0ms에 mount했고 reference 요청은 1회였다.
+- 실제 Turbo detail을 20/40/60회 교체한 뒤 Chromium GC 기준 retained renderer는 8/6/7개, document에 mount된 renderer는 계속 2개였다.
+- 선택한 최종 JVM 묶음 66개 테스트, strict TypeScript 검사, `processResources`/`bootJar`를 통과했다.
+
+전체 application E2E가 모두 green인 것은 아니다. 기존 Turbo의 Back/history 및 검색 navigation 실패를 수정하지 않은 upstream worktree에서도 재현했다. 해당 테스트를 숨기거나 기대값을 변경하지 않았다. Firefox/WebKit은 각각 86개 통과·Turbo 1개 실패, Chromium 한 실행은 83개 통과·history 1개 실패였다. 이 문제와 Markdown component 수명주기 검증을 구분한다.
+
+실제 운영 Yona 1.x export archive는 제공되지 않아 archive 업로드/import 검증을 수행했다고 주장하지 않는다. 원문 Markdown 의미와 legacy 언어 fixture는 브라우저에서 검증했다. 자세한 측정 조건과 결과는 영문 문서를 참고한다.

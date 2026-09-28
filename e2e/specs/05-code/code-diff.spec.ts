@@ -35,13 +35,9 @@ test('commit detail renders the diff and accepts a comment', async ({ page }) =>
   await expect(page.locator('body')).toContainText('line four (added)');
 
   const commentBody = 'commit comment written by the e2e suite';
-  await page.locator('textarea[data-editor-mode="commit-comment-body"]').evaluate((el: HTMLTextAreaElement, value: string) => {
-    el.value = value;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  }, commentBody);
+  await page.locator('textarea[data-editor-mode="commit-comment-body"]').fill(commentBody);
 
-  await page.locator('.write-comment-form button[type=submit]').click();
+  await page.locator('form').filter({has: page.locator('textarea[data-editor-mode="commit-comment-body"]')}).locator('button[type=submit]').click();
   // newCommitComment redirects back to the same commit view with #comment-{id} -- wait for that
   // navigation rather than assuming any fixed timing.
   await page.waitForURL(new RegExp(`/${owner}/${name}/commit/${secondCommit}`));

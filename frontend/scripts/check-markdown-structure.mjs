@@ -29,18 +29,20 @@ for (const engine of browsers) {
           label: '<img src=x onerror="window.referenceXss=true">', state: 'open'}];
       })}});
     });
-    await batchPage.evaluate(async () => {
+    const mountMs = await batchPage.evaluate(async () => {
+      const start = performance.now();
       document.body.replaceChildren();
       const mounted = [];
       for (let index = 0; index < 100; index++) {
         const renderer = document.createElement('yona-markdown-renderer');
         renderer.setAttribute('owner', 'owner');
         renderer.setAttribute('project', 'project');
-        renderer.textContent = '#1 #1 #2 #404 @reader @owner/project abcdef0 `#88` [#77](/already) <pre>#66</pre>';
+        renderer.textContent = '#1 #1 #2 #404 @reader @owner/project abcdef0 @abcdef0 `#88` [#77](/already) <pre>#66</pre>';
         document.body.append(renderer);
         mounted.push(renderer.updateComplete);
       }
       await Promise.all(mounted);
+      return performance.now() - start;
     });
     await expect(batchPage.locator('a.issueLink')).toHaveCount(200);
     assert.equal(requests.length, 1, '100 simultaneous comments use one batch');
@@ -183,7 +185,7 @@ for (const engine of browsers) {
     });
     await expect(taskPage.locator('input[type=checkbox]')).toBeDisabled();
     await taskPage.close();
-    console.log(`${engine}: reference batching/cache/context/security/abort/reconnect, relative URLs, task PATCH passed`);
+    console.log(`${engine}: 100 renderers mounted in ${mountMs.toFixed(1)}ms, one reference batch; cache/context/security/abort/reconnect, relative URLs, task PATCH passed`);
   } finally {
     await context.close();
     await browser.close();

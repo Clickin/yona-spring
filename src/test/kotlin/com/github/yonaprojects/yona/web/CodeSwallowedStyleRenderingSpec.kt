@@ -100,12 +100,7 @@ class CodeSwallowedStyleRenderingSpec @Autowired constructor(
                 body shouldContain "const csrfTokenValue = \"compare-view-csrf-test-token\""
             }
 
-            // common/reviewForm.html은 Vue 3 SFC(<yona-review-form>)라 서버 렌더링 시점엔 <form>
-            // 태그가 없어(클라이언트 마운트 시 컴포넌트가 자체 <form>을 만듦)
-            // CsrfRequestDataValueProcessor의 자동 히든 필드 주입을 받지 못한다. 대신 서버가
-            // 토큰/파라미터명을 data-csrf-param/data-csrf-token 속성으로 내려주고, 컴포넌트가 그
-            // 값으로 히든 필드를 재현한다(components/vue-widgets/src/review-form/YonaReviewForm.vue).
-            it("code/diff.html: review-form(CodeCommentBox 팝업)에 실제 _csrf 토큰이 data 속성으로 내려가야 한다") {
+            it("code/diff.html: review-form POST 폼에 실제 _csrf 히든 필드가 있어야 한다") {
                 val log = repositoryService.getRepository(project).getHistory(0, 10, "main", null)
                 val headCommitId = log.first().getId()
 
@@ -138,12 +133,13 @@ class CodeSwallowedStyleRenderingSpec @Autowired constructor(
                     .andReturn().response.contentAsString
 
                 val doc = Jsoup.parse(body)
-                val reviewForm = doc.select("yona-review-form#review-form")
+                val reviewForm = doc.select("#review-form form")
 
-                reviewForm.isEmpty() shouldBe false
-                reviewForm.attr("data-action") shouldContain "/commit/$headCommitId/comments"
-                reviewForm.attr("data-csrf-param") shouldBe "_csrf"
-                reviewForm.attr("data-csrf-token").isBlank() shouldBe false
+                reviewForm.attr("action") shouldBe "/${project.owner}/${project.name}/commit/$headCommitId/comments"
+                reviewForm.attr("method") shouldBe "post"
+                reviewForm.select("textarea[name=contents]").size shouldBe 1
+                reviewForm.select("input[type=hidden][name=_csrf]").size shouldBe 1
+                reviewForm.select("input[name=_csrf]").`val`().isBlank() shouldBe false
             }
         }
 

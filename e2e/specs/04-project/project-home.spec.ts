@@ -48,16 +48,6 @@ test('description inline-edit widget on the home page toggles and saves independ
   await expect(page.locator('#project-description')).toHaveText(overview);
 });
 
-// FIXED (was PRODUCT BUG, separate from the 400 fixed above): the success handler also calls
-// yona.Markdown.render() to re-render the saved text as HTML in place (yona.project.Home.js),
-// which internally does `fetch(htVar.sMarkdownRendererUrl, ...)` (yona.Markdown.js's shared
-// _render()). That URL is only ever set by yona.Markdown.init() inside the
-// `site/layout :: markdown(project)` fragment (site/layout.html) -- and project/home.html never
-// included that fragment, so htVar.sMarkdownRendererUrl stayed undefined and fetch(undefined, ...)
-// resolved against the current page as a same-origin request for the literal string "undefined"
-// (a 405 response), silently swallowed by the render promise's .catch(). Fixed by adding
-// `<th:block th:replace="~{site/layout :: markdown(${project})}"></th:block>` to project/home.html
-// (same pattern already used by milestone/create.html etc.).
 test('description inline-edit widget updates the DOM immediately without a reload', async ({ page }) => {
   const owner = requireSeed('projectOwner');
   const name = requireSeed('projectName');
@@ -70,7 +60,6 @@ test('description inline-edit widget updates the DOM immediately without a reloa
     page.waitForResponse((res) => res.request().method() === 'PUT' && /\/api\/projects\/\d+$/.test(new URL(res.url()).pathname)),
     page.click('#descriptionSaveBtn'),
   ]);
-  await page.waitForResponse((res) => res.request().method() === 'POST' && res.url().includes(`/markdown/${owner}/${name}`));
   await expect(page.locator('#project-description')).toHaveText(overview);
 });
 

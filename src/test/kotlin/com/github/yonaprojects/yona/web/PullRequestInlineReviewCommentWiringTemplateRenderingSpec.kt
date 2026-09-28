@@ -17,8 +17,6 @@ import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.user.YonaUserDetails
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
-import io.kotest.matchers.string.shouldNotContain
 import org.jsoup.Jsoup
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.security.core.authority.AuthorityUtils
@@ -30,9 +28,7 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
-// pullrequest/view.html의 changes 탭이 새 인라인 리뷰 댓글 작성에 필요한 권한 플래그/POST
-// URL/클릭 핸들러 스크립트를 실제로 내려주는지 확인한다. 실제 diff 줄 렌더링은
-// PullRequestDiffLineCommentUiFragmentRenderingSpec이 프래그먼트 단위로 별도 검증한다.
+// PR changes renders the permission boundary and the actual inline-review POST form.
 class PullRequestInlineReviewCommentWiringTemplateRenderingSpec @Autowired constructor(
     private val wac: WebApplicationContext,
     private val userRepository: UserRepository,
@@ -92,37 +88,27 @@ class PullRequestInlineReviewCommentWiringTemplateRenderingSpec @Autowired const
                 doc.select("#changes").attr("data-review-comment-post-url") shouldBe
                     "/${project.owner}/${project.name}/pullRequest/${pr.id}/comments"
 
-                // 매번 새 <textarea> 폼을 tr 뒤에 끼워 넣던 이전 구현(pr-comment-form-tr)을
-                // legacy와 동일한 "단일 팝업 재사용"(CodeCommentBox) 아키텍처로 교체했다.
-                body shouldContain "add-comment-btn-cell"
-                body shouldContain "id=\"review-form\""
-                body shouldContain "canReviewComment"
-                body shouldNotContain "pr-comment-form-tr"
+                doc.select("#review-form form").size shouldBe 1
             }
 
-            // 라인별(ranged) 리뷰 댓글 팝업(common/reviewForm.html)은 Vue 3 SFC
-            // (<yona-review-form>)로 구현돼 있다 - 에디터(<yona-markdown-editor-vue>)/
-            // 첨부파일(<yona-attachments>) 마크업은 서버 렌더링 시점이 아니라 그 커스텀
-            // 엘리먼트가 클라이언트에서 마운트될 때 생성되므로, 서버 응답 HTML에는
-            // <yona-review-form> 태그와 데이터 속성만 남는다(components/vue-widgets/src/
-            // review-form/YonaReviewForm.vue의 onMounted가 host.getAttribute(...)로 읽는
-            // 계약과 일치하는지 확인한다). 실제 드래그 범위선택/팝업 표시/제출 흐름은
-            // Jsoup/MockMvc로 검증할 수 없어(브라우저 런타임 필요) Playwright로 별도 검증했다.
-            it("새 라인/범위 댓글 팝업(review-form)은 <yona-review-form> 커스텀 엘리먼트로 렌더링되고 필요한 data 속성을 내려줘야 한다") {
+            it("새 라인/범위 댓글은 서버 렌더링된 contents textarea와 CSRF 필드로 제출할 수 있어야 한다") {
                 val result = mockMvc.perform(
                     get("/${project.owner}/${project.name}/pull/${pr.number}/changes").with(SecurityMockMvcRequestPostProcessors.user(memberDetails))
                 ).andReturn()
 
                 val body = result.response.contentAsString
                 val doc = Jsoup.parse(body)
-                val reviewForm = doc.select("yona-review-form#review-form")
+                val reviewForm = doc.select("#review-form form")
 
-                reviewForm.isEmpty() shouldBe false
-                reviewForm.attr("data-resource-type") shouldBe "REVIEW_COMMENT"
-                reviewForm.attr("data-action") shouldNotContain "null"
-                reviewForm.hasAttr("data-csrf-param") shouldBe true
-                reviewForm.hasAttr("data-csrf-token") shouldBe true
-                body shouldNotContain "textarea name=\"contents\""
+                reviewForm.attr("action") shouldBe
+                    "/${project.owner}/${project.name}/pullRequest/${pr.id}/comments"
+                reviewForm.attr("method") shouldBe "post"
+                reviewForm.attr("enctype") shouldBe "multipart/form-data"
+                reviewForm.select("textarea[name=contents]").size shouldBe 1
+                reviewForm.select("textarea[name=contents]").hasAttr("disabled") shouldBe false
+                reviewForm.select("input[name=contents]").size shouldBe 0
+                reviewForm.select("input[type=hidden][name=_csrf]").size shouldBe 1
+                reviewForm.select("input[name=_csrf]").`val`().isBlank() shouldBe false
             }
         }
     }

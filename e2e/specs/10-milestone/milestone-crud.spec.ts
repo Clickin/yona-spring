@@ -24,17 +24,7 @@ test.describe.serial('milestone lifecycle', () => {
     await page.goto(`/${owner}/${name}/milestone/new`);
     await page.fill('#title', milestoneTitle);
     await page.fill('#dueDate', '2099-12-31');
-    // markdownEditor('contents', ..., 'content-body') hides the real <textarea name="contents">
-    // behind its own widget. Unlike issue/wiki/board's create forms, milestone.Write.js's
-    // _validateForm() blocks the actual submit client-side unless this field is non-empty --
-    // and empirically, `.fill(..., {force:true})` on this specific textarea does not stick (the
-    // value reads back empty immediately after), while a direct property set + dispatched
-    // input/change events does. Root cause not fully isolated; this workaround reliably avoids it.
-    await page.locator('textarea[data-editor-mode="content-body"]').evaluate((el: HTMLTextAreaElement) => {
-      el.value = 'Milestone description written by the e2e suite.';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await page.locator('textarea[data-editor-mode="content-body"]').fill('Milestone description written by the e2e suite.');
     await page.check('#milestone-open');
     await page.click('#milestone-form button[type=submit]');
 
@@ -107,11 +97,7 @@ test.describe.serial('milestone lifecycle', () => {
     await page.goto(`/${owner}/${name}/milestone/new`);
     await page.fill('#title', throwawayTitle);
     await page.fill('#dueDate', '2099-12-31');
-    await page.locator('textarea[data-editor-mode="content-body"]').evaluate((el: HTMLTextAreaElement) => {
-      el.value = 'Throwaway milestone, deleted by its own test.';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await page.locator('textarea[data-editor-mode="content-body"]').fill('Throwaway milestone, deleted by its own test.');
     await page.check('#milestone-open');
     await page.click('#milestone-form button[type=submit]');
 

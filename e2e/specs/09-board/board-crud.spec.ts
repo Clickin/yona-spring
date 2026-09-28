@@ -14,9 +14,7 @@ test.describe.serial('board post lifecycle', () => {
 
     await page.goto(`/${owner}/${name}/postform`);
     await page.fill('#title', 'E2E seed post');
-    // Same hidden-textarea-behind-a-widget situation as issue/wiki create -- force bypasses the
-    // visibility actionability check on the real <textarea name="body"> the form submits.
-    await page.locator('textarea[data-editor-mode="content-body"]').fill('Post body written by the e2e suite.', { force: true });
+    await page.locator('textarea[data-editor-mode="content-body"]').fill('Post body written by the e2e suite.');
     await page.click('#post-form button[type=submit]');
 
     await expect(page).toHaveURL(new RegExp(`/${owner}/${name}/post/\\d+`));
@@ -131,7 +129,7 @@ test('delete a post', async ({ page }) => {
 
   await page.goto(`/${owner}/${name}/postform`);
   await page.fill('#title', title);
-  await page.locator('textarea[data-editor-mode="content-body"]').fill('This post exists only to be deleted.', { force: true });
+  await page.locator('textarea[data-editor-mode="content-body"]').fill('This post exists only to be deleted.');
   await page.click('#post-form button[type=submit]');
   await expect(page).toHaveURL(new RegExp(`/${owner}/${name}/post/\\d+`));
   const postUrl = page.url();

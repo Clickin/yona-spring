@@ -84,12 +84,7 @@ yona.ShortcutKey = (function(htOptions){
     /**
      * Resolve the element the keydown actually originated from.
      *
-     * 이 리스너는 window에 바인딩돼 있는데, <yona-markdown-editor>는 실제 타이핑이 Shadow
-     * DOM 안의 CodeMirror 6 contenteditable에서 일어난다. Shadow DOM을 넘어 버블링된
-     * 이벤트는 브라우저가 event.target을 shadow host로 리타게팅하므로, weEvt.target.tagName만
-     * 보면 에디터 안에서 타이핑 중인데도 "폼 입력 아님"으로 오판해 전역 단축키가 그대로
-     * 발동해 미저장 내용을 잃은 채 페이지를 이동시켰다. composedPath()[0]으로 Shadow DOM
-     * 경계와 무관한 실제 origin 엘리먼트를 구해야 한다.
+     * Shadow DOM 위젯에서도 실제 입력 요소를 판별해 전역 단축키가 편집을 방해하지 않게 한다.
      *
      * @param {Wrapped Event} weEvt
      * @return {HTMLElement}
@@ -113,9 +108,7 @@ yona.ShortcutKey = (function(htOptions){
             "elTarget"  : elTarget,
             "sTagName"  : sTagName,
             "sKeyInput" : sKeyInput,
-            // CodeMirror 6(<yona-markdown-editor>)는 <textarea>가 아니라 contenteditable div에
-            // 직접 입력을 받으므로, aFormTags(INPUT/TEXTAREA) 체크만으로는 이 경우를 못 잡는다 -
-            // isContentEditable도 함께 "폼 입력 중"으로 취급한다.
+            // Native form controls and other contenteditable widgets both suppress global shortcuts.
             "bFormInput": (htVar.aFormTags.indexOf(sTagName) > -1) || !!elTarget.isContentEditable
         };
 

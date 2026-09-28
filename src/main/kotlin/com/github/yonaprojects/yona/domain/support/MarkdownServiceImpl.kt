@@ -7,7 +7,6 @@ import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
-import com.github.yonaprojects.yona.domain.vcs.RepositoryService
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
 import org.commonmark.ext.gfm.tables.TablesExtension
@@ -32,7 +31,6 @@ import java.net.URISyntaxException
 @Service
 class MarkdownServiceImpl(
     private val autoLinkRenderer: AutoLinkRenderer,
-    private val repositoryService: RepositoryService,
     // Markdown.java의 transformIssueLink()/extractIssueLink() 대응에 필요한 의존성.
     private val projectRepository: ProjectRepository,
     private val issueRepository: IssueRepository,
@@ -77,13 +75,6 @@ class MarkdownServiceImpl(
                     .toFactory()
             )
 
-        // Markdown.java의 imageLink / normalLocalLink 정규식 대응.
-        // "!\[text](./path)" (이미지) / "[text](./path)" (일반 링크) 형태의 상대경로 링크만 매칭한다
-        // (http:/https:/ftp:/file: 스킴이거나 절대경로는 건드리지 않음 — 원본과 동일).
-        private val IMAGE_LINK_PATTERN =
-            Regex("""!\[(?<text>[^]]*)]\(/?(?!https:|http:|ftp:|file:)\.\/(?<link>[^)]*)\)""")
-        private val NORMAL_LOCAL_LINK_PATTERN =
-            Regex("""(?<space>[^!])\[(?<text>[^]]*)]\(/?(?!https:|http:|ftp:|file:)\.\/(?<link>[^)]*)\)""")
     }
 
     override fun render(body: String): String {
@@ -280,40 +271,6 @@ class MarkdownServiceImpl(
         return userRepository.findByLoginId(authentication.name).orElse(null)
     }
 
-override fun renderFileInCodeBrowser(source: String, project: Project): String {
-        val defaultBranch = getDefaultBranch(project)
-        val imageLinkFiltered = replaceImageLinkPath(project, source, defaultBranch)
-        return render(imageLinkFiltered, true, project)
-    }
-
-    override fun renderFileInReadme(source: String, project: Project): String {
-        val defaultBranch = getDefaultBranch(project)
-        val relativeLinksToCodeBrowserPath = replaceContentsLinkToCodeBrowserPath(project, source, defaultBranch)
-        return render(relativeLinksToCodeBrowserPath, true, project)
-    }
-
-    private fun getDefaultBranch(project: Project): String {
-        return try {
-            repositoryService.getRepository(project).getDefaultBranch().removePrefix("refs/heads/")
-        } catch (e: Exception) {
-            "master"
-        }
-    }
-
-    // Markdown.java의 replaceImageLinkPath() 대응.
-    private fun replaceImageLinkPath(project: Project, text: String, defaultBranch: String): String {
-        return IMAGE_LINK_PATTERN.replace(text) { m ->
-            "![${m.groups["text"]!!.value}](/${project.owner}/${project.name}/files/$defaultBranch/${m.groups["link"]!!.value})"
-        }
-    }
-
-    // Markdown.java의 replaceContentsLinkToCodeBrowserPath() 대응.
-    private fun replaceContentsLinkToCodeBrowserPath(project: Project, text: String, defaultBranch: String): String {
-        val imageFiltered = replaceImageLinkPath(project, text, defaultBranch)
-        return NORMAL_LOCAL_LINK_PATTERN.replace(imageFiltered) { m ->
-            "${m.groups["space"]!!.value}[${m.groups["text"]!!.value}](/${project.owner}/${project.name}/code/$defaultBranch/${m.groups["link"]!!.value})"
-        }
-    }
 
     private fun sanitizeInternal(html: String): String {
         return SANITIZER_POLICY.sanitize(html)

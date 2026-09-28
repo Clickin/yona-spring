@@ -18,6 +18,7 @@ export class YonaMarkdownRenderer extends LitElement {
   connectedCallback() {
     if (!this.output) {
       let hardBreak = false;
+      let paragraph = false;
       const source = this.sourceElement;
       const markdown = source instanceof HTMLTextAreaElement || source instanceof HTMLInputElement
         ? source.value : source?.textContent ??
@@ -31,7 +32,22 @@ export class YonaMarkdownRenderer extends LitElement {
       output.className = 'markdown-output';
       output.append(DOMPurify.sanitize(micromark(markdown, {
         htmlExtensions: [gfmHtml(), ...(this.getAttribute('mode') === 'document' ? [] : [{
+          enter: {
+            paragraph() {
+              paragraph = true;
+              if (!this.getData('tightStack').at(-1)) {
+                this.lineEndingIfNeeded();
+                this.tag('<p>');
+              }
+              this.setData('slurpAllLineEndings');
+            },
+          },
           exit: {
+            paragraph() {
+              paragraph = false;
+              if (this.getData('tightStack').at(-1)) this.setData('slurpAllLineEndings', true);
+              else this.tag('</p>');
+            },
             hardBreakEscape() { this.tag('<br />'); hardBreak = true; },
             hardBreakTrailing() { this.tag('<br />'); hardBreak = true; },
             lineEnding(token) {
@@ -41,7 +57,7 @@ export class YonaMarkdownRenderer extends LitElement {
                 return;
               }
               if (this.getData('inCodeText')) { this.raw(' '); return; }
-              if (!hardBreak) this.tag('<br />');
+              if (paragraph && !hardBreak) this.tag('<br />');
               hardBreak = false;
               this.raw(this.encode(this.sliceSerialize(token)));
             },

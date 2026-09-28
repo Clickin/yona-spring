@@ -16,7 +16,7 @@ test('the timeline fragment endpoint reflects a real state-change event', async 
 
   await page.goto(`/${owner}/${name}/issueform`);
   await page.fill('#title', issueTitle);
-  await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for timeline verification.', { force: true });
+  await page.locator('textarea[data-editor-mode="content-body"]').fill('Body for timeline verification.');
   await page.click('#button-save');
   await expect(page).toHaveURL(new RegExp(`/${owner}/${name}/issue/(\\d+)`));
   const issueNumber = Number(page.url().match(/\/issue\/(\d+)/)?.[1]);
