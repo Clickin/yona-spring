@@ -293,17 +293,18 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
     }
 
     describe("YonaAuthenticationProvider - 비밀번호 해시 자동 업그레이드(법적 컴플라이언스 감사 #5)") {
-        it("레거시 포맷으로 저장된 계정이 로그인에 성공하면 그 자리에서 Argon2 포맷으로 재해싱해 저장해야 한다") {
+        it("레거시 로그인은 저장된 해시와 remember-me 서명에 쓰는 principal 해시를 함께 업그레이드해야 한다") {
             val salt = "test-salt"
             val rawPassword = "myPassword123!"
             val legacyHashed = getLegacyHashedPassword(rawPassword, salt)
-            val userDetails = YonaUserDetails(
-                id = 42L, loginId = "upgrademe", passwordVal = legacyHashed, passwordSalt = salt,
-                authoritiesVal = listOf(SimpleGrantedAuthority("ROLE_ACTIVE"))
-            )
             val storedUser = User(id = 42L, loginId = "upgrademe", password = legacyHashed, passwordSalt = salt)
-
-            every { userDetailsService.loadUserByUsername("upgrademe") } returns userDetails
+            every { userDetailsService.loadUserByUsername("upgrademe") } answers {
+                YonaUserDetails(
+                    id = 42L, loginId = "upgrademe", passwordVal = storedUser.password!!,
+                    passwordSalt = storedUser.passwordSalt.orEmpty(),
+                    authoritiesVal = listOf(SimpleGrantedAuthority("ROLE_ACTIVE")),
+                )
+            }
             every { userRepository.findById(42L) } returns Optional.of(storedUser)
             every { userRepository.save(any()) } answers { firstArg() }
 
@@ -316,6 +317,9 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
             savedUser.captured.password!!.shouldStartWith("$")
             savedUser.captured.passwordSalt shouldBe null
             passwordEncodingService.matches(rawPassword, savedUser.captured.password, null) shouldBe true
+            val principal = authResult.principal as YonaUserDetails
+            principal.password shouldBe savedUser.captured.password
+            principal.password shouldNotBe legacyHashed
         }
 
         it("이미 Argon2 포맷인 계정은 재해싱을 시도하지 않아야 한다") {

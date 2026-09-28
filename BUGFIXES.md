@@ -1,5 +1,11 @@
 # yona product bug fixes — TDD tracking
 
+## 2026-09-28 — Remember-me after legacy password migration
+
+- Local login upgraded the persisted password to Argon2id but returned user details containing the old hash. Remember-me then signed a cookie that the next request rejected.
+- Reload user details only when a password upgrade succeeds, so the cookie uses the persisted hash.
+- The isolated provider regression failed before the fix; all 18 provider tests passed afterward. A live legacy login upgraded the hash and a fresh remember-me-only HTTP request rendered the administrator queue without a session cookie.
+
 ## 2026-09-28 — Shared site assets under servlet context paths
 
 - Resolve shell assets through Thymeleaf URL expressions instead of absolute root URLs.
