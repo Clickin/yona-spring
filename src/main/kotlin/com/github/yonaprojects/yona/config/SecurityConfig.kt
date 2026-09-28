@@ -20,6 +20,7 @@ import org.springframework.security.web.savedrequest.SavedRequest
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.AuthenticationException
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.web.firewall.HttpFirewall
 import org.springframework.security.web.firewall.StrictHttpFirewall
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository
@@ -106,6 +107,10 @@ class SecurityConfig(
     private val saml2DisplayNameAttribute: String
 ) {
 
+    @Bean
+    fun rememberMeServices(userDetailsService: UserDetailsService): YonaRememberMeServices =
+        YonaRememberMeServices(userDetailsService, userRepository, twoFactorService)
+
     // 위 생성자 코멘트 참고 — Initialize*BeanManagerConfigurer들보다 항상 먼저 도는
     // Spring Security 공식 훅. 여기서 전역 AuthenticationManagerBuilder를 "구성 완료" 상태로
     // 만들어 DaoAuthenticationProvider가 끼어들 여지를 원천 차단한다.
@@ -144,7 +149,7 @@ class SecurityConfig(
     // 않기 위해 명시적으로 선언했다.
     @Bean
     @Order(5)
-    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    fun securityFilterChain(http: HttpSecurity, rememberMeServices: YonaRememberMeServices): SecurityFilterChain {
         http
             // 템플릿 폼 대부분은 이미 th:action이라 자동으로 보호되고, 나머지는 개별 대응했다
             // (site/layout.html 로그인 모달, code/compare·diff.html 인라인 댓글 폼,
@@ -213,14 +218,14 @@ class SecurityConfig(
                     .loginProcessingUrl("/users/login")
                     .usernameParameter("loginIdOrEmail")
                     .passwordParameter("password")
-                    .successHandler(YonaAuthenticationSuccessHandler(twoFactorService, userRepository, deviceRecognitionService))
+                    .successHandler(YonaAuthenticationSuccessHandler(twoFactorService, userRepository, deviceRecognitionService, rememberMeServices))
                     .failureHandler(YonaAuthenticationFailureHandler())
                     .permitAll()
             }
             .rememberMe { rememberMe ->
                 rememberMe
-                    .rememberMeParameter("rememberMe")
-                    .key("yonaRememberMeKey")
+                    .rememberMeServices(rememberMeServices)
+                    .key(YONA_REMEMBER_ME_KEY)
             }
             .httpBasic { }
             // deployKeyAuthenticationProvider/yonaAuthenticationProvider는 이제
@@ -294,7 +299,8 @@ class SecurityConfig(
 class YonaAuthenticationSuccessHandler(
     private val twoFactorService: TwoFactorService,
     private val userRepository: UserRepository,
-    private val deviceRecognitionService: DeviceRecognitionService
+    private val deviceRecognitionService: DeviceRecognitionService,
+    private val rememberMeServices: YonaRememberMeServices
 ) : AuthenticationSuccessHandler {
     private val requestCache = HttpSessionRequestCache()
     private val securityContextRepository = org.springframework.security.web.context.HttpSessionSecurityContextRepository()
@@ -313,6 +319,7 @@ class YonaAuthenticationSuccessHandler(
         val user = userRepository.findByLoginId(loginId).orElse(null)
 
         if (user != null && twoFactorService.isTwoFactorEnabled(user)) {
+            rememberMeServices.deferLogin(request, response)
             val pre2fa = Pre2faAuthenticationToken(authentication)
             val context = SecurityContextHolder.createEmptyContext()
             context.authentication = pre2fa

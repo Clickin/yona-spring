@@ -24,7 +24,8 @@ class YonaAuthenticationSuccessHandlerSpec : DescribeSpec({
     val userRepository = mockk<UserRepository>()
     val twoFactorService = mockk<TwoFactorService>()
     val deviceRecognitionService = mockk<DeviceRecognitionService>(relaxed = true)
-    val handler = YonaAuthenticationSuccessHandler(twoFactorService, userRepository, deviceRecognitionService).apply {
+    val rememberMeServices = mockk<YonaRememberMeServices>(relaxed = true)
+    val handler = YonaAuthenticationSuccessHandler(twoFactorService, userRepository, deviceRecognitionService, rememberMeServices).apply {
         ReflectionTestUtils.setField(this, "requestCache", requestCache)
     }
     // 2FA를 등록하지 않은 계정 — 기존과 동일하게 동작해야 한다(회귀 방지). authentication.principal이
