@@ -72,9 +72,12 @@ class YonaAuthenticationProvider(
             throw BadCredentialsException("비밀번호가 일치하지 않습니다.")
         }
 
-        onLoginSuccess(userDetails.id, password, userDetails.password)
+        val principal = if (onLoginSuccess(userDetails.id, password, userDetails.password)) {
+            // Remember-me signs with the principal's password hash; use the upgraded persisted hash.
+            userDetailsService.loadUserByUsername(userDetails.loginId)
+        } else userDetails
 
-        return UsernamePasswordAuthenticationToken(userDetails, password, userDetails.authorities)
+        return UsernamePasswordAuthenticationToken(principal, password, principal.authorities)
     }
 
     private fun checkAccountState(userDetails: YonaUserDetails) {
@@ -106,7 +109,8 @@ class YonaAuthenticationProvider(
         }
     }
 
-    private fun onLoginSuccess(userId: Long, rawPassword: String, storedHash: String) {
+    private fun onLoginSuccess(userId: Long, rawPassword: String, storedHash: String): Boolean {
+        var upgraded = false
         userRepository.findById(userId).ifPresent { user ->
             var dirty = false
             if (user.failedLoginAttempts != 0 || user.lockedUntil != null) {
@@ -121,9 +125,11 @@ class YonaAuthenticationProvider(
                 user.password = passwordEncodingService.encode(rawPassword)
                 user.passwordSalt = null
                 dirty = true
+                upgraded = true
             }
             if (dirty) userRepository.save(user)
         }
+        return upgraded
     }
 
     override fun supports(authentication: Class<*>): Boolean {
