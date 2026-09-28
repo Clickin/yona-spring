@@ -1,5 +1,20 @@
 # yona product bug fixes — TDD tracking
 
+## 2026-09-28 — Thymeleaf and Turbo queue administration
+
+- Queue lists, detail, progress, history, cancellation and recovery retry are server-rendered at `/site/admin/queue`.
+  URL filters/cursors/selection and native CSRF forms work without JavaScript; successful commands redirect with HTTP 303.
+- Turbo replaces only the bounded queue fragment. A native Web Component owns SSE invalidation, coalescing,
+  stale indication and input/focus protection; no queue Vue bundle, client-side job store or Lit dependency is added.
+- Reused the pinned Turbo 8.0.23 asset pipeline from upstream #834 without importing the unrelated issue-screen PoC.
+  Existing site widgets remain unchanged; shared shell asset URLs now honor servlet context paths.
+- Real native form submission exposed a CSRF adapter bug: Kotlin interface delegation did not forward Java's
+  default `resolveCsrfTokenValue`. Explicit delegation now accepts Spring's XOR form token while retaining raw-header REST CSRF.
+  The browser cancellation and 301-character validation/error-retention paths were exercised, and all 16 existing REST checks passed.
+- Independent browser acceptance passed all 10 scenarios at both root and `/queue-it`: no-JavaScript URLs/forms,
+  recovery retry, exact large IDs, 105-attempt pagination, Turbo network-failure recovery, SSE reconnect/edit safety,
+  real downloads and authorization. Existing SSE regression also passed all four checks.
+
 ## 2026-09-28 — Bounded administrator SSE and queue progress coalescing
 
 - Same-stage progress retains one validated snapshot and writes at most once per five seconds; stage changes remain immediate.

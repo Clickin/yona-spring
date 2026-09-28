@@ -19,23 +19,23 @@
   <meta name="twitter:title" th:content="${titleMain}">
   <meta name="twitter:url" th:content="${currentRequestPath}">
   <meta name="twitter:description" th:content="${titleDesc}">
-  <link rel="shortcut icon" type="image/x-icon" href="/images/favicon.ico">
-  <link rel="stylesheet" type="text/css" media="all" href="/bootstrap/css/bootstrap.css">
-  <link rel="stylesheet" type="text/css" media="all" href="/stylesheets/yobicon/style.css">
-  <link rel="stylesheet" type="text/css" media="all" href="/javascripts/lib/tomselect/tom-select.min.css">
-  <link rel="stylesheet" type="text/css" media="all" href="/javascripts/lib/flatpickr/flatpickr.min.css">
+  <link rel="shortcut icon" type="image/x-icon" th:href="@{/images/favicon.ico}">
+  <link rel="stylesheet" type="text/css" media="all" th:href="@{/bootstrap/css/bootstrap.css}">
+  <link rel="stylesheet" type="text/css" media="all" th:href="@{/stylesheets/yobicon/style.css}">
+  <link rel="stylesheet" type="text/css" media="all" th:href="@{/javascripts/lib/tomselect/tom-select.min.css}">
+  <link rel="stylesheet" type="text/css" media="all" th:href="@{/javascripts/lib/flatpickr/flatpickr.min.css}">
   <!-- markdownEditor 프래그먼트가 17개 화면에서 쓰여 select2/calendar처럼 화면별 opt-in으로 두지
        않고 전역으로 로드한다. highlight.js CSS/JS도 markdown(project) fragment(원래 8개 화면 한정)
        대신 여기서 전역으로 로드해 markdownEditor를 쓰는 project 컨텍스트 16개 화면 전부에서 쓸 수
        있게 한다 - markdown(project) fragment는 중복 로드를 피하려고 자기 <link>/<script src>는
        빼고 hljs.configure/highlightAll 호출만 남겼다. -->
-  <link rel="stylesheet" type="text/css" href="/javascripts/lib/highlight/styles/default.css" />
-  <link rel="stylesheet" type="text/css" media="all" href="/stylesheets/usermenu.css">
-  <link rel="stylesheet" type="text/css" media="all" href="/stylesheets/yona.css?v=20260614-2">
-  <link rel="stylesheet" type="text/css" media="all" href="/javascripts/lib/nprogress/nprogress.css">
-  <link rel="stylesheet" href="/javascripts/lib/viewerjs/viewer.css">
-  <script type="text/javascript" src="/javascripts/yona-layout.js"></script>
-  <script type="text/javascript" src="/messages.js"></script>
+  <link rel="stylesheet" type="text/css" th:href="@{/javascripts/lib/highlight/styles/default.css}" />
+  <link rel="stylesheet" type="text/css" media="all" th:href="@{/stylesheets/usermenu.css}">
+  <link rel="stylesheet" type="text/css" media="all" th:href="@{/stylesheets/yona.css?v=20260614-2}">
+  <link rel="stylesheet" type="text/css" media="all" th:href="@{/javascripts/lib/nprogress/nprogress.css}">
+  <link rel="stylesheet" th:href="@{/javascripts/lib/viewerjs/viewer.css}">
+  <script type="text/javascript" th:src="@{/javascripts/yona-layout.js}"></script>
+  <script type="text/javascript" th:src="@{/messages.js}"></script>
   <script type="text/javascript" sec:authorize="isAuthenticated()">
     window.parent.document.title = window.document.title;
     window.parent.history.replaceState('', window.document.title, window.location.href);
@@ -535,6 +535,9 @@
   <!-- Sidebar Menu (사이트 설정 사이드바) -->
   <div th:fragment="sidebar(activeMenu)" class="span2">
     <ul class="site-setting-nav">
+      <li th:class="${activeMenu == 'queue' ? 'active' : ''}">
+        <a th:href="@{/site/admin/queue}">작업 대기열</a>
+      </li>
       <li th:class="${activeMenu == 'users' ? 'active' : ''}">
         <a href="/sites/userList" th:text="#{site.sidebar.userList}">사용자 관리</a>
       </li>
@@ -597,7 +600,7 @@
         th:attr="data-use-social-login-only=${useSocialLoginOnly}"></yona-login-dialog>
 
     <!-- 스크립트 라이브러리들 로드 -->
-    <script type="text/javascript" src="/javascripts/yona-common.js"></script>
+    <script type="text/javascript" th:src="@{/javascripts/yona-common.js}"></script>
 
     <!-- fetch()를 전역 패치해 CSRF 헤더를 주입한다(GET/HEAD/OPTIONS/TRACE 제외 - CsrfFilter가
          검증하지 않음). 토큰은 CookieCsrfTokenRepository.withHttpOnlyFalse()가 원문 그대로
@@ -664,48 +667,48 @@
     <!-- bootstrap-better-typeahead.js/jquery-ui-1.10.4.custom.min.js/bootstrap-switch.js는 실
          호출부가 없거나(전자 둘) common/yona.ui.Switch.js(yona-lib.js에 번들) vanilla 구현으로
          대체돼 <script src> 참조를 제거했다 - 벤더 파일 자체는 삭제하지 않음. -->
-    <script type="text/javascript" src="/javascripts/yona-lib.js"></script>
+    <script type="text/javascript" th:src="@{/javascripts/yona-lib.js}"></script>
 
     <!-- components/vue-widgets(Vue 3 SFC) 커스텀 엘리먼트. 각 vanilla common/*.js 파일이
          하이브리드 어댑터로 다시 쓰여, 여기서 정의된 태그가 실제로 존재하면 그쪽에 위임하고
          없으면(격리 환경 등) 원본 동작으로 폴백한다 - 대상 태그가 없는 페이지에서는 자연히
          아무 일도 안 일어나므로 항상 전역으로 로드해도 안전하다. type="module"은 기본적으로
          지연 실행(defer와 동일)되므로 물리적 위치와 무관하게 DOMContentLoaded 전에 준비된다. -->
-    <script type="module" src="/lib/yona-vue-widgets/yona-dialog-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-toast-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-popover-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-login-dialog-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-switch-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-dropdown-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-typeahead-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-pagination-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-attachments-element.js"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-dialog-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-toast-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-popover-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-login-dialog-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-switch-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-dropdown-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-typeahead-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-pagination-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-attachments-element.js}"></script>
     <!-- review-form이 내부적으로 자식 컴포넌트로 조합한다. 사이트 전역 markdownEditor
          프래그먼트는 여전히 vendor <yona-markdown-editor>를 쓴다 - textarea가 Shadow DOM에
          완전히 캡슐화돼 있어 전역 스왑하면 직접 querySelector로 접근하는 14곳의 소비처가
          깨지므로 보류했다. review-form 자신의 에디터 인스턴스는 별개라 이 위험이 없다. -->
-    <script type="module" src="/lib/yona-vue-widgets/yona-markdown-editor-vue-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-review-form-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-scroll-elevator-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-page-slide-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-help-markdown-element.js"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-markdown-editor-vue-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-review-form-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-scroll-elevator-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-page-slide-element.js}"></script>
+    <script type="module" th:src="@{/lib/yona-vue-widgets/yona-help-markdown-element.js}"></script>
 
-    <script type="text/javascript" src="/javascripts/lib/autosize/autosize.min.js"></script>
-    <script type="text/javascript" src="/javascripts/common/yona.KeyControl.js"></script>
-    <script type="text/javascript" src="/javascripts/lib/tippy/popper.min.js"></script>
-    <script type="text/javascript" src="/javascripts/lib/tippy/tippy-bundle.umd.min.js"></script>
-    <script type="text/javascript" src="/javascripts/common/yona.Usermenu.js"></script>
-    <script type="text/javascript" src="/javascripts/common/yona.LoginDialog.js"></script>
-    <script type="text/javascript" src="/javascripts/lib/viewerjs/viewer.js"></script>
+    <script type="text/javascript" th:src="@{/javascripts/lib/autosize/autosize.min.js}"></script>
+    <script type="text/javascript" th:src="@{/javascripts/common/yona.KeyControl.js}"></script>
+    <script type="text/javascript" th:src="@{/javascripts/lib/tippy/popper.min.js}"></script>
+    <script type="text/javascript" th:src="@{/javascripts/lib/tippy/tippy-bundle.umd.min.js}"></script>
+    <script type="text/javascript" th:src="@{/javascripts/common/yona.Usermenu.js}"></script>
+    <script type="text/javascript" th:src="@{/javascripts/common/yona.LoginDialog.js}"></script>
+    <script type="text/javascript" th:src="@{/javascripts/lib/viewerjs/viewer.js}"></script>
     <!-- <yona-markdown-editor>는 Custom Element이므로 이 스크립트 로드만으로 customElements.define이
          실행되고, 브라우저가 DOM에서 이 태그를 만나는 즉시 connectedCallback으로 스스로 초기화한다 -
          jQuery selector로 대상을 순회하던 yona.ui.MarkdownEditor.js(삭제됨)와 달리 별도 초기화
          스크립트가 필요 없다. -->
-    <script type="text/javascript" src="/javascripts/lib/yona-markdown-editor/yona-markdown-editor.min.js"></script>
+    <script type="text/javascript" th:src="@{/javascripts/lib/yona-markdown-editor/yona-markdown-editor.min.js}"></script>
     <!-- highlight.js를 전역으로 로드(head의 CSS 승격과 동일 이유) - markdown(project) fragment의
          hljs.highlightAll()이 이 전역 hljs에 의존하므로 그 fragment는 <script src>를 중복 로드하지
          않는다. -->
-    <script type="text/javascript" src="/javascripts/lib/highlight/highlight.pack.js"></script>
+    <script type="text/javascript" th:src="@{/javascripts/lib/highlight/highlight.pack.js}"></script>
 
     <script type="text/javascript">
         document.addEventListener("DOMContentLoaded", function() {

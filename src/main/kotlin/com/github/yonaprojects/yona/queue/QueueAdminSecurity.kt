@@ -27,6 +27,7 @@ import java.util.function.Supplier
 
 internal const val QUEUE_API = "/api/admin/queue/v1"
 internal const val QUEUE_EVENTS = "$QUEUE_API/events"
+internal const val QUEUE_PAGE = "/site/admin/queue"
 internal const val QUEUE_AUTH_STARTED_ATTRIBUTE = "yona.queue.admin.auth-started"
 internal const val QUEUE_ACTOR_ATTRIBUTE = "yona.queue.admin.actor"
 
@@ -83,31 +84,35 @@ internal class QueueAdminSecurity(private val access: QueueAdminAccess) {
                     }
                     request.setAttribute(QUEUE_ACTOR_ATTRIBUTE, actor)
                 } catch (failure: QueueHttpFailure) {
-                    error(response, failure.status, failure.code, failure.message)
+                    error(request, response, failure.status, failure.code, failure.message)
                     return
                 } catch (_: Exception) {
-                    error(response, 500, "INTERNAL_ERROR", "Queue authorization is temporarily unavailable")
+                    error(request, response, 500, "INTERNAL_ERROR", "Queue authorization is temporarily unavailable")
                     return
                 }
                 chain.doFilter(request, response)
             }
         }
-        http.securityMatcher(QUEUE_API, "$QUEUE_API/**")
+        http.securityMatcher(QUEUE_API, "$QUEUE_API/**", QUEUE_PAGE, "$QUEUE_PAGE/**")
             .requestCache { it.disable() }
             .csrf {
                 it.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                    .csrfTokenRequestHandler(object : CsrfTokenRequestHandler by csrfHandler {
+                    .csrfTokenRequestHandler(object : CsrfTokenRequestHandler {
                         override fun handle(request: HttpServletRequest, response: HttpServletResponse, csrfToken: Supplier<CsrfToken>) {
                             csrfHandler.handle(request, response, csrfToken)
                             csrfToken.get() // REST snapshots have no Thymeleaf form to materialize the cookie.
                         }
+
+                        // Kotlin delegation does not forward this Java default method.
+                        override fun resolveCsrfTokenValue(request: HttpServletRequest, csrfToken: CsrfToken): String? =
+                            csrfHandler.resolveCsrfTokenValue(request, csrfToken)
                     })
             }
             .exceptionHandling {
-                it.authenticationEntryPoint { _, response, _ ->
-                    error(response, 401, "UNAUTHENTICATED", "A signed-in session is required")
-                }.accessDeniedHandler { _, response, _ ->
-                    error(response, 403, "FORBIDDEN", "Access denied or invalid CSRF token")
+                it.authenticationEntryPoint { request, response, _ ->
+                    error(request, response, 401, "UNAUTHENTICATED", "A signed-in session is required")
+                }.accessDeniedHandler { request, response, _ ->
+                    error(request, response, 403, "FORBIDDEN", "Access denied or invalid CSRF token")
                 }
             }
             .authorizeHttpRequests { it.anyRequest().permitAll() }
@@ -115,7 +120,12 @@ internal class QueueAdminSecurity(private val access: QueueAdminAccess) {
         return http.build()
     }
 
-    private fun error(response: HttpServletResponse, status: Int, code: String, message: String) {
+    private fun error(request: HttpServletRequest, response: HttpServletResponse, status: Int, code: String, message: String) {
+        if (request.servletPath == QUEUE_PAGE || request.servletPath.startsWith("$QUEUE_PAGE/")) {
+            response.setHeader("Cache-Control", "no-store")
+            response.sendError(status, message)
+            return
+        }
         response.status = status
         response.contentType = "application/json"
         response.characterEncoding = "UTF-8"

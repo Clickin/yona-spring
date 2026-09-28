@@ -546,6 +546,7 @@ class QueueAdminHttpAcceptanceHarness(
                     "retry-once" -> "retryable-then-success"
                     "result-blob" -> "success-publish-file"
                     "process-crash-replay" -> "process-crash-replay"
+                    "process-crash-unsafe" -> "process-crash-unsafe"
                     "stale-fence-file" -> "stale-fence-file"
                     "permanent-failure" -> "permanent-failure"
                     "gated-cancel", "same-resource-pair" -> "gated-cancel"
@@ -767,6 +768,7 @@ class QueueAdminHttpAcceptanceHarness(
             "gated-cancel", "delayed", "simultaneous-claim", "process-crash-replay", "unsupported-type",
             "unsupported-payload-version", "idempotent", "same-resource-pair", "stale-fence-file", "result-blob",
             "enqueue-commit", "enqueue-rollback", "large-id", "large-result",
+            "process-crash-unsafe",
         )
         val scenario = body["scenario"] as? String ?: return false
         val runKey = body["runKey"] as? String ?: return false
