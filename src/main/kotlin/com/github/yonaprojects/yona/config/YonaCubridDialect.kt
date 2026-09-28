@@ -35,6 +35,9 @@ import java.sql.Types
 class YonaCubridDialect : CUBRIDDialect() {
     override fun getPreferredSqlTypeCodeForBoolean(): Int = Types.SMALLINT
 
+    // Hibernate 7.4's CUBRID dialect returns an empty clause despite native FOR UPDATE support.
+    override fun getForUpdateString(): String = " for update"
+
     override fun columnType(sqlTypeCode: Int): String {
         if (sqlTypeCode == SqlTypes.BOOLEAN) {
             return "smallint"

@@ -1,5 +1,11 @@
 # yona product bug fixes — TDD tracking
 
+## 2026-09-28 — CUBRID pessimistic row locking
+
+- Hibernate's CUBRID dialect returned an empty locking clause. The local dialect now emits native `FOR UPDATE`.
+- A real CUBRID two-transaction regression demonstrated the competing `PESSIMISTIC_WRITE` bypass before the fix; afterward it waits for commit and reads the committed revision.
+- `CubridPessimisticLockTest` and `SecurityColumnPortabilityTest` passed together on CUBRID.
+
 ## 2026-09-27 — CUBRID security column and schema-restart portability
 
 - CUBRID rejects literal `TEXT` and `NOT NULL` LOB columns. Profile-specific Hibernate mappings
