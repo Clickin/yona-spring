@@ -1,6 +1,6 @@
-# Durable queue: store, executor and administrator REST/SSE
+# Durable queue: store, executor and administration
 
-트랜잭션 queue 저장소, fenced 실행기와 관리자 REST/SSE API를 제공한다. 관리 UI는 다음 계층에서 추가하며 archive exporter/importer는 제외한다. 기존 메일·웹훅 callback 경로는 변경하지 않는다.
+enqueue/query, 순수 상태 전이 모델, 애플리케이션 내부 실행기와 관리자 REST/SSE API 및 Thymeleaf 관리 UI를 제공한다. Archive exporter/importer는 포함하지 않는다. 기존 메일·웹훅 등 callback 호출 경로는 변경하지 않는다. Queue는 항상 켜지는 핵심 인프라이며 별도 활성화 스위치는 없다. 실행할 수 있는 작업은 애플리케이션이 명시적으로 등록한 handler뿐이다.
 
 ## 애플리케이션 인터페이스
 
@@ -166,6 +166,25 @@ Metrics lifecycle phase는 clock과 같은 `Int.MAX_VALUE - 200`이며 worker보
 수동 HTTP 검증은 Java 21/Python 3.10 이상에서 `python3 support-script/queue-acceptance/run.py`로 실행한다. 두 loopback JVM과 private H2/storage를 만들고 결과 다운로드 무결성·connection 반환·production fixture 부재도 확인한다. [OpenAPI 계약](queue/api-openapi.yaml)을 참고한다. 출력한 private 환경 파일과 trace에는 인증 정보가 있으므로 공개하지 않는다.
 
 SSE 수용 테스트도 같은 runner에서 실행한다. `SPRING_THREADS_VIRTUAL_ENABLED=true`/false와 root/비root context를 각각 검증한다. [SSE 계약](queue/sse-protocol.md)은 OS socket 종료가 아닌 추가 전송 중단·종료 요청을 규정한다.
+
+## Thymeleaf + Turbo 관리 화면
+
+`/site/admin/queue`에서 상태·종류·자원 필터, 최신 ID순 50개 목록, 선택 작업, 50개씩 실행 이력을 조회한다. 필터·cursor·선택은 URL에 저장한다. 탐색과 취소/재시도/종결/우선 실행 폼은 JavaScript 없이도 동작하며 성공한 명령은 303으로 조회 URL에 이동한다. 현재 DB의 사이트 관리자 권한을 매 요청 확인하고 HTML 폼은 Spring의 XOR CSRF 토큰을 사용한다. 실행 중 취소는 `CANCEL_REQUESTED`로 표시하며 완료를 앞당기지 않는다. 수동 retry 뒤 아직 시작되지 않은 generation은 별도 대기 문구로 표시한다. 화면·오류·JS 메시지는 영어와 한국어를 제공하고 번역 없는 locale은 영어로 fallback한다.
+
+Thymeleaf가 행·상세·진행·오류를 렌더링한다. Turbo는 `queue-content` fragment만 갱신한다. Native `yona-queue-events` Web Component는 SSE `reset`/`changed`를 합쳐 한 번에 하나의 fragment 요청을 실행하며 input/textarea/select 편집 중에는 교체를 보류한다. 단순 링크 focus는 갱신을 막지 않고 같은 `data-job-id` 링크로 focus를 복원한다. 별도 클라이언트 작업 저장소, router, 주기적 목록 polling은 없다. 연결·조회 실패는 마지막 결과와 stale 표시를 남긴다. 입력 필드에서 초점을 옮기면 보류된 갱신을 적용한다.
+
+Turbo 8.0.23은 upstream [#834](https://github.com/yona-projects/yona/pull/834)의 잠금 파일 및 Gradle asset pipeline을 재사용한다. 이 큐 PR은 issue 화면 PoC 전체를 가져오거나 기존 독립 위젯을 제거하지 않는다. 큐 전용 Vue 코드·번들·빌드 의존성은 없고, Lit이나 추가 컴포넌트 빌드도 필요하지 않다.
+
+화면 인수 검사는 별도 Playwright 설정을 사용한다. 기존 전체 e2e bootstrap/인증 상태와 섞지 않는다. Java 21을 선택한 후 첫 터미널에서 `YONA_QUEUE_HTTP_CONTEXT_PATH=/queue-it python3 support-script/queue-acceptance/run.py --serve`를 실행한다. 두 번째 터미널에서 runner가 출력한 private 환경 파일을 읽고 실행한다:
+
+```sh
+. /absolute/path/to/queue-http.env
+npm --prefix e2e ci
+e2e/node_modules/.bin/playwright install chromium
+e2e/node_modules/.bin/playwright test --config=e2e/queue/playwright.config.ts
+```
+
+이미 설치된 Chrome을 사용하려면 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`를 실행 파일 경로로 지정할 수 있다. Root 검증은 새 fixture를 `YONA_QUEUE_HTTP_CONTEXT_PATH=''`로 시작하고 새 환경 파일을 읽어 반복한다. 완료 후 fixture를 Ctrl-C로 종료한다. Cookie/control token과 실패 trace는 비밀 정보로 취급하며 게시하지 않는다.
 
 ## 향후 계획
 

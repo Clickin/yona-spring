@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}">
+<head th:replace="~{site/layout :: head(#{${message}})}"></head>
+<body class="theme-default queue-admin-page">
+<div id="main" class="main">
+  <div th:replace="~{site/layout :: gnb}"></div>
+  <div th:replace="~{site/layout :: breadcrumb}"></div>
+  <div class="page-wrap-outer">
+    <div class="site-setting-wrap">
+      <div class="row-fluid">
+        <div th:replace="~{site/layout :: sidebar('queue')}"></div>
+        <main class="span10 queue-admin" aria-labelledby="queue-heading">
+          <h1 id="queue-heading" th:text="#{queue.admin.title}"></h1>
+          <p th:text="#{queue.admin.intro}"></p>
+          <form th:if="${state != null}" method="get" th:action="@{/site/admin/queue}" class="queue-filters" data-turbo="false">
+            <label><span th:text="#{queue.admin.status}"></span> <select name="status" multiple size="3">
+              <option th:each="status : ${statuses}" th:value="${status}" th:text="#{${'queue.admin.status.' + status}}" th:selected="${#lists.contains(state.status, status)}"></option>
+            </select></label>
+            <label><span th:text="#{queue.admin.taskType}"></span> <input name="type" maxlength="160" th:value="${state.type}"></label>
+            <label><span th:text="#{queue.admin.resource}"></span> <input name="resource" maxlength="300" th:value="${state.resource}"></label>
+            <button type="submit" th:text="#{queue.admin.filter}"></button>
+            <a th:href="@{/site/admin/queue}" data-turbo="false" th:text="#{queue.admin.clearFilters}"></a>
+          </form>
+          <yona-queue-events th:attr="src=@{/api/admin/queue/v1/events}">
+            <p role="status" aria-live="polite" data-queue-connection th:text="#{queue.admin.js.waiting}"></p>
+            <a th:href="${pageUrl != null} ? @{${pageUrl}} : @{/site/admin/queue}" data-queue-refresh data-turbo="false" th:text="#{queue.admin.refresh}"></a>
+            <turbo-frame id="queue-content" th:fragment="content" target="_top" data-turbo="false">
+              <p th:if="${queueError != null}" role="alert"><span th:text="#{${'queue.admin.error.' + queueError}}"></span> (<strong th:text="${queueError}"></strong>)</p>
+              <th:block th:if="${page != null}">
+                <div class="queue-table-scroll" role="region" th:aria-label="#{queue.admin.jobs}" tabindex="0">
+                  <table class="table table-striped">
+                    <caption th:text="#{queue.admin.jobsCaption}"></caption>
+                    <thead><tr><th scope="col" th:text="#{queue.admin.jobId}"></th><th scope="col" th:text="#{queue.admin.typeResource}"></th><th scope="col" th:text="#{queue.admin.status}"></th><th scope="col" th:text="#{queue.admin.progress}"></th><th scope="col" th:text="#{queue.admin.createdAt}"></th></tr></thead>
+                    <tbody>
+                    <tr th:each="job : ${page.items}" th:attr="data-job-id=${job.id}">
+                      <td><a th:href="@{${jobUrls[job.id]}}" th:text="${job.id}" th:attr="aria-current=${state.selected == job.id ? 'true' : null}"></a> <span th:if="${job.prioritized}" class="queue-priority" th:text="#{queue.admin.prioritized}"></span></td>
+                      <td><span th:text="${job.type}"></span><ul><li th:each="resource : ${job.resources}" th:text="${resource}"></li></ul></td>
+                      <td th:text="#{${'queue.admin.status.' + job.status}}"></td>
+                      <td><th:block th:replace="~{site/queueAdmin :: progress(${job.progress})}"></th:block></td>
+                      <td><time th:datetime="${job.createdAt}" th:text="${job.createdAt}"></time></td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(page.items)}"><td colspan="5" th:text="#{queue.admin.empty}"></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <nav th:aria-label="#{queue.admin.jobsPages}">
+                  <a th:if="${state.cursor != null}" th:href="@{${firstUrl}}" th:text="#{queue.admin.newestJobs}"></a>
+                  <a th:if="${nextUrl != null}" th:href="@{${nextUrl}}" th:text="#{queue.admin.nextJobs}"></a>
+                </nav>
+                <section th:if="${detail != null}" id="queue-detail" aria-labelledby="queue-detail-heading" th:attr="data-job-id=${detail.id}">
+                  <h2 id="queue-detail-heading" tabindex="-1"><span th:text="#{queue.admin.detail}"></span> <span th:text="${detail.id}"></span></h2>
+                  <a th:href="@{${closeUrl}}" th:text="#{queue.admin.closeDetail}"></a>
+                  <dl>
+                    <dt th:text="#{queue.admin.type}"></dt><dd th:text="${detail.type}"></dd>
+                    <dt th:text="#{queue.admin.status}"></dt><dd th:text="#{${'queue.admin.status.' + detail.status}}"></dd>
+                    <dt th:text="#{queue.admin.resource}"></dt><dd><ul><li th:each="resource : ${detail.resources}" th:text="${resource}"></li></ul></dd>
+                    <dt th:text="#{queue.admin.progress}"></dt><dd><th:block th:replace="~{site/queueAdmin :: progress(${detail.progress})}"></th:block></dd>
+                    <dt th:text="#{queue.admin.scheduledAt}"></dt><dd th:text="${detail.scheduledAt}"></dd>
+                    <dt th:text="#{queue.admin.nextAttemptAt}"></dt><dd th:text="${detail.nextAttemptAt ?: '—'}"></dd>
+                    <dt th:text="#{queue.admin.startedFinished}"></dt><dd><span th:text="${detail.startedAt != null} ? ${detail.startedAt} : (${detail.executionGeneration != '1' and detail.status == 'QUEUED'} ? #{queue.admin.waitingGeneration} : '—')"></span> / <span th:text="${detail.finishedAt ?: '—'}"></span></dd>
+                    <dt th:text="#{queue.admin.updatedAt}"></dt><dd th:text="${detail.updatedAt}"></dd>
+                    <dt th:text="#{queue.admin.generationAttempts}"></dt><dd><span th:text="${detail.executionGeneration}"></span> / <span th:text="${detail.attemptCount}"></span></dd>
+                    <dt th:text="#{queue.admin.owner}"></dt><dd th:text="${detail.ownerInstance ?: '—'}"></dd>
+                    <dt th:text="#{queue.admin.failureDisposition}"></dt><dd th:text="${detail.failureDisposition != null} ? #{${'queue.admin.failure.' + detail.failureDisposition}} : '—'"></dd>
+                  </dl>
+                  <p th:if="${detail.errorCode != null}" role="note"><strong th:text="${detail.errorCode}"></strong>: <span th:text="${detail.errorSummary}"></span></p>
+                  <p th:if="${detail.status == 'CANCEL_REQUESTED'}" th:text="#{queue.admin.cancelPending}"></p>
+                  <form th:if="${#lists.contains({'QUEUED','RETRY_WAIT'}, detail.status)}"
+                        method="post" th:action="@{/site/admin/queue/jobs/{id}/{action}(id=${detail.id},action=${detail.prioritized ? 'deprioritize' : 'prioritize'})}" data-turbo="false" class="queue-command">
+                    <th:block th:replace="~{site/queueAdmin :: commandState}"></th:block>
+                    <button type="submit" th:text="${detail.prioritized} ? #{queue.admin.deprioritize} : #{queue.admin.prioritize}"></button>
+                  </form>
+                  <form th:if="${#lists.contains({'QUEUED','RETRY_WAIT','RUNNING','CANCEL_REQUESTED'}, detail.status)}"
+                        method="post" th:action="@{/site/admin/queue/jobs/{id}/cancel(id=${detail.id})}" data-turbo="false" class="queue-command">
+                    <th:block th:replace="~{site/queueAdmin :: commandState}"></th:block>
+                    <label><span th:text="#{queue.admin.cancelReason}"></span> <input name="reason" th:value="${reason}" aria-describedby="queue-reason-help"></label>
+                    <button type="submit" th:disabled="${detail.status == 'CANCEL_REQUESTED'}" th:text="#{queue.admin.cancel}"></button>
+                  </form>
+                  <form th:if="${#lists.contains({'FAILED','RECOVERY_REQUIRED','BLOCKED_UNSUPPORTED'}, detail.status)}"
+                        method="post" th:action="@{/site/admin/queue/jobs/{id}/retry(id=${detail.id})}" data-turbo="false" class="queue-command">
+                    <th:block th:replace="~{site/queueAdmin :: commandState}"></th:block>
+                    <label th:if="${detail.status == 'RECOVERY_REQUIRED'}"><input type="checkbox" name="recoveryAcknowledged" value="true" required th:checked="${recoveryAcknowledged}"> <span th:text="#{queue.admin.retryAcknowledgement}"></span></label>
+                    <label><span th:text="#{queue.admin.retryReason}"></span> <input name="reason" th:value="${reason}" th:required="${detail.status == 'RECOVERY_REQUIRED'}" aria-describedby="queue-reason-help"></label>
+                    <button type="submit" th:text="#{queue.admin.retry}"></button>
+                  </form>
+                  <form th:if="${#lists.contains({'FAILED','RECOVERY_REQUIRED','BLOCKED_UNSUPPORTED'}, detail.status)}"
+                        method="post" th:action="@{/site/admin/queue/jobs/{id}/abandon(id=${detail.id})}" data-turbo="false" class="queue-command">
+                    <th:block th:replace="~{site/queueAdmin :: commandState}"></th:block>
+                    <label th:if="${detail.status == 'RECOVERY_REQUIRED'}"><input type="checkbox" name="recoveryAcknowledged" value="true" required th:checked="${recoveryAcknowledged}"> <span th:text="#{queue.admin.abandonAcknowledgement}"></span></label>
+                    <label><span th:text="#{queue.admin.abandonReason}"></span> <input name="reason" th:value="${reason}" required aria-describedby="queue-reason-help"></label>
+                    <button type="submit" th:text="#{queue.admin.abandon}"></button>
+                  </form>
+                  <p id="queue-reason-help" th:text="#{queue.admin.reasonHelp}"></p>
+                  <div th:if="${detail.result != null}">
+                    <h3 th:text="#{queue.admin.result}"></h3>
+                    <a th:href="@{/api/admin/queue/v1/jobs/{id}/result(id=${detail.id})}" data-turbo="false" th:text="${detail.result.fileName}"></a>
+                    <p><span th:text="#{queue.admin.resultSize(${detail.result.sizeBytes})}"></span> · SHA-256 <code th:text="${detail.result.sha256}"></code></p>
+                  </div>
+                  <h3 th:text="#{queue.admin.historyCount(${detail.attemptHistoryCount})}"></h3>
+                  <div class="queue-table-scroll" role="region" th:aria-label="#{queue.admin.history}" tabindex="0">
+                    <table class="table">
+                      <caption th:text="#{queue.admin.historyCaption}"></caption>
+                      <thead><tr><th scope="col" th:text="#{queue.admin.attemptGeneration}"></th><th scope="col" th:text="#{queue.admin.statusOwner}"></th><th scope="col" th:text="#{queue.admin.startedFinished}"></th><th scope="col" th:text="#{queue.admin.progressError}"></th></tr></thead>
+                      <tbody><tr th:each="attempt : ${detail.attempts}" th:attr="data-attempt-no=${attempt.attemptNo}">
+                        <td><span th:text="${attempt.attemptNo}"></span> / <span th:text="${attempt.executionGeneration}"></span></td>
+                        <td><span th:text="#{${'queue.admin.attempt.' + attempt.status}}"></span><br><span th:text="${attempt.ownerInstance}"></span></td>
+                        <td><time th:datetime="${attempt.startedAt}" th:text="${attempt.startedAt}"></time><br><time th:datetime="${attempt.finishedAt}" th:text="${attempt.finishedAt ?: '—'}"></time></td>
+                        <td><th:block th:replace="~{site/queueAdmin :: progress(${attempt.progress})}"></th:block><strong th:text="${attempt.errorCode}"></strong> <span th:text="${attempt.errorSummary}"></span></td>
+                      </tr><tr th:if="${#lists.isEmpty(detail.attempts)}"><td colspan="4" th:text="#{queue.admin.historyEmpty}"></td></tr></tbody>
+                    </table>
+                  </div>
+                  <nav th:aria-label="#{queue.admin.historyPages}"><a th:if="${state.attemptCursor != null}" th:href="@{${firstAttemptUrl}}" th:text="#{queue.admin.newestAttempts}"></a> <a th:if="${nextAttemptUrl != null}" th:href="@{${nextAttemptUrl}}" th:text="#{queue.admin.previousAttempts}"></a></nav>
+                </section>
+              </th:block>
+            </turbo-frame>
+          </yona-queue-events>
+        </main>
+      </div>
+    </div>
+  </div>
+  <footer th:replace="~{site/layout :: footer}"></footer>
+</div>
+<th:block th:replace="~{site/layout :: scripts}"></th:block>
+<link rel="stylesheet" th:href="@{/stylesheets/queue-admin.css}">
+<script type="module" th:src="@{/javascripts/service/yona.queue.Admin.js}"></script>
+
+<th:block th:if="${false}">
+<th:block th:fragment="progress(progress)">
+  <span th:if="${progress == null}">—</span>
+  <th:block th:if="${progress != null}"><span th:text="${progress.stage}"></span><ul><li th:each="counter : ${progress.counters}"><span th:text="${counter.key}"></span>: <span th:text="${counter.value}"></span></li></ul></th:block>
+</th:block>
+<th:block th:fragment="commandState">
+  <input type="hidden" name="commandId" th:value="${commandId}">
+  <input th:each="status : ${state.status}" type="hidden" name="status" th:value="${status}">
+  <input th:if="${state.type != null}" type="hidden" name="type" th:value="${state.type}">
+  <input th:if="${state.resource != null}" type="hidden" name="resource" th:value="${state.resource}">
+  <input th:if="${state.cursor != null}" type="hidden" name="cursor" th:value="${state.cursor}">
+  <input type="hidden" name="selected" th:value="${state.selected}">
+  <input th:if="${state.attemptCursor != null}" type="hidden" name="attemptCursor" th:value="${state.attemptCursor}">
+</th:block>
+</th:block>
+</body>
+</html>

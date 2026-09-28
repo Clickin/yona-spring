@@ -558,6 +558,9 @@
       <li th:class="${activeMenu == 'diagnostic' ? 'active' : ''}">
         <a href="/sites/diagnostic" th:text="#{site.sidebar.diagnostics}">시스템 자가진단</a>
       </li>
+      <li th:class="${activeMenu == 'queue' ? 'active' : ''}">
+        <a th:href="@{/site/admin/queue}" th:text="#{site.sidebar.queue}">Job queue</a>
+      </li>
     </ul>
   </div>
 
