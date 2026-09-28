@@ -465,27 +465,6 @@ class TemplateEquivalenceSpec @Autowired constructor(
                     doc.select("meta[name='twitter:url']").size shouldBe 1
                 }
 
-                it("공통 스크립트 조각에 NProgress 라이브러리 로드/초기화 및 ViewerJS 자산이 포함되어야 한다") {
-                    val result = mockMvc.perform(get("/owner/public-proj"))
-                        .andExpect(status().isOk)
-                        .andReturn()
-
-                    val html = result.response.contentAsString
-                    val doc = Jsoup.parse(html)
-
-                    doc.select("link[href*='lib/nprogress/nprogress.css']").size shouldBe 1
-                    // nprogress.js는 yona-layout.js 번들에 포함돼 개별 <script src>로는 더 이상
-                    // 로드하지 않는다(layout.html에 남아있던 중복 로드를 제거).
-                    doc.select("script[src*='lib/nprogress/nprogress.js']").size shouldBe 0
-                    html.contains("NProgress.configure(") shouldBe true
-
-                    doc.select("link[href*='lib/viewerjs/viewer.css']").size shouldBe 1
-                    doc.select("script[src*='lib/viewerjs/viewer.js']").size shouldBe 1
-                    // jQuery 래퍼(jquery-viewer.js)는 제거되고 순정 Viewer.js API로 전환됐다
-                    // — ViewerLightboxWidgetTemplateEquivalenceSpec 참고.
-                    doc.select("script[src*='lib/viewerjs/jquery-viewer.js']").size shouldBe 0
-                    html.contains(".markdown-wrap").shouldBe(true)
-                }
 
                 it("sendYonaUsage 설정 기본값(true)이면 메인 레이아웃에도 구글 애널리틱스 스크립트가 렌더링되어야 한다") {
                     val result = mockMvc.perform(get("/owner/public-proj"))

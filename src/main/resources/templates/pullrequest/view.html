@@ -35,7 +35,7 @@
                         </a>
                         <div th:replace="~{pullrequest/partial_branch :: branch(${pr})}"></div>
                     </div>
-                    <div class="content markdown-wrap" th:utext="${markdownService.render(pr.body, true, project)}">본문 내용</div>
+                    <yona-markdown-renderer class="content markdown-wrap" mode="comment" th:owner="${project.owner}" th:project="${project.name}" ref="" path="" th:text="${pr.body}">본문 내용</yona-markdown-renderer>
                     <div class="attachments" id="attachments" th:data-attachments="${attachmentsJson}"></div>
                 </div>
 
@@ -146,7 +146,7 @@
                         <span class="review-verdict-label review-verdict-request-changes" th:if="${rv.state.name() == 'REQUEST_CHANGES'}" th:text="#{pullRequest.review.verdict.state.requestChanges}">변경을 요청함</span>
                         <span class="review-verdict-label" th:if="${rv.state.name() == 'COMMENT'}" th:text="#{pullRequest.review.verdict.state.comment}">코멘트를 남김</span>
                         <span class="date" style="margin-left:8px;" th:title="${@templateHelper.getDateString(rv.createdDate)}" th:text="${@templateHelper.agoOrDateString(rv.createdDate)}">방금 전</span>
-                        <div class="content markdown-wrap" th:if="${rv.body != null and !rv.body.isEmpty()}" th:utext="${markdownService.render(rv.body, true, project)}" style="margin-top:6px;">리뷰 내용</div>
+                        <yona-markdown-renderer class="content markdown-wrap" mode="comment" th:owner="${project.owner}" th:project="${project.name}" ref="" path="" th:if="${rv.body != null and !rv.body.isEmpty()}" th:text="${rv.body}" style="margin-top:6px;">리뷰 내용</yona-markdown-renderer>
                     </div>
 
                     <div id="pr-review-submit" th:if="${currentUser != null and pr.state.name() == 'OPEN'}" style="margin-top:15px;">
@@ -304,9 +304,6 @@
 </div>
 
 <th:block th:replace="~{site/layout :: scripts}"></th:block>
-<!-- markdown fragment(yona.Markdown.js 로드)는 scripts fragment(yona-lib.js, 구버전
-     yona.Markdown 사본 포함) 뒤에 와야 새 정의가 번들의 구식 정의를 덮어쓴다 - 이 페이지만
-     순서가 반대였다. 자세한 경위는 site/layout.html::markdown(project) fragment 주석 참고. -->
 <th:block th:replace="~{site/layout :: markdown(${project})}"></th:block>
 <th:block th:replace="~{common/tomselect :: tomselect}"></th:block>
 <!-- common/yona.CodeCommentBlock.js는 완전한 vanilla 포팅으로 이미 존재했지만 어느 템플릿도

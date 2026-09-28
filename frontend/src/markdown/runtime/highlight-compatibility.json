@@ -1,0 +1,376 @@
+{
+  "legacySource": "16dc242b6^:src/main/resources/static/javascripts/lib/highlight/highlight.pack.js (highlight.js 9.11.0)",
+  "legacy": {
+    "haskell": [
+      "hs"
+    ],
+    "gradle": [],
+    "xml": [
+      "html",
+      "xhtml",
+      "rss",
+      "atom",
+      "xjb",
+      "xsd",
+      "xsl",
+      "plist"
+    ],
+    "lua": [],
+    "css": [],
+    "basic": [],
+    "makefile": [
+      "mk",
+      "mak"
+    ],
+    "cpp": [
+      "c",
+      "cc",
+      "h",
+      "c++",
+      "h++",
+      "hpp"
+    ],
+    "arduino": [],
+    "excel": [
+      "xlsx",
+      "xls"
+    ],
+    "r": [],
+    "rust": [
+      "rs"
+    ],
+    "nginx": [
+      "nginxconf"
+    ],
+    "accesslog": [],
+    "scss": [],
+    "llvm": [],
+    "clojure": [
+      "clj"
+    ],
+    "kotlin": [],
+    "ruby": [
+      "rb",
+      "gemspec",
+      "podspec",
+      "thor",
+      "irb"
+    ],
+    "haml": [],
+    "markdown": [
+      "md",
+      "mkdown",
+      "mkd"
+    ],
+    "diff": [
+      "patch"
+    ],
+    "php": [
+      "php3",
+      "php4",
+      "php5",
+      "php6"
+    ],
+    "matlab": [],
+    "awk": [],
+    "htmlbars": [],
+    "bash": [
+      "sh",
+      "zsh"
+    ],
+    "json": [],
+    "elm": [],
+    "django": [
+      "jinja"
+    ],
+    "apache": [
+      "apacheconf"
+    ],
+    "clojure-repl": [],
+    "tex": [],
+    "swift": [],
+    "typescript": [
+      "ts"
+    ],
+    "javascript": [
+      "js",
+      "jsx"
+    ],
+    "objectivec": [
+      "mm",
+      "objc",
+      "obj-c"
+    ],
+    "go": [
+      "golang"
+    ],
+    "http": [
+      "https"
+    ],
+    "scala": [],
+    "groovy": [],
+    "python": [
+      "py",
+      "gyp"
+    ],
+    "shell": [
+      "console"
+    ],
+    "ini": [
+      "toml"
+    ],
+    "dockerfile": [
+      "docker"
+    ],
+    "erlang": [
+      "erl"
+    ],
+    "java": [
+      "jsp"
+    ],
+    "dos": [
+      "bat",
+      "cmd"
+    ],
+    "powershell": [
+      "ps"
+    ],
+    "coffeescript": [
+      "coffee",
+      "cson",
+      "iced"
+    ],
+    "less": [],
+    "dart": [],
+    "cs": [
+      "csharp"
+    ],
+    "sql": [],
+    "elixir": [],
+    "cmake": [
+      "cmake.in"
+    ],
+    "perl": [
+      "pl",
+      "pm"
+    ],
+    "yaml": [
+      "yml",
+      "YAML",
+      "yaml"
+    ],
+    "asciidoc": [
+      "adoc"
+    ]
+  },
+  "currentSource": "a71722f:src/main/resources/static/javascripts/lib/highlight/highlight.pack.js (highlight.js 11.12.0)",
+  "current": {
+    "bash": [
+      "sh",
+      "zsh"
+    ],
+    "c": [
+      "h"
+    ],
+    "cpp": [
+      "cc",
+      "c++",
+      "h++",
+      "hpp",
+      "hh",
+      "hxx",
+      "cxx"
+    ],
+    "csharp": [
+      "cs",
+      "c#"
+    ],
+    "css": [],
+    "diff": [
+      "patch"
+    ],
+    "go": [
+      "golang"
+    ],
+    "graphql": [
+      "gql"
+    ],
+    "ini": [
+      "toml"
+    ],
+    "java": [
+      "jsp"
+    ],
+    "javascript": [
+      "js",
+      "jsx",
+      "mjs",
+      "cjs"
+    ],
+    "json": [
+      "jsonc",
+      "json5"
+    ],
+    "kotlin": [
+      "kt",
+      "kts",
+      "ktm",
+      "ktx"
+    ],
+    "less": [],
+    "lua": [
+      "pluto"
+    ],
+    "makefile": [
+      "mk",
+      "mak",
+      "make"
+    ],
+    "markdown": [
+      "md",
+      "mkdown",
+      "mkd"
+    ],
+    "objectivec": [
+      "mm",
+      "objc",
+      "obj-c",
+      "obj-c++",
+      "objective-c++"
+    ],
+    "perl": [
+      "pl",
+      "pm"
+    ],
+    "php": [],
+    "php-template": [],
+    "plaintext": [
+      "text",
+      "txt"
+    ],
+    "python": [
+      "py",
+      "gyp",
+      "ipython"
+    ],
+    "python-repl": [
+      "pycon"
+    ],
+    "r": [],
+    "ruby": [
+      "rb",
+      "gemspec",
+      "podspec",
+      "thor",
+      "irb"
+    ],
+    "rust": [
+      "rs"
+    ],
+    "scss": [],
+    "shell": [
+      "console",
+      "shellsession"
+    ],
+    "sql": [],
+    "swift": [],
+    "typescript": [
+      "ts",
+      "tsx",
+      "mts",
+      "cts"
+    ],
+    "vbnet": [
+      "vb"
+    ],
+    "wasm": [],
+    "xml": [
+      "html",
+      "xhtml",
+      "rss",
+      "atom",
+      "xjb",
+      "xsd",
+      "xsl",
+      "plist",
+      "wsf",
+      "svg"
+    ],
+    "yaml": [
+      "yml"
+    ]
+  },
+  "migrations": {
+    "cs": "csharp",
+    "tex": "latex",
+    "htmlbars": "handlebars"
+  },
+  "samples": {
+    "accesslog": "127.0.0.1 - - [01/Jan/2026:12:00:00 +0000] \"GET / HTTP/1.1\" 200 123",
+    "apache": "<VirtualHost *:80>\nDocumentRoot /var/www\n</VirtualHost>",
+    "arduino": "void setup() { pinMode(LED_BUILTIN, OUTPUT); }",
+    "asciidoc": "= Title\n\n*bold* text",
+    "awk": "BEGIN { print \"hello\" }",
+    "bash": "#!/bin/bash\necho \"$HOME\"",
+    "basic": "10 PRINT \"HELLO\"\n20 GOTO 10",
+    "c": "int main(void) { return 0; }",
+    "clojure": "(defn hello [name] (str \"Hello \" name))",
+    "clojure-repl": "user=> (println \"hello\")",
+    "cmake": "cmake_minimum_required(VERSION 3.10)\nproject(Hello)",
+    "coffeescript": "square = (x) -> x * x",
+    "cpp": "#include <iostream>\nint main() { std::cout << \"hello\"; }",
+    "csharp": "public class Hello { public static int Value = 42; }",
+    "css": "body { color: red; }",
+    "dart": "void main() { print('hello'); }",
+    "diff": "--- a/file\n+++ b/file\n-old\n+new",
+    "django": "<h1>{{ user.name }}</h1>{% if user %}Hello{% endif %}",
+    "dockerfile": "FROM alpine:3\nRUN echo hello",
+    "dos": "@echo off\nset NAME=hello",
+    "elixir": "defmodule Hello do\n  def world, do: :ok\nend",
+    "elm": "module Main exposing (main)\nmain = \"hello\"",
+    "erlang": "-module(hello).\nhello() -> ok.",
+    "excel": "=SUM(A1:A10)",
+    "go": "package main\nfunc main() { println(\"hello\") }",
+    "gradle": "plugins { id 'java' }\nversion = '1.0'",
+    "graphql": "query User { user(id: 1) { name } }",
+    "groovy": "def name = 'hello'\nprintln name",
+    "haml": "%h1= @user.name",
+    "handlebars": "<h1>{{user.name}}</h1>",
+    "haskell": "main :: IO ()\nmain = putStrLn \"hello\"",
+    "http": "HTTP/1.1 200 OK\nContent-Type: application/json",
+    "ini": "[server]\nport=8080",
+    "java": "public class Hello { private int value = 42; }",
+    "javascript": "const hello = (name) => `Hello ${name}`;",
+    "json": "{\"hello\": true, \"count\": 42}",
+    "kotlin": "fun main() { val name: String = \"hello\" }",
+    "latex": "\\documentclass{article}\n\\begin{document}Hello\\end{document}",
+    "less": "@color: red;\nbody { color: @color; }",
+    "llvm": "define i32 @main() {\n  ret i32 0\n}",
+    "lua": "local name = \"hello\"\nprint(name)",
+    "makefile": "all:\n\t$(CC) main.c -o main",
+    "markdown": "# Title\n\n**bold** [link](https://example.com)",
+    "matlab": "function y = square(x)\ny = x.^2;\nend",
+    "nginx": "server { listen 80; server_name example.com; }",
+    "objectivec": "@interface Hello : NSObject\n@property NSString *name;\n@end",
+    "perl": "my $name = \"hello\";\nprint $name;",
+    "php": "<?php function hello() { return true; }",
+    "php-template": "<h1><?php echo $name; ?></h1>",
+    "plaintext": "plain unhighlighted text",
+    "powershell": "Get-ChildItem -Path $HOME | Write-Output",
+    "python": "def hello(name):\n    return f'Hello {name}'",
+    "python-repl": ">>> print('hello')",
+    "r": "hello <- function(x) { print(x) }",
+    "ruby": "def hello(name)\n  puts \"Hello #{name}\"\nend",
+    "rust": "fn main() { let value: i32 = 42; }",
+    "scala": "object Hello { val name: String = \"hello\" }",
+    "scss": "$color: red;\nbody { color: $color; }",
+    "shell": "$ echo hello",
+    "sql": "SELECT name FROM users WHERE id = 42;",
+    "swift": "func hello(name: String) -> String { return name }",
+    "typescript": "const hello: string = 'world';",
+    "vbnet": "Public Class Hello\nDim value As Integer = 42\nEnd Class",
+    "wasm": "(module (func (export \"answer\") (result i32) i32.const 42))",
+    "xml": "<html><body class=\"hello\">Hello</body></html>",
+    "yaml": "hello: true\nvalues:\n  - 42"
+  }
+}

@@ -21,7 +21,6 @@ import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.attachment.Attachment
 import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.attachment.AttachmentService
-import com.github.yonaprojects.yona.domain.support.MarkdownService
 import org.springframework.http.HttpStatus
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -53,7 +52,6 @@ class MilestoneViewControllerSpec : DescribeSpec({
     val projectUserRepository = mockk<ProjectUserRepository>()
     val userRepository = mockk<UserRepository>()
     val attachmentRepository = mockk<AttachmentRepository>()
-    val markdownService = mockk<MarkdownService>()
     val organizationUserRepository = mockk<OrganizationUserRepository>()
     every { organizationUserRepository.findByOrganizationIdAndUserId(any(), any()) } returns Optional.empty()
     val userRepositoryForAccessControl = mockk<UserRepository>()
@@ -80,7 +78,6 @@ class MilestoneViewControllerSpec : DescribeSpec({
         projectUserRepository,
         userRepository,
         attachmentRepository,
-        markdownService,
         accessControl,
         attachmentService
     )
@@ -97,7 +94,6 @@ class MilestoneViewControllerSpec : DescribeSpec({
             projectUserRepository,
             userRepository,
             attachmentRepository,
-            markdownService,
             attachmentService
         )
     }
@@ -514,8 +510,8 @@ class MilestoneViewControllerSpec : DescribeSpec({
             }
 
             // 첨부파일이 있을 때만 joinToString의 변환 람다(id/mimeType/size의 엘비스 분기, 이름의
-            // 따옴표·줄바꿈 이스케이프)가 실행되고, contents가 있을 때만 markdownService.render가 호출된다.
-            it("첨부파일과 본문이 있으면 attachmentsJson과 contentsHtml을 채워야 한다") {
+            // 따옴표·줄바꿈 이스케이프)가 실행된다.
+            it("첨부파일이 있으면 attachmentsJson을 채워야 한다") {
                 val memberUser = User(id = 10L, loginId = "testuser", name = "테스트유저")
                 memberUser.projectUsers.add(ProjectUser(id = 922L, user = memberUser, project = project, role = Role(id = RoleType.MEMBER.roleType)))
                 // dueDate를 채워서 toViewDto()의 isOverdue/daysBetween 계산(milestone.dueDate?.let{...}) 중
@@ -530,7 +526,6 @@ class MilestoneViewControllerSpec : DescribeSpec({
                 every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
                 every { milestoneService.getMilestone(2L) } returns milestoneWithContents
                 every { issueRepository.findByMilestone(milestoneWithContents) } returns emptyList()
-                every { markdownService.render("본문 \"내용\"\n둘째줄", true, project) } returns "<p>본문 내용</p>"
                 every { attachmentRepository.findByContainerTypeAndContainerId(ResourceType.MILESTONE, "2") } returns listOf(
                     Attachment(id = 5L, name = "파일\"1\"\n줄바꿈", containerType = ResourceType.MILESTONE, containerId = "2", mimeType = "image/png", size = 1024L),
                     Attachment(id = null, name = "파일2", containerType = ResourceType.MILESTONE, containerId = "2", mimeType = null, size = null)
@@ -547,7 +542,6 @@ class MilestoneViewControllerSpec : DescribeSpec({
                         "{\"id\":\"\",\"mimeType\":\"\",\"name\":\"파일2\",\"url\":\"/files/null\",\"size\":0}" +
                         "]}"
                 )
-                result.modelAndView!!.model["contentsHtml"] shouldBe "<p>본문 내용</p>"
             }
         }
 

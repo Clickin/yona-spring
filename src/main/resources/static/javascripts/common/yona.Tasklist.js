@@ -7,7 +7,8 @@
 
 window.yona = window.yona || {};
 yona.initTasklist = function(root) {
-    var markdownWraps = root.querySelectorAll(".markdown-wrap");
+    var markdownWraps = root.matches && root.matches(".markdown-wrap")
+        ? [root] : root.querySelectorAll(".markdown-wrap");
     var inputCheckBox = "input[type='checkbox']";
 
     checkTasklistDoneCount(markdownWraps);
@@ -45,7 +46,16 @@ yona.initTasklist = function(root) {
                 })
                 .then(function (msg) {
                     NProgress.done();
-                    checkTasklistDoneCount(markdownWraps);
+                    if (wrap.matches("yona-markdown-renderer") && wrap.isConnected) {
+                        var replacement = document.createElement("yona-markdown-renderer");
+                        Array.prototype.forEach.call(wrap.attributes, function(attribute) {
+                            replacement.setAttribute(attribute.name, attribute.value);
+                        });
+                        replacement.textContent = textarea.value;
+                        wrap.replaceWith(replacement);
+                    } else {
+                        checkTasklistDoneCount(markdownWraps);
+                    }
                 })
                 .catch(function(err){
                     var response = JSON.parse(err.responseText);
@@ -107,10 +117,11 @@ yona.initTasklist = function(root) {
                 }
             });
             var tasklist = target.previousElementSibling;
-            if(!tasklist){
+            if(!tasklist || !tasklist.querySelector(".done-counter") ||
+                !tasklist.querySelector(".bar") || !tasklist.querySelector(".task-title")){
                 return;
             }
-            var percentage = checked / total * 100;
+            var percentage = total ? checked / total * 100 : 0;
             tasklist.querySelector(".done-counter").innerHTML = "(" + checked + "/" + total + ")";
             tasklist.querySelector(".bar").style.width = percentage + "%";
             tasklist.querySelector(".task-title").style.width = percentage + "%";
@@ -129,11 +140,14 @@ yona.initTasklist = function(root) {
 
     function disableCheckboxIfNeeds(targets){
         targets.forEach(function (target) {
-            if(target.dataset.allowedUpdate !== "true") {
-                target.querySelectorAll(inputCheckBox).forEach(function (checkbox) {
-                    checkbox.disabled = true;
-                });
-            }
+            var container = target.closest("div[id]");
+            var editForm = container && container.previousElementSibling &&
+                container.previousElementSibling.querySelector("form");
+            var allowed = target.dataset.allowedUpdate === "true" && editForm &&
+                editForm.querySelector("textarea") && editForm.getAttribute("action");
+            target.querySelectorAll(inputCheckBox).forEach(function (checkbox) {
+                checkbox.disabled = !allowed;
+            });
         });
     }
 

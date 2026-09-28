@@ -26,7 +26,6 @@ import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.pullrequest.ReviewCommentRepository
 import com.github.yonaprojects.yona.domain.milestone.MilestoneRepository
-import com.github.yonaprojects.yona.domain.support.MarkdownService
 import com.github.yonaprojects.yona.domain.watch.WatchService
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import io.mockk.clearMocks
@@ -49,7 +48,6 @@ class CodeViewControllerSpec : DescribeSpec({
     val repositoryService = mockk<RepositoryService>()
     val commentThreadRepository = mockk<CommentThreadRepository>()
     val commitCommentRepository = mockk<CommitCommentRepository>()
-    val markdownService = mockk<MarkdownService>()
     val watchService = mockk<WatchService>()
     val organizationUserRepository = mockk<OrganizationUserRepository>()
     every { organizationUserRepository.findByOrganizationIdAndUserId(any(), any()) } returns Optional.empty()
@@ -80,7 +78,6 @@ class CodeViewControllerSpec : DescribeSpec({
         commentThreadRepository,
         commitCommentRepository,
         accessControl,
-        markdownService,
         watchService,
         attachmentRepository,
         objectMapperForController,
@@ -168,7 +165,7 @@ class CodeViewControllerSpec : DescribeSpec({
             }
 
             // yona views/code/partial_view_file.scala.html:109-114 isMarkdownExtension() 분기 대응 (P1-139).
-            it(".md 파일이면 렌더링된 마크다운 HTML을 markdownHtml 모델 속성으로 담아야 한다") {
+            it(".md 파일이면 원본 마크다운을 markdownSource 모델 속성으로 담아야 한다") {
                 val objectMapper = ObjectMapper()
                 val mockNode = objectMapper.createObjectNode()
                 mockNode.put("type", "file")
@@ -180,15 +177,14 @@ class CodeViewControllerSpec : DescribeSpec({
                 every { playRepo.getNamedBranchNames() } returns emptyList()
                 every { playRepo.getTagNames() } returns emptyList()
                 every { repositoryService.getMetaDataFromAncestorDirectories(playRepo, "main", "README.md") } returns listOf(mockNode)
-                every { markdownService.renderFileInCodeBrowser("# 제목", project) } returns "<h1>제목</h1>"
 
                 mockMvc.perform(get("/testowner/testproject/code/main/README.md"))
                     .andExpect(status().isOk)
                     .andExpect(view().name("code/view"))
-                    .andExpect(model().attribute("markdownHtml", "<h1>제목</h1>"))
+                    .andExpect(model().attribute("markdownSource", "# 제목"))
             }
 
-            it(".md가 아닌 일반 파일이면 markdownHtml 모델 속성을 담지 않아야 한다") {
+            it(".md가 아닌 일반 파일이면 markdownSource 모델 속성을 담지 않아야 한다") {
                 val objectMapper = ObjectMapper()
                 val mockNode = objectMapper.createObjectNode()
                 mockNode.put("type", "file")
@@ -204,7 +200,7 @@ class CodeViewControllerSpec : DescribeSpec({
                 mockMvc.perform(get("/testowner/testproject/code/main/src/Main.kt"))
                     .andExpect(status().isOk)
                     .andExpect(view().name("code/view"))
-                    .andExpect(model().attributeDoesNotExist("markdownHtml"))
+                    .andExpect(model().attributeDoesNotExist("markdownSource"))
             }
 
             it("[Test-12-2-1] 공개 프로젝트이지만 isCodeAccessibleMemberOnly가 true이고 비멤버인 경우 상세 경로 접근 시 403 Forbidden을 반환해야 한다") {
@@ -683,7 +679,7 @@ class CodeViewControllerSpec : DescribeSpec({
                     .andExpect(model().attribute("title", "nobranch"))
             }
 
-            it("디렉터리(folder) 항목이면 markdownHtml/fileCommentCount를 담지 않고 currentDir에 슬래시를 붙여야 한다") {
+            it("디렉터리(folder) 항목이면 markdownSource/fileCommentCount를 담지 않고 currentDir에 슬래시를 붙여야 한다") {
                 val objectMapper = ObjectMapper()
                 val mockNode = objectMapper.createObjectNode()
                 mockNode.put("type", "folder")
@@ -699,11 +695,11 @@ class CodeViewControllerSpec : DescribeSpec({
                     .andExpect(status().isOk)
                     .andExpect(view().name("code/view"))
                     .andExpect(model().attribute("currentDir", "src/"))
-                    .andExpect(model().attributeDoesNotExist("markdownHtml"))
+                    .andExpect(model().attributeDoesNotExist("markdownSource"))
                     .andExpect(model().attributeDoesNotExist("fileCommentCount"))
             }
 
-            it("파일이지만 data 필드가 없으면 markdownHtml을 담지 않아야 한다") {
+            it("파일이지만 data 필드가 없으면 markdownSource를 담지 않아야 한다") {
                 val objectMapper = ObjectMapper()
                 val mockNode = objectMapper.createObjectNode()
                 mockNode.put("type", "file")
@@ -717,7 +713,7 @@ class CodeViewControllerSpec : DescribeSpec({
 
                 mockMvc.perform(get("/testowner/testproject/code/main/README.md"))
                     .andExpect(status().isOk)
-                    .andExpect(model().attributeDoesNotExist("markdownHtml"))
+                    .andExpect(model().attributeDoesNotExist("markdownSource"))
             }
 
             it("파일이지만 revisionNo가 없으면 fileCommentCount를 담지 않아야 한다") {
@@ -793,7 +789,7 @@ class CodeViewControllerSpec : DescribeSpec({
                 mockMvc.perform(get("/testowner/testproject/code/main/empty"))
                     .andExpect(status().isOk)
                     .andExpect(view().name("code/view"))
-                    .andExpect(model().attributeDoesNotExist("markdownHtml"))
+                    .andExpect(model().attributeDoesNotExist("markdownSource"))
                     .andExpect(model().attributeDoesNotExist("fileCommentCount"))
             }
 
@@ -814,7 +810,7 @@ class CodeViewControllerSpec : DescribeSpec({
                 mockMvc.perform(get("/testowner/testproject/code/main/notype"))
                     .andExpect(status().isOk)
                     .andExpect(view().name("code/view"))
-                    .andExpect(model().attributeDoesNotExist("markdownHtml"))
+                    .andExpect(model().attributeDoesNotExist("markdownSource"))
                     .andExpect(model().attributeDoesNotExist("fileCommentCount"))
             }
 

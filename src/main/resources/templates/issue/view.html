@@ -83,7 +83,7 @@
                                 <div class="bar red" style="width: 0;" title="Tasklist"></div>
                             </div>
                         </div>
-                        <div class="content markdown-wrap" th:data-allowed-update="${isAllowedUpdate}" th:utext="${markdownService.render(issue.body, true, project)}">본문 내용</div>
+                        <yona-markdown-renderer class="content markdown-wrap" mode="comment" th:owner="${project.owner}" th:project="${project.name}" ref="" path="" th:data-allowed-update="${isAllowedUpdate}" th:text="${issue.body}">본문 내용</yona-markdown-renderer>
                     </div>
                     
                     <div class="attachments" id="attachments" th:data-attachments="${attachmentsJson}"></div>
@@ -282,7 +282,7 @@
                                                     <div class="bar red" style="width: 0;" title="Tasklist"></div>
                                                 </div>
                                             </div>
-                                            <div class="content markdown-wrap" th:data-allowed-update="${canEditThisComment}" th:utext="${markdownService.render(comment.contents, true, project)}">댓글내용</div>
+                                            <yona-markdown-renderer class="content markdown-wrap" mode="comment" th:owner="${project.owner}" th:project="${project.name}" ref="" path="" th:data-allowed-update="${canEditThisComment}" th:text="${comment.contents}">댓글내용</yona-markdown-renderer>
                                         </div>
                                     </div>
                                     <div th:replace="~{common/childComments :: childComments(${comment}, ${children}, ${project}, ${commentApiBase}, ${currentUser}, ${isProjectManager})}"></div>

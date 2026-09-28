@@ -78,7 +78,7 @@
                             th:data-request-uri="@{/comments/COMMIT_COMMENT/{id}(id=${comment.id})}"><i class="yobicon-trash"></i></button>
                   </span>
                 </div>
-                <div class="comment-body markdown-wrap" th:utext="${markdownService.render(comment.contents, true, project)}">댓글 내용</div>
+                <yona-markdown-renderer class="comment-body markdown-wrap" mode="comment" th:owner="${project.owner}" th:project="${project.name}" ref="" path="" th:text="${comment.contents}">댓글 내용</yona-markdown-renderer>
                 <div class="attachments" th:data-attachments="${commentAttachmentsJsonByCommentId != null ? commentAttachmentsJsonByCommentId.get(comment.id) : '{}'}"></div>
               </div>
             </li>

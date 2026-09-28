@@ -25,7 +25,7 @@
                 <div class="project-overview span9 span-hard-wrap">
                     <div class="project-description" data-toggle="project-description-tab">
                         <h3>
-                            <span id="project-description" class="markdown-wrap" th:text="${project.overview != null && !project.overview.isEmpty() ? project.overview : '프로젝트에 대한 설명이 등록되지 않았습니다.'}">test</span>
+                            <yona-markdown-renderer id="project-description" class="markdown-wrap" mode="comment" th:owner="${project.owner}" th:project="${project.name}" ref="" path="" th:text="${project.overview != null && !project.overview.isEmpty() ? project.overview : '프로젝트에 대한 설명이 등록되지 않았습니다.'}">test</yona-markdown-renderer>
                             <button type="button" class="ybtn ybtn-minimum" data-toggle="description-edit"><i class="yobicon-edit"></i></button>
                         </h3>
                     </div>
@@ -62,18 +62,18 @@
                             
                             <!-- 1. README 탭 -->
                             <div th:if="${tabId == 'readme'}" class="bubble-wrap gray readme">
-                                <p class="default" th:if="${readmeHtml == null}">
+                                <p class="default" th:if="${readmeSource == null}">
                                     <span th:text="#{project.readme}">README.md will be shown here if you add it to the code repository's root directory.</span>
                                     <br><br>
                                     <a th:if="${project.isCodeEnabled}" th:href="@{/{owner}/{name}/postform?readme=true(owner=${project.owner}, name=${project.name})}" class="ybtn" th:text="#{project.readme.create}">create README</a>
                                 </p>
-                                <div class="readme-wrap" th:if="${readmeHtml != null}">
+                                <div class="readme-wrap" th:if="${readmeSource != null}">
                                     <header>
                                         <i class="yobicon-book-open vmiddle"></i>
                                         <strong class="vmiddle" th:text="${readmeFileName}"> README.md</strong>
                                         <a th:if="${project.isCodeEnabled}" th:href="@{/{owner}/{name}/postform?readme=true(owner=${project.owner}, name=${project.name})}" class="ybtn vmiddle ml5" th:text="#{button.edit}">Edit</a>
                                     </header>
-                                    <div class="readme-body markdown-wrap" th:utext="${readmeHtml}">README 내용</div>
+                                    <yona-markdown-renderer class="readme-body markdown-wrap" mode="document" th:owner="${project.owner}" th:project="${project.name}" ref="HEAD" th:path="${readmeFileName}" th:text="${readmeSource}">README 내용</yona-markdown-renderer>
                                 </div>
                             </div>
 
@@ -313,11 +313,6 @@
     <footer th:replace="~{site/layout :: footer}"></footer>
     <div th:replace="~{site/layout :: scripts}"></div>
 </div>
-<!-- yona.project.Home.js의 설명 인라인 저장 성공 핸들러가 yona.Markdown.render()로 저장된 설명을
-     새로고침 없이 다시 렌더링하는데, 그 함수가 fetch할 URL(sMarkdownRendererUrl)은 이 프래그먼트가
-     yona.Markdown.init()으로 세팅해준다 — 없으면 undefined인 채로 fetch(undefined, ...)가 되어
-     현재 페이지 자신에 POST(항상 405)하고 그 실패가 조용히 삼켜져, 저장은 되지만 화면은 새로고침
-     전까지 갱신 안 되는 버그가 있었다. -->
 <th:block th:replace="~{site/layout :: markdown(${project})}"></th:block>
 <!-- legacy project/home.scala.html 대응 — 이 호출이 없으면 "주소복사"(ClipboardJS)/설명
      수정 저장/라벨 편집이 전부 죽은 버튼이 된다. ClipboardJS 자체는 site/layout::scripts가 이미

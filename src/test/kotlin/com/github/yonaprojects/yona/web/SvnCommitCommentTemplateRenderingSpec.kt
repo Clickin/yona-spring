@@ -168,16 +168,6 @@ class SvnCommitCommentTemplateRenderingSpec @Autowired constructor(
                 authoritiesVal = AuthorityUtils.createAuthorityList("ROLE_ACTIVE")
             )
 
-            it("댓글 본문이 마크다운으로 렌더링돼야 한다(원문 이스케이프 아님)") {
-                val html = mockMvc.perform(get("/${project.owner}/${project.name}/commit/$commitId"))
-                    .andExpect(status().isOk).andReturn().response.contentAsString
-                val doc = Jsoup.parse(html)
-
-                val body = doc.select("#comment-${comment.id} .comment-body.markdown-wrap").first()
-                (body != null) shouldBe true
-                body!!.select("strong").isEmpty() shouldBe false
-            }
-
             it("새 댓글 작성 폼은 markdownEditor(yona-markdown-editor) + uploadForm 프래그먼트를 써야 한다") {
                 val html = mockMvc.perform(
                     get("/${project.owner}/${project.name}/commit/$commitId")

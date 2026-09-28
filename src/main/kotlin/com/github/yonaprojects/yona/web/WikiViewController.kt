@@ -4,7 +4,6 @@ import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
-import com.github.yonaprojects.yona.domain.support.MarkdownService
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.wiki.WikiService
@@ -29,7 +28,6 @@ class WikiViewController(
     private val userRepository: UserRepository,
     private val projectUserRepository: ProjectUserRepository,
     private val wikiService: WikiService,
-    private val markdownService: MarkdownService,
     private val accessControl: AccessControl
 ) {
 
@@ -60,11 +58,11 @@ class WikiViewController(
         // 있으면 커스텀 푸터를 렌더링한다(Forgejo와 동일한 동작).
         val sidebarPage = wikiService.getPage(project, "_Sidebar")
         if (sidebarPage != null) {
-            model.addAttribute("customSidebarHtml", markdownService.render(sidebarPage.content, true, project))
+            model.addAttribute("customSidebarSource", sidebarPage.content)
         }
         val footerPage = wikiService.getPage(project, "_Footer")
         if (footerPage != null) {
-            model.addAttribute("customFooterHtml", markdownService.render(footerPage.content, true, project))
+            model.addAttribute("customFooterSource", footerPage.content)
         }
     }
 
@@ -91,7 +89,6 @@ class WikiViewController(
             return "wiki/view"
         }
         model.addAttribute("page", home)
-        model.addAttribute("renderedHtml", markdownService.render(home.content, true, project))
         return "wiki/view"
     }
 
@@ -312,7 +309,6 @@ class WikiViewController(
             return "wiki/view"
         }
         model.addAttribute("page", page)
-        model.addAttribute("renderedHtml", markdownService.render(page.content, true, project))
         return "wiki/view"
     }
 

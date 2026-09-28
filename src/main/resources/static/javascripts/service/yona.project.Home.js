@@ -152,7 +152,13 @@
                                                 ? data.overview
                                                 : (elDescInput ? elDescInput.getAttribute('placeholder') : "");
 
-                            yona.Markdown.render(document.getElementById("project-description"), sDescription);
+                            var previous = document.getElementById("project-description");
+                            var renderer = document.createElement("yona-markdown-renderer");
+                            Array.from(previous.attributes).forEach(function(attribute) {
+                                renderer.setAttribute(attribute.name, attribute.value);
+                            });
+                            renderer.textContent = sDescription;
+                            previous.replaceWith(renderer);
 
                             document.querySelectorAll('[data-toggle="project-description-tab"]').forEach(function(el){
                                 el.classList.toggle('hidden');

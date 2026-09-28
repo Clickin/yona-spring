@@ -59,7 +59,7 @@
                     </span>
                 </div>
 
-                <div class="comment-body markdown-wrap" th:utext="${markdownService.render(comment.contents, true, project)}">댓글 내용</div>
+                <yona-markdown-renderer class="comment-body markdown-wrap" mode="comment" th:owner="${project.owner}" th:project="${project.name}" ref="" path="" th:text="${comment.contents}">댓글 내용</yona-markdown-renderer>
             </div>
         </li>
     </ul>

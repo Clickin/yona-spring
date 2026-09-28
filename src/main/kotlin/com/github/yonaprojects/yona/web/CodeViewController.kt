@@ -8,7 +8,6 @@ import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.pullrequest.CommentThreadRepository
 import com.github.yonaprojects.yona.domain.pullrequest.CommitCommentRepository
-import com.github.yonaprojects.yona.domain.support.MarkdownService
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
@@ -43,7 +42,6 @@ class CodeViewController(
     private val commentThreadRepository: CommentThreadRepository,
     private val commitCommentRepository: CommitCommentRepository,
     private val accessControl: AccessControl,
-    private val markdownService: MarkdownService,
     private val watchService: WatchService,
     // code/svnDiff.html 댓글별 첨부파일 목록(legacy AttachmentApp.getFileList 대응) 렌더링용.
     private val attachmentRepository: AttachmentRepository,
@@ -230,7 +228,7 @@ class CodeViewController(
             if (isMarkdownExtension(normalizedPath)) {
                 val data = lastEntry.get("data")?.asText()
                 if (data != null) {
-                    model.addAttribute("markdownHtml", markdownService.renderFileInCodeBrowser(data, project))
+                    model.addAttribute("markdownSource", data)
                 }
             }
 

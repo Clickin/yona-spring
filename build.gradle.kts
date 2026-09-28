@@ -220,8 +220,23 @@ val copyTurbo = tasks.register<Copy>("copyTurbo") {
 	into(turboResources)
 }
 
+val markdownResources = layout.buildDirectory.dir("generated/frontend/markdown")
+val buildMarkdown = tasks.register<Exec>("buildMarkdown") {
+	dependsOn(npmCi)
+	workingDir("frontend")
+	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "npm.cmd" else "npm",
+		"run", "build:markdown")
+	inputs.files("frontend/package.json", "frontend/package-lock.json")
+	inputs.dir("frontend/src")
+	inputs.dir("frontend/scripts")
+	outputs.dir(markdownResources)
+}
+
 tasks.processResources {
-	dependsOn(copyTurbo)
+	dependsOn(copyTurbo, buildMarkdown)
+	from(markdownResources) {
+		into("static/javascripts/markdown")
+	}
 	from(turboResources) {
 		into("static/javascripts/turbo")
 	}

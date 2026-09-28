@@ -6,6 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta th:if="${turboFrameError == true}" name="turbo-visit-control" content="reload">
+  <meta name="yona-markdown-noreferrer" th:content="${@environment.getProperty('application.noreferrer', 'false')}">
   <!-- 실제 CSRF 헤더 주입은 XSRF-TOKEN 쿠키를 직접 읽는 방식(scripts 하단, config/CsrfSupport.kt)이
        담당하므로 이 meta 태그 자체는 더 이상 쓰이지 않지만 유지한다. _csrf 요청 속성은 CsrfFilter를
        거치지 않는 일부 경로(에러 페이지 포워딩 등)에서 없을 수 있어 안전 내비게이션(?.)이 필요하다 -
@@ -690,6 +691,7 @@
     <script type="text/javascript" src="/javascripts/common/yona.Usermenu.js"></script>
     <script type="text/javascript" src="/javascripts/common/yona.LoginDialog.js"></script>
     <script type="text/javascript" src="/javascripts/lib/viewerjs/viewer.js"></script>
+    <script type="module" src="/javascripts/markdown/yona-markdown-renderer.js"></script>
     <!-- <yona-markdown-editor>는 Custom Element이므로 이 스크립트 로드만으로 customElements.define이
          실행되고, 브라우저가 DOM에서 이 태그를 만나는 즉시 connectedCallback으로 스스로 초기화한다 -
          jQuery selector로 대상을 순회하던 yona.ui.MarkdownEditor.js(삭제됨)와 달리 별도 초기화
@@ -703,27 +705,6 @@
     <script type="text/javascript">
         document.addEventListener("DOMContentLoaded", function() {
             NProgress.configure({minimum: 0.7});
-        });
-    </script>
-    <script type="text/javascript">
-        // 컨테이너(.markdown-wrap)마다 개별 Viewer 인스턴스를 붙인다(본문 하나에 여러 댓글이 각자
-        // .markdown-wrap을 가지는 화면 - 이슈/PR 상세 등 - 에서 컨테이너별로 독립된 갤러리가 필요).
-        // mouseover 시 커서를 포인터로 바꾸는 로직은 순정 Viewer.js에 동등한 옵션/CSS가 없어
-        // (뷰어가 열리기 전 원본 <img>의 커서 처리는 라이브러리가 관여하지 않는 영역) 직접 처리한다.
-        document.addEventListener("DOMContentLoaded", function () {
-            Viewer.setDefaults({
-                transition: false
-            })
-            document.querySelectorAll(".markdown-wrap").forEach(function (el) {
-                el.querySelectorAll("img").forEach(function(img){
-                    img.addEventListener("mouseover", function () {
-                        img.style.cursor = "pointer";
-                    });
-                });
-                new Viewer(el, {
-                    transition: false
-                });
-            });
         });
     </script>
 

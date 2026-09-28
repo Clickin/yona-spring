@@ -14,7 +14,6 @@ import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.attachment.AttachmentService
-import com.github.yonaprojects.yona.domain.support.MarkdownService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
@@ -41,7 +40,6 @@ class MilestoneViewController(
     private val projectUserRepository: ProjectUserRepository,
     private val userRepository: UserRepository,
     private val attachmentRepository: AttachmentRepository,
-    private val markdownService: MarkdownService,
     private val accessControl: AccessControl,
     private val attachmentService: AttachmentService
 ) {
@@ -179,13 +177,10 @@ class MilestoneViewController(
             """{"id":"$attachId","mimeType":"$mimeType","name":"$name","url":"$url","size":$size}"""
         }
 
-        val contentsHtml = milestone.contents?.let { markdownService.render(it, true, project) } ?: ""
-
         model.addAttribute("project", project)
         model.addAttribute("milestoneDto", dto)
         model.addAttribute("currentUser", loginUser)
         model.addAttribute("attachmentsJson", attachmentsJson)
-        model.addAttribute("contentsHtml", contentsHtml)
 
         return "milestone/view"
     }

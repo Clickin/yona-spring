@@ -1,34 +1,54 @@
-This document describes how markdown support works.
+# Markdown
 
-Ported from legacy Yona's `docs/technical/markdown.md`, adapted for yona — the client-side
-`markdown` attribute convention is unchanged, but the server-side rendering mechanism is
-completely different (no more Play template helper). See
-[`docs/guide/technical/markdown.md`](../guide/technical/markdown.md) for the Korean version with
-the same content.
+Browser Markdown uses main-repository Lit 3 Web Components, micromark + GFM, and DOMPurify. Server CommonMark remains for email, translation responses and `WikiRestApiController.renderedHtml`; those API contracts are unchanged.
 
-Usage
------
+## Read-only content
 
-Set the `markdown` attribute on the HTML element to be used as an editor:
+```html
+<yona-markdown-renderer mode="comment" owner="owner" project="project"
+    th:text="${issue.body}"></yona-markdown-renderer>
+```
 
-    <textarea markdown></textarea>
+Always bind escaped text (`th:text`), never pre-rendered HTML or a Markdown attribute. `mode="document"` uses CommonMark line breaks and stable GitHub-style heading IDs. `mode="comment"` preserves soft line breaks. Repository documents additionally provide `ref` and full file `path`; Wiki provides its page path without a repository ref.
 
-or to be rendered:
+Each element captures its source once. Replacing content requires a new element. The renderer retains an inert `<template>` snapshot so Turbo's `cloneNode(true)` cache restores Markdown rather than reparsing rendered text. Reconnecting the same element does not parse again. There is no MutationObserver or Turbo dependency in the renderer.
 
-    <div markdown>...</div>
+## Pipeline and security
 
-`yobi.Markdown.js` (same file name and location as legacy, `static/javascripts/common/`) finds
-elements matching this attribute and handles them.
+`micromark → DOMPurify → relative links/headings/references/task lists → async enhancement`.
 
-- Markdown-to-HTML rendering itself happens **client-side**, via `marked.js`
-  (`_renderMarkdown()` calls `marked(sText, ...)` then sanitizes with `$yobi.xssClean()`).
-- Auto-link resolution (issue/user mentions etc.) needs server-side domain knowledge, so it's
-  handled by a separate AJAX POST to `MarkdownController`'s
-  `POST /markdown/{owner}/{projectName}` endpoint, with a JSON body
-  `{"body": "...", "breaks": true|false}`.
+Raw HTML is restricted to the HTML profile, without forms, inline styles, event handlers, SVG/MathML or unsafe protocols. Structural plugins create DOM nodes and text, not user-supplied HTML. External links use `noopener`; `application.noreferrer=true` also adds `noreferrer`.
 
-Server-side, the actual markdown engine is **CommonMark Java**
-(`org.commonmark:commonmark` + GFM tables/strikethrough/autolink extensions) — a full
-replacement for legacy's Nashorn/Rhino JS-engine-based renderer (`lib/js-engine.jar`).
-Sanitization uses the **OWASP Java HTML Sanitizer** with an equivalent allowlist policy to
-legacy's custom `Markdown.java` (`docs/parity/index.md` P0-08).
+References are batched globally per project in a fixed 25 ms window, deduplicated and cached in page memory. `POST /api/{owner}/{project}/markdown/references/resolve` accepts at most 100 typed tokens, each at most 200 characters, and returns metadata, never HTML. Target project/issue permissions and member-only repository access are checked before lookup results are disclosed. Disconnect cancels subscribers; stale results cannot update detached content.
+
+Highlight core and individual grammars load only for recognized code fences. The fixture in `frontend/src/markdown/runtime/highlight-compatibility.json` preserves all 59 legacy language registrations and aliases plus the current bundle's languages (66 canonical grammars). Unknown languages stay plain text; automatic language detection is not used.
+
+Mermaid loads only for Mermaid fences. A shared 24 ms queue renders sequentially and yields between diagrams, prioritizing the viewport. Strict mode, 50,000-character and 500-edge limits apply. SVG is sanitized separately, without `foreignObject`, handlers or external resources. Failed diagrams retain their source. Viewer instances belong to the renderer lifecycle and are destroyed on disconnect.
+
+## Build and checks
+
+`./gradlew processResources` and `bootJar` depend on `npmCi` and `buildMarkdown`. The pinned lockfile is installed with `--ignore-scripts --no-audit --no-fund`. esbuild emits ESM and lazy chunks into `build/generated/frontend/markdown`; generated Markdown bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `npm.cmd` on Windows.
+
+```sh
+cd frontend
+npm ci --ignore-scripts --no-audit --no-fund
+npm run build:markdown
+npx tsc --noEmit
+# From the repository root, against a running application:
+node frontend/scripts/check-markdown-structure.mjs http://localhost:8080
+node frontend/scripts/check-markdown-enhancements.mjs http://localhost:8080
+```
+
+Both browser scripts use the existing E2E Playwright dependency and exercise Chromium, Firefox and WebKit. Application fixtures live in `e2e/specs/15-misc/markdown-components.spec.ts`.
+
+## Baseline
+
+Before migration (`next` a71722f, bytes; local gzip/Brotli, not HTTP transfer):
+
+| Asset | Minified | gzip | Brotli |
+|---|---:|---:|---:|
+| CM6 editor | 557,522 | 194,197 | 162,527 |
+| Marked | 44,870 | 13,865 | 12,531 |
+| Global highlight | 129,254 | 44,094 | 38,156 |
+
+The read-only renderer migration precedes the editor replacement in a separate commit. Legacy undocumented Marked quirks and `yb-header-*` IDs are not preserved.

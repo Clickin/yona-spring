@@ -184,9 +184,8 @@ class ProjectViewControllerSpec : DescribeSpec({
                     .andExpect(model().attributeExists("project", "projectUsers"))
             }
 
-            // yona partial_readme.scala.html:41 Markdown.renderFileInReadme() 대응 (P1-139) —
-            // README 렌더링에 상대경로 링크 치환이 포함된 renderFileInReadme()를 써야 한다(일반 render() 아님).
-            it("readme 탭이면 README.md를 renderFileInReadme로 렌더링해 markdownHtml에 담아야 한다") {
+            // The browser receives Markdown source with repository-relative links intact.
+            it("readme 탭이면 README.md 원본을 readmeSource에 담아야 한다") {
                 val memberUser = User(id = 10L, loginId = "testuser", name = "테스트유저")
                 memberUser.projectUsers.add(ProjectUser(id = 901L, user = memberUser, project = project, role = managerRole))
                 val playRepo = mockk<PlayRepository>()
@@ -199,13 +198,11 @@ class ProjectViewControllerSpec : DescribeSpec({
                 every { repositoryService.getRepository(project) } returns playRepo
                 every { playRepo.isFile("README.md") } returns true
                 every { playRepo.getRawFile("HEAD", "README.md") } returns "# 안내".toByteArray(Charsets.UTF_8)
-                every { markdownService.renderFileInReadme("# 안내", project) } returns "<h1>안내</h1>"
 
                 mockMvc.perform(get("/owner/TestProj").param("tabId", "readme").principal(userAuth))
                     .andExpect(status().isOk)
                     .andExpect(view().name("project/home"))
-                    .andExpect(model().attribute("readmeHtml", "<h1>안내</h1>"))
-                verify(exactly = 0) { markdownService.render("# 안내", true, project) }
+                    .andExpect(model().attribute("readmeSource", "# 안내"))
             }
 
             // yona partial_readme.scala.html:38-42 대응 (P2-42) — 코드브라우저 메뉴가 꺼진
@@ -227,15 +224,13 @@ class ProjectViewControllerSpec : DescribeSpec({
                 every { repositoryService.getRepository(noCodeProject) } returns playRepo
                 every { playRepo.isFile("README.md") } returns true
                 every { postingRepository.findByProjectAndReadme(noCodeProject, true) } returns listOf(readmePosting)
-                every { markdownService.render("게시판 README 본문", true, noCodeProject) } returns "<p>게시판 README 본문</p>"
 
                 mockMvc.perform(get("/owner/NoCodeProj").param("tabId", "readme").principal(userAuth))
                     .andExpect(status().isOk)
-                    .andExpect(model().attribute("readmeHtml", "<p>게시판 README 본문</p>"))
-                verify(exactly = 0) { markdownService.renderFileInReadme(any(), any()) }
+                    .andExpect(model().attribute("readmeSource", "게시판 README 본문"))
             }
 
-            it("코드브라우저가 꺼져도 게시판 README 글이 없으면 기존처럼 git 파일을 렌더링해야 한다") {
+            it("코드브라우저가 꺼져도 게시판 README 글이 없으면 git 파일 원본을 전달해야 한다") {
                 val noCodeProject = Project(id = 6L, name = "NoCodeProj2", owner = "owner", projectScope = ProjectScope.PRIVATE, isCodeEnabled = false)
                 val memberUser = User(id = 10L, loginId = "testuser", name = "테스트유저")
                 memberUser.projectUsers.add(ProjectUser(id = 903L, user = memberUser, project = noCodeProject, role = managerRole))
@@ -250,11 +245,10 @@ class ProjectViewControllerSpec : DescribeSpec({
                 every { playRepo.isFile("README.md") } returns true
                 every { playRepo.getRawFile("HEAD", "README.md") } returns "# git readme".toByteArray(Charsets.UTF_8)
                 every { postingRepository.findByProjectAndReadme(noCodeProject, true) } returns emptyList()
-                every { markdownService.renderFileInReadme("# git readme", noCodeProject) } returns "<h1>git readme</h1>"
 
                 mockMvc.perform(get("/owner/NoCodeProj2").param("tabId", "readme").principal(userAuth))
                     .andExpect(status().isOk)
-                    .andExpect(model().attribute("readmeHtml", "<h1>git readme</h1>"))
+                    .andExpect(model().attribute("readmeSource", "# git readme"))
             }
 
             it("프로젝트 멤버가 아닐 경우 403 Forbidden 뷰를 반환해야 한다") {
@@ -1966,7 +1960,6 @@ class ProjectViewControllerSpec : DescribeSpec({
             every { playRepo.isFile("README.md") } returns false
             every { playRepo.isFile("readme.md") } returns true
             every { playRepo.getRawFile("HEAD", "readme.md") } returns "소문자 리드미".toByteArray(Charsets.UTF_8)
-            every { markdownService.renderFileInReadme("소문자 리드미", proj) } returns "<p>소문자 리드미</p>"
 
             mockMvc.perform(get("/owner/LowerReadmeProj").param("tabId", "readme").principal(auth))
                 .andExpect(status().isOk)
@@ -1991,7 +1984,6 @@ class ProjectViewControllerSpec : DescribeSpec({
             every { svnRepo.isFile("readme.md") } returns false
             every { svnRepo.isFile("/trunk/README.md") } returns true
             every { svnRepo.getRawFile("HEAD", "/trunk/README.md") } returns "SVN 리드미".toByteArray(Charsets.UTF_8)
-            every { markdownService.renderFileInReadme("SVN 리드미", proj) } returns "<p>SVN 리드미</p>"
 
             mockMvc.perform(get("/owner/SvnReadmeProj").param("tabId", "readme").principal(auth))
                 .andExpect(status().isOk)
@@ -2445,7 +2437,7 @@ class ProjectViewControllerSpec : DescribeSpec({
             verify(exactly = 0) { watchService.isWatching(any(), any(), any()) }
         }
 
-        it("README 파일은 있지만 내용을 읽는 데 실패하면 readmeHtml은 null이어야 한다") {
+        it("README 파일은 있지만 내용을 읽는 데 실패하면 readmeSource는 null이어야 한다") {
             val proj = Project(id = 981L, name = "ReadmeContentFailProj", owner = "owner", projectScope = ProjectScope.PUBLIC)
             val user2 = User(id = 981L, loginId = "readmefailuser", name = "리드미실패유저")
             val auth2 = UsernamePasswordAuthenticationToken("readmefailuser", "password")
@@ -2461,8 +2453,7 @@ class ProjectViewControllerSpec : DescribeSpec({
 
             val model = ExtendedModelMap()
             projectViewController.projectHome("owner", "ReadmeContentFailProj", "readme", auth2, model)
-            model.getAttribute("readmeHtml") shouldBe null
-            verify(exactly = 0) { markdownService.renderFileInReadme(any(), any()) }
+            model.getAttribute("readmeSource") shouldBe null
         }
 
         it("isMilestoneEnabled가 꺼진 프로젝트는 마일스톤 조회 없이 sidebarMilestone이 null이어야 한다") {
@@ -2586,7 +2577,6 @@ class ProjectViewControllerSpec : DescribeSpec({
             every { svnRepo.isFile("/trunk/README.md") } returns false
             every { svnRepo.isFile("/trunk/readme.md") } returns true
             every { svnRepo.getRawFile("HEAD", "/trunk/readme.md") } returns "SVN 소문자 리드미".toByteArray(Charsets.UTF_8)
-            every { markdownService.renderFileInReadme("SVN 소문자 리드미", proj) } returns "<p>SVN 소문자 리드미</p>"
 
             val model = ExtendedModelMap()
             projectViewController.projectHome("owner", "SvnLowerReadmeProj", "readme", auth2, model)
@@ -2712,9 +2702,9 @@ class ProjectViewControllerSpec : DescribeSpec({
     // 공통으로 남아있던 미실행 분기다.
     // ============================================================================================
 
-    // projectHome readmeHtml 잔여 분기 — 게시판 README 글(readme=true)의 본문이 null인 경우.
-    describe("projectHome readmeHtml 최종 분기 보강") {
-        it("게시판 README 글의 body가 null이면 빈 문자열로 렌더링해야 한다") {
+    // A board README without a body is an empty immutable source.
+    describe("projectHome readmeSource null body") {
+        it("게시판 README 글의 body가 null이면 빈 문자열을 전달해야 한다") {
             val proj = Project(id = 2000L, name = "NullBodyReadmeProj", owner = "owner", projectScope = ProjectScope.PUBLIC, isCodeEnabled = false)
             val user2 = User(id = 2000L, loginId = "nullbodyuser", name = "본문없는유저")
             val auth2 = UsernamePasswordAuthenticationToken("nullbodyuser", "password")
@@ -2728,12 +2718,10 @@ class ProjectViewControllerSpec : DescribeSpec({
             every { repositoryService.getRepository(proj) } returns playRepo
             every { playRepo.isFile("README.md") } returns true
             every { postingRepository.findByProjectAndReadme(proj, true) } returns listOf(readmePostingNullBody)
-            every { markdownService.render("", true, proj) } returns "<p></p>"
 
             val model = ExtendedModelMap()
             projectViewController.projectHome("owner", "NullBodyReadmeProj", "readme", auth2, model)
-            model.getAttribute("readmeHtml") shouldBe "<p></p>"
-            verify(exactly = 1) { markdownService.render("", true, proj) }
+            model.getAttribute("readmeSource") shouldBe ""
         }
     }
 

@@ -24,8 +24,8 @@
                         </form>
                         <a th:if="${canWriteWiki}" th:href="${wikiBase + '/_new'}" class="ybtn ybtn-success ybtn-block" style="display:block;text-align:center;margin-bottom:10px;">New Page</a>
 
-                        <div th:if="${customSidebarHtml != null}" class="markdown-wrap wiki-custom-sidebar" th:utext="${customSidebarHtml}"></div>
-                        <ul th:unless="${customSidebarHtml != null}" class="unstyled wiki-page-list">
+                        <yona-markdown-renderer th:if="${customSidebarSource != null}" class="markdown-wrap wiki-custom-sidebar" mode="document" th:owner="${project.owner}" th:project="${project.name}" ref="" path="_Sidebar" th:text="${customSidebarSource}"></yona-markdown-renderer>
+                        <ul th:unless="${customSidebarSource != null}" class="unstyled wiki-page-list">
                             <li th:each="p : ${pages}">
                                 <a th:href="${wikiBase + '/' + #uris.escapePath(p.title)}"
                                    th:text="${p.title}"
@@ -51,7 +51,7 @@
                                 <a th:href="${wikiBase + '/_history/' + #uris.escapePath(page.title)}" class="ybtn" th:text="#{wiki.history}">History</a>
                             </span>
                         </div>
-                        <div class="bubble-wrap gray readme-body markdown-wrap" th:utext="${renderedHtml}">Rendered wiki content</div>
+                        <yona-markdown-renderer class="bubble-wrap gray readme-body markdown-wrap" mode="document" th:owner="${project.owner}" th:project="${project.name}" ref="" th:path="${page.title}" th:text="${page.content}">Wiki content</yona-markdown-renderer>
                     </div>
 
                     <div th:if="${page == null and notFoundTitle == null}" class="bubble-wrap gray" style="text-align:center;padding:40px 0;">
@@ -64,7 +64,7 @@
                         <a th:if="${canWriteWiki}" th:href="${wikiBase + '/_new?title=' + #uris.escapeQueryParam(notFoundTitle)}" class="ybtn ybtn-success" th:text="#{wiki.createThisPage}">Create this page</a>
                     </div>
 
-                    <div th:if="${customFooterHtml != null}" class="markdown-wrap wiki-custom-footer" style="margin-top:20px;border-top:1px solid #e5e5e5;padding-top:10px;" th:utext="${customFooterHtml}"></div>
+                    <yona-markdown-renderer th:if="${customFooterSource != null}" class="markdown-wrap wiki-custom-footer" mode="document" th:owner="${project.owner}" th:project="${project.name}" ref="" path="_Footer" style="margin-top:20px;border-top:1px solid #e5e5e5;padding-top:10px;" th:text="${customFooterSource}"></yona-markdown-renderer>
                 </div>
             </div>
         </div>

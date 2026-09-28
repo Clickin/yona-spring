@@ -119,20 +119,17 @@ class ProjectViewController(
         }
 
         val readmeFileName = getReadmeFileName(project)
-        // 코드브라우저 메뉴가 꺼진(project.isCodeEnabled == false) 프로젝트는 게시판에서 작성한
-        // README 글(readme=true인 Posting)의 본문을 우선 사용하고, 그 외에는 기존처럼 git 저장소
-        // 파일을 renderFileInReadme()로 렌더링한다.
-        val readmeHtml = if (tabId == "readme" && readmeFileName != null) {
+        // The browser captures escaped Markdown once; repository files retain HEAD/path context.
+        val readmeSource = if (tabId == "readme" && readmeFileName != null) {
             val readmePosting = if (!project.isCodeEnabled) {
                 postingRepository.findByProjectAndReadme(project, true).firstOrNull()
             } else {
                 null
             }
             if (readmePosting != null) {
-                markdownService.render(readmePosting.body ?: "", true, project)
+                readmePosting.body ?: ""
             } else {
-                val content = getReadmeContent(project, readmeFileName)
-                if (content != null) markdownService.renderFileInReadme(content, project) else null
+                getReadmeContent(project, readmeFileName)
             }
         } else {
             null
@@ -156,7 +153,7 @@ class ProjectViewController(
         model.addAttribute("tabId", tabId)
         model.addAttribute("histories", histories)
         model.addAttribute("readmeFileName", readmeFileName)
-        model.addAttribute("readmeHtml", readmeHtml)
+        model.addAttribute("readmeSource", readmeSource)
         model.addAttribute("isWatching", isWatching)
         model.addAttribute("watcherCount", watcherCount)
         model.addAttribute("sidebarMilestone", sidebarMilestone)

@@ -33,7 +33,7 @@
 
                 <div th:if="${#strings.isEmpty(milestone.contents)}" class="content empty-content"></div>
                 <div th:unless="${#strings.isEmpty(milestone.contents)}" class="milestone-desc">
-                    <div class="markdown-wrap" th:utext="${contentsHtml}">마일스톤 설명</div>
+                    <yona-markdown-renderer class="markdown-wrap" mode="comment" th:owner="${project.owner}" th:project="${project.name}" ref="" path="" th:text="${milestone.contents}">마일스톤 설명</yona-markdown-renderer>
                     <div class="attachments" th:data-attachments="${attachmentsJson}"></div>
                 </div>
 
