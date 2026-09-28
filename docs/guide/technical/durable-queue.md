@@ -134,7 +134,7 @@ store 검증에는 업무 rollback, concurrent keyed/unkeyed admission, 기존 M
 
 별도 Java smoke에서도 실제 child JVM이 결과 파일을 게시하고, 새 JVM이 같은 resource를 실행한 뒤 원래 파일과 resource fence 증가를 확인했다. 테스트의 setup 실패/skip은 수용성 통과가 아니다.
 
-PR03 검증은 실제 두 servlet JVM과 session cookie로 REST 16개 시나리오를 실행한다. Root 및 `/queue-it` context에서 권한/2FA/CSRF, 권한 회수, 105개 attempt paging, 두 node의 claim 경합, 취소·retry·정확한 결과 bytes를 검사했다. 조회/메트릭 경로는 위 6개 DB에서 별도 Java 프로세스로도 확인한다. SSE·Vue page 검증은 별도 단계이며 이 REST 통과에 포함하지 않는다.
+PR03 검증은 실제 두 servlet JVM과 session cookie로 REST 16개 시나리오를 실행한다. Root 및 `/queue-it` context에서 권한/2FA/CSRF, 권한 회수, 105개 attempt paging, 두 node의 claim 경합, 취소·retry·정확한 결과 bytes를 검사했다. 조회/메트릭 경로는 위 6개 DB에서 별도 Java 프로세스로도 확인한다. SSE 및 관리 화면의 브라우저 검증은 이 REST 통과와 구분한다.
 
 Java 21, Python 3.10 이상과 `lsof`가 있는 macOS/Linux에서 재현한다. 추가 Python package나 외부 DB는 필요하지 않다.
 
@@ -144,4 +144,24 @@ python3 src/test/queue/run.py
 
 Runner는 test class를 컴파일하고 private H2/storage와 두 loopback JVM을 만든다. REST와 SSE 외에 checksum 손상·동일 bytes를 가리키는 파일/ancestor symlink·파일 누락, OSIV를 켠 상태의 16 MiB 느린 다운로드와 DB 연결 반환, main classpath에서 fixture route/handler 부재를 검사한다. SSE 검증은 실제 socket tuple의 FD 소멸, 멈춘 reader·drip reader, 권한 회수, 공유 polling, node 종료 시 실제 Tomcat async count와 재시작을 사용한다. 압력용 comment·관측 API는 test classpath에만 있으며 일반 JSON 압축을 켠 상태에서도 SSE는 압축하지 않는다. 끝나면 소유한 JVM을 종료하고 mode-700 임시 directory에 증거를 남긴다. Cookie/control token을 출력하지 않으며 생성한 환경 파일은 mode 600이다.
 
-`YONA_QUEUE_HTTP_CONTEXT_PATH`로 context를 변경하고 `--serve`로 수동 검증용 fixture만 유지할 수 있다. [독립 OpenAPI 계약](../../../src/test/queue/api-openapi.yaml)과 Python verifier는 test 디렉터리에 보존한다. Page 항목은 후속 단계용이다.
+`YONA_QUEUE_HTTP_CONTEXT_PATH`로 context를 변경하고 `--serve`로 수동 검증용 fixture만 유지할 수 있다. [독립 OpenAPI 계약](../../../src/test/queue/api-openapi.yaml)과 Python verifier는 test 디렉터리에 보존한다.
+
+## Thymeleaf + Turbo 관리 화면
+
+`/site/admin/queue`에서 상태·종류·자원 필터, 최신 ID순 50개 목록, 선택 작업, 50개씩 실행 이력을 조회한다. 필터·cursor·선택은 URL에 저장한다. 탐색과 취소/재시도 폼은 JavaScript 없이도 동작하며 성공한 명령은 303으로 조회 URL에 이동한다. 현재 DB의 사이트 관리자 권한과 완료된 세션을 매 요청 확인하고, HTML 폼은 Spring의 XOR CSRF 토큰을 사용한다. 실행 중 취소는 `CANCEL_REQUESTED`로 표시하며 완료를 앞당겨 표시하지 않는다.
+
+Thymeleaf가 행·상세·진행·오류를 렌더링한다. Turbo는 `queue-content` fragment만 갱신한다. native `yona-queue-events` Web Component는 기존 SSE `reset`/`changed`를 합쳐 한 번에 하나의 fragment 요청을 실행하며, 입력/체크박스/키보드 초점을 보호하기 위해 필요하면 교체를 보류한다. 별도 클라이언트 작업 저장소, router, 주기적 목록 polling은 없다. 연결·조회 실패는 마지막 결과와 stale 표시를 남긴다. 미제출 사유/확인을 지우고 초점을 옮기면 보류된 갱신을 적용한다.
+
+Turbo 8.0.23은 upstream [#834](https://github.com/yona-projects/yona/pull/834)의 잠금 파일 및 Gradle asset pipeline을 재사용한다. 이 큐 PR은 issue 화면 PoC 전체를 가져오거나 기존 독립 위젯을 제거하지 않는다. 큐 전용 Vue 코드·번들·빌드 의존성은 없고, Lit이나 추가 컴포넌트 빌드도 필요하지 않다.
+
+화면 인수 검사는 별도 Playwright 설정을 사용한다. 기존 전체 e2e bootstrap/인증 상태와 섞지 않는다. Java 21을 선택한 후 첫 터미널에서 `YONA_QUEUE_HTTP_CONTEXT_PATH=/queue-it python3 src/test/queue/run.py --serve`를 실행한다. 두 번째 터미널에서 runner가 출력한 private 환경 파일을 읽고 실행한다:
+
+```sh
+. /absolute/path/to/queue-http.env
+npm --prefix e2e ci
+e2e/node_modules/.bin/playwright install chromium
+e2e/node_modules/.bin/playwright test --config=e2e/queue/playwright.config.ts
+```
+
+이미 설치된 Chrome을 사용하려면 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`를 실행 파일 경로로 지정할 수 있다. Root 검증은 새 fixture를 `YONA_QUEUE_HTTP_CONTEXT_PATH=''`로 시작하고 새 환경 파일을 읽어 반복한다. 완료 후 fixture를 Ctrl-C로 종료한다. Cookie/control token과 실패 trace는 비밀 정보로 취급하며 게시하지 않는다.
+

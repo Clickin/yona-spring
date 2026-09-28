@@ -1,0 +1,22 @@
+.queue-admin { min-width: 0; overflow-wrap: anywhere; }
+yona-queue-events, .queue-admin turbo-frame { display: block; }
+.queue-filters, .queue-command { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 1rem 0; }
+.queue-filters label, .queue-command label { display: flex; align-items: center; gap: .5rem; }
+.queue-table-scroll { overflow-x: auto; }
+.queue-admin table { width: 100%; min-width: 40rem; }
+.queue-admin th, .queue-admin td { text-align: left; vertical-align: top; }
+.queue-admin nav { display: flex; gap: 1rem; margin: 1rem 0; }
+.queue-admin dt { font-weight: bold; }
+.queue-admin dd { margin: 0 0 .5rem; }
+.queue-admin :focus-visible { outline: 2px solid #1769aa; outline-offset: 3px; }
+.queue-admin [role=alert] { color: #a11; }
+.queue-admin #queue-detail { border-top: 1px solid #ccc; padding-top: 1rem; margin-top: 1rem; }
+@media (max-width: 767px) {
+  .queue-admin-page .row-fluid { width: 100%; }
+  .queue-admin-page .site-setting-wrap .span2 { float: none; width: auto; margin: 1rem; }
+  .queue-admin-page .site-setting-nav { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .queue-admin-page .site-setting-nav li { width: auto; }
+  .queue-admin.span10 { float: none; width: auto; margin: 1rem; }
+  .queue-filters label, .queue-command label { flex-wrap: wrap; }
+  .queue-admin input, .queue-admin select { max-width: 100%; }
+}

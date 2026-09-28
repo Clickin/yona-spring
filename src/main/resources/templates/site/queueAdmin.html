@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{site/layout :: head(#{${message}})}"></head>
+<body class="theme-default queue-admin-page">
+<div id="main" class="main">
+  <div th:replace="~{site/layout :: gnb}"></div>
+  <div th:replace="~{site/layout :: breadcrumb}"></div>
+  <div class="page-wrap-outer">
+    <div class="site-setting-wrap">
+      <div class="row-fluid">
+        <div th:replace="~{site/layout :: sidebar('queue')}"></div>
+        <main class="span10 queue-admin" aria-labelledby="queue-heading">
+          <h1 id="queue-heading">작업 큐</h1>
+          <p>최신 작업부터 표시합니다. 시각은 UTC입니다.</p>
+          <form th:if="${state != null}" method="get" th:action="@{/site/admin/queue}" class="queue-filters" data-turbo="false">
+            <label>상태 <select name="status" multiple size="3">
+              <option th:each="status : ${statuses}" th:value="${status}" th:text="${status}" th:selected="${#lists.contains(state.status, status)}"></option>
+            </select></label>
+            <label>작업 종류 <input name="type" maxlength="160" th:value="${state.type}"></label>
+            <label>자원 <input name="resource" maxlength="300" th:value="${state.resource}"></label>
+            <button type="submit">필터 적용</button>
+            <a th:href="@{/site/admin/queue}" data-turbo="false">필터 초기화</a>
+          </form>
+          <yona-queue-events th:attr="src=@{/api/admin/queue/v1/events}">
+            <p role="status" aria-live="polite" data-queue-connection>실시간 연결 대기 중 — 아래 내용은 마지막 서버 조회 결과입니다.</p>
+            <a th:href="${pageUrl != null} ? @{${pageUrl}} : @{/site/admin/queue}" data-queue-refresh data-turbo="false">새로고침</a>
+            <turbo-frame id="queue-content" th:fragment="content" target="_top" data-turbo="false">
+              <p th:if="${queueError != null}" role="alert">요청을 처리하지 못했습니다: <strong th:text="${queueError}"></strong></p>
+              <th:block th:if="${page != null}">
+                <div class="queue-table-scroll" role="region" aria-label="작업 목록" tabindex="0">
+                  <table class="table table-striped">
+                    <caption>작업 목록 (최신 ID순, 최대 50개)</caption>
+                    <thead><tr><th scope="col">작업 ID</th><th scope="col">종류 / 자원</th><th scope="col">상태</th><th scope="col">진행</th><th scope="col">생성 시각 (UTC)</th></tr></thead>
+                    <tbody>
+                    <tr th:each="job : ${page.items}" th:attr="data-job-id=${job.id}">
+                      <td><a th:href="@{${jobUrls[job.id]}}" th:text="${job.id}" th:attr="aria-current=${state.selected == job.id ? 'true' : null}"></a></td>
+                      <td><span th:text="${job.type}"></span><ul><li th:each="resource : ${job.resources}" th:text="${resource}"></li></ul></td>
+                      <td th:text="${job.status}"></td>
+                      <td><th:block th:replace="~{site/queueAdmin :: progress(${job.progress})}"></th:block></td>
+                      <td><time th:datetime="${job.createdAt}" th:text="${job.createdAt}"></time></td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(page.items)}"><td colspan="5">조건에 맞는 작업이 없습니다.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <nav aria-label="작업 목록 페이지">
+                  <a th:if="${state.cursor != null}" th:href="@{${firstUrl}}">최신 작업</a>
+                  <a th:if="${nextUrl != null}" th:href="@{${nextUrl}}">다음 작업 50개</a>
+                </nav>
+                <section th:if="${detail != null}" id="queue-detail" aria-labelledby="queue-detail-heading" th:attr="data-job-id=${detail.id}">
+                  <h2 id="queue-detail-heading" tabindex="-1">작업 상세 <span th:text="${detail.id}"></span></h2>
+                  <a th:href="@{${closeUrl}}">상세 닫기</a>
+                  <dl>
+                    <dt>종류</dt><dd th:text="${detail.type}"></dd>
+                    <dt>상태</dt><dd th:text="${detail.status}"></dd>
+                    <dt>자원</dt><dd><ul><li th:each="resource : ${detail.resources}" th:text="${resource}"></li></ul></dd>
+                    <dt>진행</dt><dd><th:block th:replace="~{site/queueAdmin :: progress(${detail.progress})}"></th:block></dd>
+                    <dt>예약 시각 (UTC)</dt><dd th:text="${detail.scheduledAt}"></dd>
+                    <dt>다음 시도 (UTC)</dt><dd th:text="${detail.nextAttemptAt ?: '—'}"></dd>
+                    <dt>시작 / 완료 (UTC)</dt><dd><span th:text="${detail.startedAt ?: '—'}"></span> / <span th:text="${detail.finishedAt ?: '—'}"></span></dd>
+                    <dt>갱신 시각 (UTC)</dt><dd th:text="${detail.updatedAt}"></dd>
+                    <dt>실행 세대 / 시도 횟수</dt><dd><span th:text="${detail.executionGeneration}"></span> / <span th:text="${detail.attemptCount}"></span></dd>
+                    <dt>실행 인스턴스</dt><dd th:text="${detail.ownerInstance ?: '—'}"></dd>
+                    <dt>실패 분류</dt><dd th:text="${detail.failureDisposition ?: '—'}"></dd>
+                  </dl>
+                  <p th:if="${detail.errorCode != null}" role="note"><strong th:text="${detail.errorCode}"></strong>: <span th:text="${detail.errorSummary}"></span></p>
+                  <p th:if="${detail.status == 'CANCEL_REQUESTED'}">취소를 요청했습니다. 실행 중인 작업이 안전 지점에서 중지될 때까지 기다려 주세요.</p>
+                  <form th:if="${#lists.contains({'QUEUED','RETRY_WAIT','RUNNING','CANCEL_REQUESTED'}, detail.status)}"
+                        method="post" th:action="@{/site/admin/queue/jobs/{id}/cancel(id=${detail.id})}" data-turbo="false" class="queue-command">
+                    <th:block th:replace="~{site/queueAdmin :: commandState}"></th:block>
+                    <label>취소 사유 <input name="reason" th:value="${reason}" aria-describedby="queue-reason-help"></label>
+                    <button type="submit" th:disabled="${detail.status == 'CANCEL_REQUESTED'}">취소 요청</button>
+                  </form>
+                  <form th:if="${#lists.contains({'FAILED','RECOVERY_REQUIRED','BLOCKED_UNSUPPORTED'}, detail.status)}"
+                        method="post" th:action="@{/site/admin/queue/jobs/{id}/retry(id=${detail.id})}" data-turbo="false" class="queue-command">
+                    <th:block th:replace="~{site/queueAdmin :: commandState}"></th:block>
+                    <label th:if="${detail.status == 'RECOVERY_REQUIRED'}"><input type="checkbox" name="recoveryAcknowledged" value="true" required th:checked="${recoveryAcknowledged}"> 기존 부작용을 확인했으며 재실행 위험을 이해합니다.</label>
+                    <label>재시도 사유 <input name="reason" th:value="${reason}" th:required="${detail.status == 'RECOVERY_REQUIRED'}" aria-describedby="queue-reason-help"></label>
+                    <button type="submit">재시도</button>
+                  </form>
+                  <p id="queue-reason-help">사유는 최대 300자입니다. 입력 중에는 실시간 화면 갱신이 보류됩니다.</p>
+                  <div th:if="${detail.result != null}">
+                    <h3>결과 파일</h3>
+                    <a th:href="@{/api/admin/queue/v1/jobs/{id}/result(id=${detail.id})}" data-turbo="false" th:text="${detail.result.fileName}"></a>
+                    <p><span th:text="${detail.result.sizeBytes}"></span> bytes · SHA-256 <code th:text="${detail.result.sha256}"></code></p>
+                  </div>
+                  <h3>실행 이력 <span th:text="${detail.attemptHistoryCount}"></span>회</h3>
+                  <div class="queue-table-scroll" role="region" aria-label="실행 이력" tabindex="0">
+                    <table class="table">
+                      <caption>최근 실행부터 최대 50개</caption>
+                      <thead><tr><th scope="col">시도 / 세대</th><th scope="col">상태 / 인스턴스</th><th scope="col">시작 / 완료 (UTC)</th><th scope="col">진행 / 오류</th></tr></thead>
+                      <tbody><tr th:each="attempt : ${detail.attempts}" th:attr="data-attempt-no=${attempt.attemptNo}">
+                        <td><span th:text="${attempt.attemptNo}"></span> / <span th:text="${attempt.executionGeneration}"></span></td>
+                        <td><span th:text="${attempt.status}"></span><br><span th:text="${attempt.ownerInstance}"></span></td>
+                        <td><time th:datetime="${attempt.startedAt}" th:text="${attempt.startedAt}"></time><br><time th:datetime="${attempt.finishedAt}" th:text="${attempt.finishedAt ?: '—'}"></time></td>
+                        <td><th:block th:replace="~{site/queueAdmin :: progress(${attempt.progress})}"></th:block><strong th:text="${attempt.errorCode}"></strong> <span th:text="${attempt.errorSummary}"></span></td>
+                      </tr><tr th:if="${#lists.isEmpty(detail.attempts)}"><td colspan="4">실행 이력이 없습니다.</td></tr></tbody>
+                    </table>
+                  </div>
+                  <nav aria-label="실행 이력 페이지"><a th:if="${state.attemptCursor != null}" th:href="@{${firstAttemptUrl}}">최신 실행</a> <a th:if="${nextAttemptUrl != null}" th:href="@{${nextAttemptUrl}}">이전 실행 50개</a></nav>
+                </section>
+              </th:block>
+            </turbo-frame>
+          </yona-queue-events>
+        </main>
+      </div>
+    </div>
+  </div>
+  <footer th:replace="~{site/layout :: footer}"></footer>
+</div>
+<th:block th:replace="~{site/layout :: scripts}"></th:block>
+<link rel="stylesheet" th:href="@{/stylesheets/queue-admin.css}">
+<script type="module" th:src="@{/javascripts/service/yona.queue.Admin.js}"></script>
+
+<th:block th:if="${false}">
+<th:block th:fragment="progress(progress)">
+  <span th:if="${progress == null}">—</span>
+  <th:block th:if="${progress != null}"><span th:text="${progress.stage}"></span><ul><li th:each="counter : ${progress.counters}"><span th:text="${counter.key}"></span>: <span th:text="${counter.value}"></span></li></ul></th:block>
+</th:block>
+<th:block th:fragment="commandState">
+  <input type="hidden" name="commandId" th:value="${commandId}">
+  <input th:each="status : ${state.status}" type="hidden" name="status" th:value="${status}">
+  <input th:if="${state.type != null}" type="hidden" name="type" th:value="${state.type}">
+  <input th:if="${state.resource != null}" type="hidden" name="resource" th:value="${state.resource}">
+  <input th:if="${state.cursor != null}" type="hidden" name="cursor" th:value="${state.cursor}">
+  <input type="hidden" name="selected" th:value="${state.selected}">
+  <input th:if="${state.attemptCursor != null}" type="hidden" name="attemptCursor" th:value="${state.attemptCursor}">
+</th:block>
+</th:block>
+</body>
+</html>
