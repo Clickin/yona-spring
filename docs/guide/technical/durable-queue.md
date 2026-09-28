@@ -1,6 +1,6 @@
-# Durable queue: store, executor and administrator API
+# Durable queue: store, executor and administrator REST/SSE
 
-트랜잭션 queue 저장소, fenced 실행기와 관리자 REST API를 제공한다. SSE·관리 UI는 다음 스택 계층에서 추가하며 archive exporter/importer는 제외한다. 기존 메일·웹훅 callback 경로는 변경하지 않는다.
+트랜잭션 queue 저장소, fenced 실행기와 관리자 REST/SSE API를 제공한다. 관리 UI는 다음 계층에서 추가하며 archive exporter/importer는 제외한다. 기존 메일·웹훅 callback 경로는 변경하지 않는다.
 
 ## 애플리케이션 인터페이스
 
@@ -124,6 +124,20 @@ Job 하나에는 다운로드할 결과 파일 하나만 게시할 수 있다. �
 다운로드는 조회 전용 EntityManager를 별도로 만들고 transaction과 연결을 닫은 뒤 파일을 연다. 요청의 OSIV EntityManager를 재사용하지 않으며, 큐 JSON API에서는 HTML용 초기 설정·사용자 모델 조회도 실행하지 않는다. 크기와 SHA-256을 확인한 **같은 열린 handle**에서 고정 크기 buffer로 전송한다. 파일 누락은 404, 무결성 불일치는 409이며 실패 응답에 이전 파일의 길이·다운로드 헤더를 남기지 않는다.
 
 `SecureDirectoryStream`을 지원하는 파일시스템은 descriptor 기준으로 탐색한다. macOS 등 미지원 환경은 symlink/real-path 점검과 `NOFOLLOW_LINKS`를 사용한다. 이 경로는 악의적인 OS 사용자의 ancestor 교체 경합을 막는다고 주장하지 않는다. **Queue data directory와 그 상위 경로는 신뢰할 수 없는 OS principal이 수정할 수 없어야 하며, 게시한 파일을 제자리에서 수정하지 않아야 한다.**
+## 관리자 SSE
+
+`GET /api/admin/queue/v1/events`는 같은 origin의 로그인 session으로 연결한다. 매 연결의 첫 이벤트는 `reset`이며, 이후 committed queue generation이 바뀌면 decimal string을 담은 `changed`를 보낸다. 두 이벤트 모두 REST snapshot을 다시 읽으라는 신호다. Payload·결과 파일·사용자 정보는 전송하지 않고, `Last-Event-ID`는 받아도 과거 이벤트를 재생하지 않는다. 변경이 계속 발생해도 15초 이내에 comment heartbeat를 보내며 필요하면 같은 invalidation frame에 comment를 함께 넣는다.
+
+한 node에 최대 32개, principal과 session마다 각각 최대 2개 연결을 허용한다. 초과하면 SSE를 시작하기 전에 JSON 429와 `Retry-After`를 반환한다. Generation·현재 관리자 권한·session 검사는 node의 공유 주기로 실행하고, stream마다 DB 연결이나 poller를 보유하지 않는다.
+
+Spring MVC `SseEmitter`를 사용하며 Tomcat 내부 API나 connector protocol 교체에 의존하지 않는다. TLS·HTTP/2·proxy에서도 같은 servlet 계약을 사용한다. 응답은 `Cache-Control: no-cache`, `X-Accel-Buffering: no`를 사용하며 `Connection: close`를 강제하지 않는다. `text/event-stream`을 압축 MIME 목록에 추가하지 않는다. Proxy buffering과 socket write timeout은 배포 환경에서 설정·확인한다.
+
+한 연결은 최대 5분 유지하고 EventSource 재연결의 첫 `reset`으로 다시 동기화한다. 재연결 요청이 HTTP session의 마지막 접근 시각을 갱신하므로 관리 화면을 열어 두면 session이 유지되어 idle timeout으로 만료되지 않을 수 있다. 로그아웃 등으로 session이 무효화되면 인증부터 다시 해야 한다. 공유 poller는 1초마다 권한·generation을 확인하고 직접 network write를 하지 않는다. Stream별 전송 중 플래그와 pending 이벤트 하나만 유지하며 밀린 변경은 `reset`으로 합친다. 전송 executor는 Spring의 가상 스레드 설정을 따르고 platform 모드에서는 32개 스레드를 사용한다.
+
+권한 조회가 connection pool 대기에 막혀도 공유 JDK timer의 1초 기한이 종료 요청을 보낸다. 기한이 지난 조회가 아직 진행 중이면 새 stream은 503으로 거부한다. `complete()`도 emitter write lock을 기다릴 수 있어 별도 완료 executor를 쓰며, 등록 quota를 완료 callback과 sender 반환까지 유지하므로 완료 작업도 node당 최대 32개다.
+
+권한·세션을 잃으면 2초 안에 추가 전송을 중단하고 `complete()`를 요청한다. Write가 2초 이상 막힌 stream은 다른 stream과 격리하고 이후 이벤트를 보내지 않는다. 이미 진행 중인 write와 실제 OS socket 종료 시점은 컨테이너 write timeout에 맡기며 앱이 보장하지 않는다. 종료 시 신규 연결을 거부하고 웹 서버 graceful shutdown보다 먼저 모든 emitter의 종료를 요청한다.
+
 ## 관측과 업그레이드
 
 - `yona.queue.jobs{status=...}`: QUEUED/RUNNING/RETRY_WAIT/CANCEL_REQUESTED/FAILED 현재 수.
@@ -150,6 +164,8 @@ Metrics lifecycle phase는 clock과 같은 `Int.MAX_VALUE - 200`이며 worker보
 `yona.it.db`는 h2/mariadb/postgres/mysql/mssql/cubrid를 지원한다. H2 외에는 Docker가 필요하다. DB SQL/schema 변경은 각 DB의 clock/timezone, admission, populated-schema upgrade와 스캔 계획을 함께 검증한다. H2 fixture는 기존 domain의 value 컬럼 때문에 NON_KEYWORDS=VALUE를 사용한다.
 
 수동 HTTP 검증은 Java 21/Python 3.10 이상에서 `python3 support-script/queue-acceptance/run.py`로 실행한다. 두 loopback JVM과 private H2/storage를 만들고 결과 다운로드 무결성·connection 반환·production fixture 부재도 확인한다. [OpenAPI 계약](queue/api-openapi.yaml)을 참고한다. 출력한 private 환경 파일과 trace에는 인증 정보가 있으므로 공개하지 않는다.
+
+SSE 수용 테스트도 같은 runner에서 실행한다. `SPRING_THREADS_VIRTUAL_ENABLED=true`/false와 root/비root context를 각각 검증한다. [SSE 계약](queue/sse-protocol.md)은 OS socket 종료가 아닌 추가 전송 중단·종료 요청을 규정한다.
 
 ## 향후 계획
 

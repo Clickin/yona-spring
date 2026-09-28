@@ -335,6 +335,11 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/ServerError' }
+        '503':
+          description: UNAVAILABLE; the application is stopping or its shared authority lookup exceeded its deadline.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
 components:
   securitySchemes:
     yonaSession:

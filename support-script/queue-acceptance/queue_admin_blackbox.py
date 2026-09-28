@@ -7,11 +7,13 @@ be present on the production classpath.
 """
 from __future__ import annotations
 
+import http.client
 import datetime as dt
 import base64
 import json
 import os
 import time
+import threading
 import unittest
 import urllib.error
 import urllib.parse
@@ -476,25 +478,38 @@ class QueueAdminBlackBox(unittest.TestCase):
         for cookie, action, restore in cases:
             run = call_test("success", cookie=cookie, resourceKey=f"revoke:{uuid.uuid4()}")
             wait_for(run["jobIds"][0], lambda j: j["status"] == "SUCCEEDED")
-            stream = open_sse(cookie, timeout=1)
+            stream = open_sse(cookie, timeout=6)
+            reader_done = threading.Event()
+            reader_errors: list[Exception] = []
+            reader_closed_at: list[float] = []
             try:
                 self.assertEqual(read_sse_event(stream)[0], "reset")
-                time.sleep(1.1)  # Drain any pre-connect generation invalidation.
-                test_action(run["runId"], action)
-                revoked_at = time.monotonic()
-                deadline = revoked_at + 5
-                while time.monotonic() < deadline:
+
+                # Drain queued frames but do not treat pre-check bytes as post-revocation writes.
+                def drain_until_close() -> None:
                     try:
-                        line = stream.readline()
-                    except TimeoutError:
-                        continue
-                    if line == b"":
-                        self.assertLessEqual(time.monotonic() - revoked_at, 5)
-                        break
-                    if line.startswith((b"event:", b"data:")):
-                        self.fail(f"SSE sent an event after {action}: {line!r}")
-                else:
-                    self.fail(f"SSE remained open beyond five seconds after {action}")
+                        while stream.readline():
+                            pass
+                    except (ConnectionResetError, ConnectionAbortedError, http.client.IncompleteRead):
+                        pass
+                    except Exception as failure:
+                        reader_errors.append(failure)
+                    finally:
+                        reader_closed_at.append(time.monotonic())
+                        reader_done.set()
+
+                reader = threading.Thread(target=drain_until_close, daemon=True)
+                reader.start()
+                self.assertFalse(reader_done.is_set(), "SSE closed before authority mutation")
+                revoked_at = time.monotonic()
+                test_action(run["runId"], action)
+                remaining = revoked_at + 5 - time.monotonic()
+                self.assertGreater(remaining, 0, "authority mutation consumed the five-second close budget")
+                self.assertTrue(reader_done.wait(remaining), f"SSE remained open beyond five seconds after {action}")
+                reader.join(timeout=0.2)
+                self.assertGreaterEqual(reader_closed_at[0], revoked_at,
+                                        "stream closed before the authority mutation began")
+                self.assertFalse(reader_errors, f"SSE reader failed before server close: {reader_errors!r}")
             finally:
                 stream.close()
                 if restore:

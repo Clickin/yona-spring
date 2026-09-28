@@ -1,5 +1,6 @@
 package com.github.yonaprojects.yona.queue
 
+import com.github.yonaprojects.yona.domain.user.UserState
 import jakarta.persistence.EntityManager
 import jakarta.persistence.EntityManagerFactory
 import jakarta.persistence.Tuple
@@ -12,10 +13,25 @@ import java.util.Base64
 import java.util.HexFormat
 
 internal data class QueueResultArtifact(val storagePath: String, val fileName: String, val sizeBytes: Long, val sha256: String)
+internal data class QueueEventSnapshot(val generation: Long, val siteAdmins: Map<Long, String>)
 
 @Service
 internal class QueueAdminQueries(private val entityManagerFactory: EntityManagerFactory) {
     private val json = JsonMapper.builder().build()
+
+    fun events(actorIds: Set<Long>): QueueEventSnapshot = read { entityManager ->
+        require(actorIds.size <= 32)
+        val generation = entityManager.createQuery(
+            "select c.value from QueueCounter c where c.name = 'change-generation'", Long::class.javaObjectType,
+        ).setHint("jakarta.persistence.query.timeout", 1_000).singleResult
+        val admins = if (actorIds.isEmpty()) emptyMap() else entityManager.createQuery(
+            "select u.id as id, u.loginId as login from User u where u.id in :ids and u.state = :state",
+            Tuple::class.java,
+        ).setParameter("ids", actorIds).setParameter("state", UserState.SITE_ADMIN)
+            .setHint("jakarta.persistence.query.timeout", 1_000).resultList
+            .associate { it.number("id") to it.get("login", String::class.java) }
+        QueueEventSnapshot(generation, admins)
+    }
 
     fun list(statuses: List<String>, type: String?, resource: String?, cursor: String?, limit: Int): Map<String, Any?> =
         read { entityManager ->

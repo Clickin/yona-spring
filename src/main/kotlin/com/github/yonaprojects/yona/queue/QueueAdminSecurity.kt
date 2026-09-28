@@ -31,7 +31,6 @@ import java.util.function.Supplier
 internal const val QUEUE_API = "/api/admin/queue/v1"
 internal const val QUEUE_EVENTS = "$QUEUE_API/events"
 internal const val QUEUE_PAGE = "/site/admin/queue"
-internal const val QUEUE_AUTH_STARTED_ATTRIBUTE = "yona.queue.admin.auth-started"
 internal const val QUEUE_ACTOR_ATTRIBUTE = "yona.queue.admin.actor"
 
 internal data class QueueApiError(val code: String, val message: String)
@@ -77,7 +76,6 @@ internal class QueueAdminSecurity(private val access: QueueAdminAccess, private 
                 try {
                     val events = request.servletPath == QUEUE_EVENTS
                     val started = if (events) System.nanoTime() else 0L
-                    if (events) request.setAttribute(QUEUE_AUTH_STARTED_ATTRIBUTE, started)
                     val actor = access.actor(request)
                     if (events && System.nanoTime() - started > 1_000_000_000L) {
                         throw QueueHttpFailure(500, "INTERNAL_ERROR", "Queue authorization is temporarily unavailable")
