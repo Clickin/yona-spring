@@ -16,8 +16,16 @@ import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
 import jakarta.servlet.Filter
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.mock.web.MockHttpSession
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.userdetails.UserDetailsService
+import org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie
+import org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated
+import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -87,19 +95,58 @@ class TwoFactorLoginFlowIntegrationSpec @Autowired constructor(
                 val loginId = userRepository.findByEmail("no2fa@example.com").get().loginId
                 val session = MockHttpSession()
 
-                mockMvc.perform(
+                val loginResponse = mockMvc.perform(
                     post("/users/login")
                         .param("loginIdOrEmail", loginId)
                         .param("password", "password1234")
+                        .param("rememberMe", "true")
                         .session(session)
                         .with(csrf())
                 )
                     .andExpect(status().is3xxRedirection)
                     .andExpect(redirectedUrl("/"))
+                    .andReturn().response
+
+                val rememberMe = requireNotNull(loginResponse.getCookie("remember-me"))
+                mockMvc.perform(get("/").cookie(rememberMe))
+                    .andExpect(authenticated().withUsername(loginId))
 
                 // 2FA 게이트를 거치지 않았으므로 세션의 Authentication은 이미 완전한 권한을 갖는다.
                 mockMvc.perform(get("/").session(session))
                     .andExpect(status().isOk)
+            }
+        }
+
+        describe("remember-me signing-key rotation") {
+            it("rejects a cookie minted with the old key without invalidating an existing session") {
+                val salt = "salt-old-remember-me"
+                val user = userRepository.save(
+                    User(
+                        loginId = "old-remember-${System.nanoTime()}", name = "Remember me",
+                        email = "old-remember-${System.nanoTime()}@example.invalid",
+                        password = legacyHash("password1234", salt), passwordSalt = salt
+                    )
+                )
+                val session = MockHttpSession()
+                mockMvc.perform(
+                    post("/users/login").param("loginIdOrEmail", user.loginId)
+                        .param("password", "password1234").session(session).with(csrf())
+                ).andExpect(redirectedUrl("/"))
+
+                // Mint against the CURRENT hash so rejection proves key rotation, not password upgrade.
+                val userDetailsService = wac.getBean(UserDetailsService::class.java)
+                val principal = userDetailsService.loadUserByUsername(user.loginId)
+                val authentication = UsernamePasswordAuthenticationToken(principal, null, principal.authorities)
+                val oldResponse = MockHttpServletResponse()
+                TokenBasedRememberMeServices("yonaRememberMeKey", userDetailsService)
+                    .onLoginSuccess(MockHttpServletRequest(), oldResponse, authentication)
+                val oldCookie = requireNotNull(oldResponse.getCookie("remember-me"))
+
+                mockMvc.perform(get("/site/admin").accept("text/html").cookie(oldCookie))
+                    .andExpect(status().is3xxRedirection)
+                    .andExpect(unauthenticated())
+                mockMvc.perform(get("/").session(session))
+                    .andExpect(authenticated().withUsername(user.loginId))
             }
         }
 
@@ -141,14 +188,19 @@ class TwoFactorLoginFlowIntegrationSpec @Autowired constructor(
                 // 틀린 코드로는 완전한 로그인이 되지 않는다.
                 mockMvc.perform(post("/users/login/2fa/totp").param("code", "000000").session(session).with(csrf()))
                     .andExpect(status().is3xxRedirection)
+                    .andExpect(cookie().doesNotExist("remember-me"))
                 mockMvc.perform(get("/").session(session))
                     .andExpect(status().is3xxRedirection)
                     .andExpect(redirectedUrl("/users/login/2fa"))
 
                 // 올바른 코드로 완전히 로그인된다.
-                mockMvc.perform(post("/users/login/2fa/totp").param("code", currentTotpCode(secret)).session(session).with(csrf()))
+                mockMvc.perform(
+                    post("/users/login/2fa/totp").param("code", currentTotpCode(secret))
+                        .param("rememberMe", "true").session(session).with(csrf())
+                )
                     .andExpect(status().is3xxRedirection)
                     .andExpect(redirectedUrl("/"))
+                    .andExpect(cookie().doesNotExist("remember-me"))
                 mockMvc.perform(get("/").session(session))
                     .andExpect(status().isOk)
             }

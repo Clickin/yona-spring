@@ -1,6 +1,7 @@
 package com.github.yonaprojects.yona.web
 
 import com.github.yonaprojects.yona.config.Pre2faAuthenticationToken
+import com.github.yonaprojects.yona.config.YonaRememberMeServices
 import com.github.yonaprojects.yona.domain.device.DeviceRecognitionService
 import com.github.yonaprojects.yona.domain.twofactor.TwoFactorService
 import com.github.yonaprojects.yona.domain.user.User
@@ -38,7 +39,8 @@ class TwoFactorLoginController(
     private val twoFactorService: TwoFactorService,
     private val webAuthnRelyingPartyOperations: WebAuthnRelyingPartyOperations,
     private val requestOptionsRepository: PublicKeyCredentialRequestOptionsRepository,
-    private val deviceRecognitionService: DeviceRecognitionService
+    private val deviceRecognitionService: DeviceRecognitionService,
+    private val rememberMeServices: YonaRememberMeServices
 ) {
     private val requestCache = HttpSessionRequestCache()
     private val securityContextRepository = HttpSessionSecurityContextRepository()
@@ -151,6 +153,7 @@ class TwoFactorLoginController(
         context.authentication = token.originalAuthentication
         SecurityContextHolder.setContext(context)
         securityContextRepository.saveContext(context, request, response)
+        rememberMeServices.completeTwoFactorLogin(request, response, token.originalAuthentication)
         deviceRecognitionService.recognizeLogin(user, request, response)
     }
 }
