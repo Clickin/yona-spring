@@ -51,6 +51,7 @@ class QueueWorkerRuntime(
     @Value("\${yona.queue.recovery-poll-millis:0}") configuredRecoveryPollMillis: Long = 0,
     @Value("\${yona.queue.idle-poll-max-millis:1000}") private val idlePollMaxMillis: Long = 1000,
     environment: Environment = StandardEnvironment(),
+    private val retention: QueueRetention? = null,
 ) : SmartLifecycle, AutoCloseable {
     val instanceId: String = configuredInstanceId.ifBlank { java.util.UUID.randomUUID().toString() }
     private val claiming = AtomicBoolean(true)
@@ -120,6 +121,33 @@ class QueueWorkerRuntime(
                 }
             }
         }, recoveryPollMillis, recoveryPollMillis, TimeUnit.MILLISECONDS)
+        retention?.let { scheduleRetention(it) }
+    }
+
+    // Shares the single cleanup thread, so retention passes never overlap orphan cleanup.
+    private fun scheduleRetention(retention: QueueRetention) {
+        var failed = false
+        cleanupScheduler.scheduleWithFixedDelay({
+            if (!closing.get()) {
+                try {
+                    retention.runPass()
+                    if (failed) logger.info("Queue retention recovered")
+                    failed = false
+                } catch (failure: QueueAdmissionException) {
+                    if (!closing.get()) {
+                        if (failed) logger.debug("Queue retention remains paused: {}", failure.code)
+                        else logger.warn("Queue retention paused: {}", failure.code)
+                        failed = true
+                    }
+                } catch (failure: Exception) {
+                    if (!closing.get()) {
+                        if (failed) logger.debug("Queue retention still failing", failure)
+                        else logger.warn("Queue retention failed; a later pass will retry", failure)
+                        failed = true
+                    }
+                }
+            }
+        }, min(retention.intervalMillis, 60_000L), retention.intervalMillis, TimeUnit.MILLISECONDS)
     }
 
     override fun isAutoStartup(): Boolean = true

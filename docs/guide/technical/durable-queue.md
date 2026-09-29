@@ -59,6 +59,10 @@ Quartz 등 별도 scheduler의 실행 상태와 업무 DB 상태를 중복 관�
 | `instance-id` | 매 프로세스 UUID |
 | `error-summary-codepoints` | 2048 (1–2048) |
 | `metrics-refresh-millis` | 30000 |
+| `retention.terminal-days` | 30 (0이면 job 삭제 안 함) |
+| `retention.audit-days` | 365 (0이면 감사 삭제 안 함) |
+| `retention.batch` | 500 (1–5000, pass당 최대 job·감사·resource lock 수) |
+| `retention.interval-millis` | 3600000 (1000 이상) |
 
 Worker slot 수는 설정된 Hikari maximum-pool-size를 넘지 않아야 한다. Type별 lane 기본값은 1이며, **lane 제한과 worker slot은 노드별**이다. 여러 노드가 같은 DB를 공유해도 claim/resource fence는 DB에서 검증한다. 매 poll은 우선순위 내림차순·ID 오름차순 `(priority, id)` keyset으로 맨 위부터 최대 4 × 64건을 확인하고, lane이 찬 type은 SQL에서 제외한다. Resource에 막힌 앞쪽 작업을 건너뛰어 뒤쪽의 실행 가능한 작업을 찾는다.
 
@@ -153,7 +157,52 @@ Metrics lifecycle phase는 clock과 같은 `Int.MAX_VALUE - 200`이며 worker보
 
 기존 큐 설치 업그레이드는 **모든 이전 버전 node를 중지한 뒤** 새 버전 node 하나를 먼저 시작한다. 최초 초기화에서 기존 FAILED 수를 한 번 집계하고 worker·HTTP serving 전에 commit한다. 이 일회성 backfill은 데이터량에 따라 시간이 걸릴 수 있다. 완료 후 나머지 새 node를 시작한다. 이후 시작은 해당 row만 확인한다. 이전/새 버전을 섞은 rolling upgrade는 이 파생 counter를 유지하지 못하므로 지원하지 않는다.
 
-기존 row의 priority는 DB 기본값 0으로 채운다. `queue_job_ready(status, priority, id)`가 새 스캔 인덱스다. Hibernate `ddl-auto=update`는 예전 인덱스를 삭제하지 않으므로 정지된 업그레이드 단계에서 기존 `queue_job_due`와 `queue_job_retry_due`가 있으면 제거한다. PostgreSQL/H2는 `DROP INDEX <index>`, MySQL/MariaDB/CUBRID/SQL Server는 `DROP INDEX <index> ON queue_job` 형식을 쓰며 먼저 실제 schema/catalog의 존재를 확인한다.
+기존 row의 priority는 DB 기본값 0으로 채운다. `queue_job_ready(status, priority, id)`가 새 스캔 인덱스다. Hibernate `ddl-auto=update`는 예전 인덱스를 삭제하지 않으므로 정지된 업그레이드 단계에서 기존 `queue_job_due`와 `queue_job_retry_due`가 있으면 제거한다. PostgreSQL/H2는 `DROP INDEX <index>`, MySQL/MariaDB/CUBRID/SQL Server는 `DROP INDEX <index> ON queue_job` 형식을 쓰며 먼저 실제 schema/catalog의 존재를 확인한다. 이력 보존 스캔용 인덱스 `queue_job_finished(status, finished_at_epoch_ms)`와 `queue_audit_created(created_at_epoch_ms)`는 `ddl-auto=update`가 새로 만든다. 기존 이력이 많으면 첫 기동에서 인덱스 생성 시간이 걸릴 수 있다.
+
+### DB 이력 보존
+
+기본으로 자동 삭제가 켜져 있다. Runtime의 orphan 정리용 단일 scheduler thread가 `retention.interval-millis`(기본 1시간) 주기로 pass를 실행하므로 orphan 정리와 겹치지 않는다. DB clock 신뢰가 없으면(`CLOCK_UNTRUSTED`) 해당 pass를 건너뛰고, 기준 시각은 DB 시각 `clock.now()`에서 보존 일수를 뺀 값이다.
+
+| 설정 | 기본값 | 의미 |
+|---|---:|---|
+| `yona.queue.retention.terminal-days` | 30 | 종결 후 이 일수가 지난 SUCCEEDED/CANCELLED job 삭제. 0이면 job을 삭제하지 않는다 |
+| `yona.queue.retention.audit-days` | 365 | `queue_admin_audit`의 보존 일수. 0이면 삭제하지 않는다 |
+| `yona.queue.retention.batch` | 500 | pass당 최대 job 수. 감사 row와 resource lock row도 각각 이 수까지만 지운다 (1–5000) |
+| `yona.queue.retention.interval-millis` | 3600000 | pass 간격 (1000 이상) |
+
+**Job.** `status IN (SUCCEEDED, CANCELLED)`이고 `finished_at_epoch_ms`가 기준보다 오래된 job만 ID 오름차순으로 batch만큼 삭제한다. FAILED/RECOVERY_REQUIRED/BLOCKED_UNSUPPORTED와 모든 비종결 상태는 나이와 관계없이 삭제하지 않으며 관리자가 종결해야 대상이 된다. 삭제 대상이 SUCCEEDED/CANCELLED뿐이므로 `failed-jobs` counter는 변하지 않는다.
+
+Job마다 트랜잭션 하나로 처리한다. 먼저 idempotency key row, 다음 job row를 `PESSIMISTIC_WRITE`로 잠근다(enqueue와 같은 순서라 교착이 없다). Job row 잠금은 artifact 게시·orphan 정리와 같은 잠금이라 여러 node에서도 안전하다. 잠근 뒤 상태와 `finished_at`을 다시 확인한다. 그다음 **파일을 먼저** 지운다. `queue_artifact.storage_path`를 queue data root의 `artifacts/` 아래로만 해석하고 밖으로 나가거나 symlink를 지나는 경로는 거부하며, 이미 없는 파일은 무시한다. 비어 버린 `artifacts/<jobId>/...` 디렉터리도 지운다. 파일 삭제가 하나라도 실패하면 트랜잭션을 롤백해 그 job의 DB row를 그대로 두고 다음 pass에서 재시도한다(일부 파일만 지워졌어도 재시도는 안전하다). 파일 삭제 뒤 `queue_artifact` → `queue_attempt` → `queue_job_resource` → `queue_idempotency_key` → `queue_job` 순서로 row를 지우고 `change-generation`을 올려 관리자 SSE가 갱신되게 한다. 실패한 job은 pass를 중단시키지 않으며 pass 끝에 첫 예외를 warn으로 기록한다.
+
+**Idempotency 보장 기간은 `terminal-days`와 같다.** Key row는 job과 함께 지워지므로 그 뒤 같은 key의 enqueue는 새 job을 만든다. `terminal-days=0`이면 key도 영구 보존된다.
+
+**감사.** `queue_admin_audit`는 job 삭제와 독립적으로 `created_at_epoch_ms < audit 기준`인 row를 batch만큼 지운다. 삭제된 job의 감사 row도 자기 보존 기간이 끝날 때까지 남는다. 삭제한 commandId는 더 이상 멱등 재요청을 보장하지 않는다.
+
+**`queue_resource_lock`.** `current_job_id`, `current_attempt_no`, `current_fence`, `lease_expires_at`이 모두 NULL(소유자 없음)이고 그 `resource_key`를 참조하는 `queue_job_resource` row가 없는 row만 지운다. Row를 `PESSIMISTIC_WRITE`로 잠근 뒤 두 조건을 다시 확인한다. 이 삭제가 안전한 전제는 다음과 같다. `owns()`는 fence 외에 jobId와 attemptNo도 요구하고, job ID는 next-id가 단조 증가해 재사용되지 않으며 attempt 번호도 job별로 단조 증가한다. Resource fence는 내부용이며(`QueueAttemptToken`은 internal이고 `TaskContext`는 job fence만 노출한다) 외부 fencing token으로 쓰이지 않는다. **Resource fence를 외부 fencing token으로 노출하게 되면 이 삭제를 다시 검토해야 한다.** 삭제와 동시에 claim이 들어오면 row가 없는 쪽이 기존 `lockResourceRows` 경로로 fence 1부터 다시 만든다. 동시 생성 경쟁은 유니크 제약이 잡아 claim이 null을 반환하고 다음 poll에서 재시도한다. `resource-guards/*.lock` 파일과 `queue_meta`는 지우지 않는다.
+
+**관측.** counter `yona.queue.retention.deleted{kind=job|audit|resource_lock}`가 commit 뒤 증가한다. 로그는 orphan 정리와 같은 방식이다(첫 실패 warn, 반복 실패 debug, 복구 info). 무엇이든 삭제했을 때만 info 요약 한 줄을 남긴다.
+
+**인덱스.** 스캔이 full scan이 되지 않도록 `queue_job_finished(status, finished_at_epoch_ms)`와 `queue_audit_created(created_at_epoch_ms)`를 사용한다.
+
+`terminal-days=0`으로 job을 보존하는 설치에서 수동 정리가 필요하면 **모든 node/handler를 정지하고 DB·파일을 백업한 뒤** 수행한다. `:cutoff_ms`는 UTC epoch milliseconds이며 SELECT에서 확정한 ID를 최대 500개씩 `:job_ids`에 바인딩한다. 조회된 storage_path는 queue data root 아래의 검증된 경로로 해석해 파일을 먼저 지우고, 삭제에 실패한 ID는 DB 삭제 대상에서 제외한다.
+
+```sql
+SELECT id FROM queue_job
+WHERE status IN ('SUCCEEDED', 'CANCELLED')
+  AND finished_at_epoch_ms < :cutoff_ms
+ORDER BY id;
+SELECT storage_path FROM queue_artifact WHERE job_id IN (:job_ids);
+-- 파일 삭제 성공 후 아래 DELETE들을 하나의 트랜잭션에서 실행한다.
+DELETE FROM queue_artifact WHERE job_id IN (:job_ids);
+DELETE FROM queue_attempt WHERE job_id IN (:job_ids);
+DELETE FROM queue_job_resource WHERE job_id IN (:job_ids);
+DELETE FROM queue_idempotency_key WHERE job_id IN (:job_ids);
+DELETE FROM queue_job WHERE id IN (:job_ids)
+  AND status IN ('SUCCEEDED', 'CANCELLED')
+  AND finished_at_epoch_ms < :cutoff_ms;
+-- 별도 트랜잭션: :audit_cutoff_ms는 audit 보존 기준.
+DELETE FROM queue_admin_audit WHERE created_at_epoch_ms < :audit_cutoff_ms;
+```
 
 ## 검증
 
@@ -195,29 +244,3 @@ e2e/node_modules/.bin/playwright test --config=e2e/queue/playwright.config.ts
 주기 작업의 발화는 poller, 실제 실행은 일반 worker claim 경로가 맡는다. 발화 시 `enqueue(type, v, payload, dueAt = 발화시각, idempotencyKey = "<type>@<발화시각 epoch>", callerScope = "recurring")`를 호출한다. 여러 node가 발화해도 idempotency로 job 한 건만 생성하므로 leader election은 필요 없다. 이전 발화와 겹칠 때 `overlap = SKIP | QUEUE`를 제공하며 기본 SKIP으로 설계한다. 발화용 enqueue의 lock timeout은 1초로 제한하고 실패하면 다음 loop에서 재시도해 next-id 대기가 poller를 장시간 막지 않게 한다.
 
 Worker는 자기 handler의 종결 전이, resource 해제, staging 정리, 물리 guard 해제와 slot 반환을 마지막 `finally`에서 책임진다. Poller는 lease가 만료된 소유자 복구를 맡으며 handler를 직접 실행하지 않는다. 주기적인 소량의 orphan 정리는 전용 scheduler가 맡는다.
-
-### DB 이력 보존
-
-**계획이며 아직 자동 삭제나 아래 설정은 구현하지 않는다.** `yona.queue.retention.terminal-days` 기본 30(0이면 비활성), `yona.queue.retention.batch` 기본 500으로 설계한다. `SUCCEEDED`/`CANCELLED`이고 `finished_at_epoch_ms`가 기준보다 오래된 job만 삭제한다. FAILED/RECOVERY_REQUIRED/BLOCKED_UNSUPPORTED는 관리자가 종결할 때까지 보존한다. 순서는 artifact 파일 → queue_artifact → queue_attempt → queue_job_resource → queue_idempotency_key → queue_job이다. queue_admin_audit는 독립적인 365일 보존 기간을 사용한다.
-
-Idempotency key를 삭제하면 같은 key의 enqueue가 새 job을 만든다. Audit를 삭제한 commandId도 더 이상 멱등 재요청을 보장하지 않는다. `queue_meta`, `queue_resource_lock`의 fence와 resource guard 파일은 이 정리에서 지우지 않는다.
-
-임시 수동 정리는 **모든 node/handler를 정지하고 DB·파일을 백업한 뒤** 수행한다. `:cutoff_ms`는 보존 기준 UTC epoch milliseconds이며 다음 SELECT에서 확정한 ID를 최대 500개씩 `:job_ids`에 바인딩한다. SQL 도구별 bind/list 문법을 사용하며, 조회된 storage_path를 queue data root 아래의 검증된 경로로 해석해 파일을 먼저 삭제한다. 파일 삭제에 실패한 ID는 DB 삭제 대상에서 제외한다.
-
-```sql
-SELECT id FROM queue_job
-WHERE status IN ('SUCCEEDED', 'CANCELLED')
-  AND finished_at_epoch_ms < :cutoff_ms
-ORDER BY id;
-SELECT storage_path FROM queue_artifact WHERE job_id IN (:job_ids);
--- 파일 삭제 성공 후 아래 DELETE들을 하나의 트랜잭션에서 실행한다.
-DELETE FROM queue_artifact WHERE job_id IN (:job_ids);
-DELETE FROM queue_attempt WHERE job_id IN (:job_ids);
-DELETE FROM queue_job_resource WHERE job_id IN (:job_ids);
-DELETE FROM queue_idempotency_key WHERE job_id IN (:job_ids);
-DELETE FROM queue_job WHERE id IN (:job_ids)
-  AND status IN ('SUCCEEDED', 'CANCELLED')
-  AND finished_at_epoch_ms < :cutoff_ms;
--- 별도 트랜잭션: :audit_cutoff_ms는 365일 보존 기준.
-DELETE FROM queue_admin_audit WHERE created_at_epoch_ms < :audit_cutoff_ms;
-```

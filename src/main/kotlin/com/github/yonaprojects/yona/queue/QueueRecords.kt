@@ -33,6 +33,7 @@ class QueueCounter(
 @Table(name = "queue_job", indexes = [
     Index(name = "queue_job_ready", columnList = "status,priority,id"),
     Index(name = "queue_job_type", columnList = "task_type,id"),
+    Index(name = "queue_job_finished", columnList = "status,finished_at_epoch_ms"),
 ])
 class QueueJob(
     @Id var id: Long = 0,
@@ -133,7 +134,10 @@ class QueueResourceLock(
 )
 
 @Entity
-@Table(name = "queue_admin_audit", indexes = [Index(name = "queue_audit_job", columnList = "job_id,created_at_epoch_ms")])
+@Table(name = "queue_admin_audit", indexes = [
+    Index(name = "queue_audit_job", columnList = "job_id,created_at_epoch_ms"),
+    Index(name = "queue_audit_created", columnList = "created_at_epoch_ms"),
+])
 class QueueAdminAudit(
     @Id @Column(name = "command_id", length = 36) var commandId: String = "",
     @Column(name = "command_hash", nullable = false, length = 64) var commandHash: String = "",

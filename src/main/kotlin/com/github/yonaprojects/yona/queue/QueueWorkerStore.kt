@@ -59,10 +59,10 @@ class QueueWorkerStore(
     private val fencedTransactions = TransactionTemplate(transactionManager).apply {
         timeout = (leaseMillis / 4_000).coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
     }
-    private val root: Path = Path.of(dataDirectory.takeIf { it.isNotBlank() } ?: error("Queue data directory is required"))
+    internal val root: Path = Path.of(dataDirectory.takeIf { it.isNotBlank() } ?: error("Queue data directory is required"))
         .toAbsolutePath().normalize().also { Files.createDirectories(it) }.toRealPath()
     private val stagingRoot = root.resolve("staging")
-    private val artifactRoot = root.resolve("artifacts")
+    internal val artifactRoot: Path = root.resolve("artifacts")
     private val cleanupCursor = root.resolve("cleanup.cursor")
     // A batch can stop inside a job; restart from that job after a process restart.
     private var cleanupStagingJobId = 0L
