@@ -191,6 +191,7 @@ class SiteViewController(
         val currentUser = checkAdmin(authentication)
         model.addAttribute("currentUser", currentUser)
         model.addAttribute("message", "title.siteSetting")
+        model.addAttribute("projects", projectRepository.findAllByOrderByName())
         return "site/data"
     }
 

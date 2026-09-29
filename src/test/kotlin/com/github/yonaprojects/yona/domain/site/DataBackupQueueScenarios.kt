@@ -15,18 +15,14 @@ import java.time.Instant
  * durable queue 테이블은 export/import에서 제외된다 — H2/PostgreSQL/MariaDB 스펙이 공유하는 시나리오.
  * 세 시나리오는 하나의 DB 상태를 이어 쓰므로 순서에 의존한다(작업 enqueue → 거부 확인 → 종료 후 import).
  */
-@Suppress("UNCHECKED_CAST")
 fun DescribeSpec.queueBackupScenarios(
     dataBackupService: DataBackupService,
     queue: Queue,
     userRepository: UserRepository,
     jdbc: JdbcTemplate,
-    objectMapper: ObjectMapper
+    objectMapper: ObjectMapper,
 ) {
     val payload = byteArrayOf(0, 1, 2, -1, -128, 127, 65, 66)
-
-    fun tables(dump: ByteArray): Map<String, Any?> =
-        (objectMapper.readValue(dump, Map::class.java) as Map<String, Any?>)["tables"] as Map<String, Any?>
 
     // 큐 상태 스냅샷 — payload는 바이트 리스트로 비교해 byte-for-byte 동일성을 본다.
     fun queueSnapshot(): List<List<Any?>> {
@@ -44,20 +40,21 @@ fun DescribeSpec.queueBackupScenarios(
             userRepository.save(User(loginId = "queue-scn-user", name = "큐시나리오", email = "queue-scn@example.com"))
             queue.enqueue("scratch.unknown", 1, payload, Instant.now().plusSeconds(3600), "k1", "scratch")
 
-            val keys = tables(dataBackupService.exportAll()).keys.map { it.lowercase() }
-            keys.none { it in QUEUE_TABLE_NAMES } shouldBe true
-            keys.none { it.startsWith("queue_") } shouldBe true
-            val root = objectMapper.readValue(dataBackupService.exportAll(), Map::class.java) as Map<String, Any?>
-            (root["sequences"] as Map<String, Any?>).keys.none { it.lowercase().startsWith("queue_") } shouldBe true
+            val archive = DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
+            val tables = DataBackupArchiveTestSupport.readTables(objectMapper, archive).keys
+            tables.none { it in QUEUE_TABLE_NAMES } shouldBe true
+            tables.none { it.startsWith("queue_") } shouldBe true
         }
 
         it("미완료 작업이 있으면 import를 거부하고 아무것도 삭제하지 않아야 한다") {
-            val backup = dataBackupService.exportAll()
+            val backup = DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
             val usersBefore = jdbc.queryForObject("SELECT COUNT(*) FROM n4user", Int::class.java)!!
             (usersBefore > 0) shouldBe true
             val queueBefore = queueSnapshot()
 
-            shouldThrow<UnfinishedQueueJobsException> { dataBackupService.importAll(backup) }
+            shouldThrow<UnfinishedQueueJobsException> {
+                DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, backup)
+            }
 
             jdbc.queryForObject("SELECT COUNT(*) FROM n4user", Int::class.java) shouldBe usersBefore
             queueSnapshot() shouldBe queueBefore
@@ -67,21 +64,19 @@ fun DescribeSpec.queueBackupScenarios(
             jdbc.update("UPDATE queue_job SET status = 'SUCCEEDED'")
             val queueBefore = queueSnapshot()
 
-            // 구버전 백업 흉내 — 대문자(H2)/소문자 키로 큐 테이블을 주입한다. 그대로 복원되면 손상될 값들.
-            val root = objectMapper.readValue(dataBackupService.exportAll(), Map::class.java) as Map<String, Any?>
-            val injected = LinkedHashMap(root["tables"] as Map<String, Any?>)
+            // 구버전/외부 백업 흉내 — 큐 테이블을 주입해도 import가 무시해야 한다(그대로 복원되면 손상될 값들).
+            val exported = DataBackupArchiveTestSupport.readTables(
+                objectMapper, DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
+            )
+            val injected = LinkedHashMap<String, List<Map<String, Any?>>>(exported)
             val fakeJob = mapOf("id" to 999, "task_type" to "bogus", "payload" to "AAECf4B/QUI=", "status" to "QUEUED")
             injected["queue_job"] = listOf(fakeJob)
-            injected["QUEUE_JOB"] = listOf(fakeJob)
             injected["queue_meta"] = listOf(mapOf("counter_name" to "next-id", "counter_value" to 123456))
-            injected["QUEUE_META"] = listOf(mapOf("counter_name" to "next-id", "counter_value" to 123456))
-            val sequences = LinkedHashMap((root["sequences"] as Map<String, Any?>))
-            sequences["queue_job"] = 5000
-            val dump = objectMapper.writeValueAsBytes(mapOf("tables" to injected, "sequences" to sequences))
-            val usersInDump = ((root["tables"] as Map<String, List<*>>).entries
-                .first { it.key.equals("n4user", ignoreCase = true) }.value).size
+            val usersInDump = exported["n4user"]?.size ?: exported.entries
+                .first { it.key.equals("n4user", ignoreCase = true) }.value.size
 
-            dataBackupService.importAll(dump)
+            val dump = DataBackupArchiveTestSupport.buildSiteArchive(objectMapper, injected, sequences = mapOf("queue_job" to 5000))
+            DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, dump)
 
             queueSnapshot() shouldBe queueBefore
             jdbc.queryForObject("SELECT COUNT(*) FROM n4user", Int::class.java) shouldBe usersInDump

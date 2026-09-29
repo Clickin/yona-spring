@@ -54,7 +54,7 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
                     Project(name = "backup-baseline-project", owner = "backup-baseline-user", projectScope = ProjectScope.PUBLIC)
                 )
 
-                val backup = dataBackupService.exportAll()
+                val backup = DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
 
                 // When: 기준 시점 이후 데이터가 더 추가됨
                 userRepository.save(
@@ -68,7 +68,7 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
                 countBeforeRestore shouldBe 2
 
                 // 백업 시점으로 복원
-                dataBackupService.importAll(backup)
+                DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, backup)
 
                 // Then: 백업 이후에 추가된 사용자는 사라지고, 기준 시점 사용자는 남아있어야 한다
                 val baselineExists = jdbc.queryForObject(
@@ -90,13 +90,13 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
                 restoredProjectCount shouldBe 1
             }
 
-            it("exportAll이 만든 백업에는 여러 테이블이 포함되어야 한다 (users/projects 전용이 아님)") {
-                val backup = dataBackupService.exportAll()
-                val json = String(backup, Charsets.UTF_8)
+            it("백업에는 여러 테이블이 포함되어야 한다 (users/projects 전용이 아님)") {
+                val backup = DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
+                val tables = DataBackupArchiveTestSupport.readTables(objectMapper, backup).keys
 
                 // n4user/project 외에도 role, organization 같은 다른 테이블이 최소 포함돼야 한다
-                (json.contains("\"role\"") || json.contains("\"n4user\"")) shouldBe true
-                (json.contains("\"organization\"")) shouldBe true
+                (tables.contains("role") || tables.contains("n4user")) shouldBe true
+                (tables.contains("organization")) shouldBe true
             }
 
             // yona DefaultExchanger.exportData()/importSequence() 대응 (P2-07) — export 시점에 실제
@@ -115,7 +115,7 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
                     Long::class.java
                 )
 
-                val backup = dataBackupService.exportAll()
+                val backup = DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
 
                 // 복원 사이에 카운터를 의도적으로 훨씬 낮은 값으로 흐트러뜨려둔다 — 만약 복원 로직이
                 // (이전 구현처럼) 백업된 행의 max(id)+1을 다시 계산하는 방식이라면 이 훼손과 무관하게
@@ -123,7 +123,7 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
                 // 이 훼손 여부와 무관하게 항상 export 시점 값으로 정확히 돌아와야 한다.
                 jdbc.execute("ALTER TABLE n4user AUTO_INCREMENT = 1")
 
-                dataBackupService.importAll(backup)
+                DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, backup)
 
                 val nextValueAfterRestore = jdbc.queryForObject(
                     "SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'n4user'",
@@ -135,8 +135,7 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
 
             // "가끔 전체 스위트에서만 실패하는 flake"로 보였던 문제의 실체 — datetime(Instant) 컬럼에
             // 실제 값(NULL이 아닌)이 있는 행이 하나라도 있으면 100% 결정적으로 재현되는 버그였다.
-            // exportAll()이 Instant를 JSON에 ISO-8601 문자열로 직렬화하는데, importAll()은 이를
-            // 타입 정보 없는 Map<String, Any?>로 역직렬화해 평범한 String이 되고, 그 String을 그대로
+            // NDJSON 행의 Instant는 ISO-8601 문자열이다. importSite()는 실제 TIMESTAMP 컬럼을 다시 Timestamp로 변환해 바인딩한다.
             // PreparedStatement에 바인딩하면 MariaDB가 ISO-8601('T'/'Z')을 datetime으로 파싱하지
             // 못해 거부한다(`insertRow`의 `dateTimeColumns` 기반 String→Timestamp 변환으로 수정).
             it("created 값이 있는 organization 행도 export/import 왕복 시 실패하지 않아야 한다") {
@@ -144,8 +143,8 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
                     Organization(name = "datetime-roundtrip-org-${System.nanoTime()}", created = Instant.now(), descr = "datetime 왕복 검증용")
                 )
 
-                val backup = dataBackupService.exportAll()
-                dataBackupService.importAll(backup)
+                val backup = DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
+                DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, backup)
 
                 val restoredCount = jdbc.queryForObject(
                     "SELECT COUNT(*) FROM organization WHERE id = ?",

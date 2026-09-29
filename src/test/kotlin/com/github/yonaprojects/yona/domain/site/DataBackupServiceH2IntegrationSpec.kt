@@ -11,6 +11,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import tools.jackson.databind.ObjectMapper
+import java.io.ByteArrayInputStream
 import javax.sql.DataSource
 import com.github.yonaprojects.yona.queue.Queue
 import com.github.yonaprojects.yona.domain.user.User
@@ -36,6 +37,9 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
     override fun extensions() = listOf(SpringExtension)
 
     companion object {
+        private val appData = java.nio.file.Files.createTempDirectory("yona-backup-app-data").toFile()
+        private val queueData = java.io.File(appData, "queue")
+
         @JvmStatic
         @DynamicPropertySource
         fun registerProperties(registry: DynamicPropertyRegistry) {
@@ -44,6 +48,8 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
             registry.add("spring.datasource.password") { "" }
             registry.add("spring.datasource.driver-class-name") { "org.h2.Driver" }
             registry.add("spring.jpa.database-platform") { "org.hibernate.dialect.H2Dialect" }
+            registry.add("yona.data") { appData.absolutePath }
+            registry.add("yona.queue.data-dir") { queueData.absolutePath }
         }
     }
 
@@ -55,12 +61,13 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
         describe("DataBackupService H2 복원 시퀀스 재설정") {
             it("복원된 PK 이후에 저장되는 신규 행이 시퀀스 충돌 없이 저장돼야 한다") {
                 // H2는 unquoted DDL 식별자를 대문자로 접어 저장한다(listTables()가 실제
-                // exportAll()에서 돌려주는 테이블명도 N4USER) — MariaDB/PostgreSQL과 달리
+                // exportSite()에서 사용하는 테이블명도 N4USER) — MariaDB/PostgreSQL과 달리
                 // JDBC DatabaseMetaData 조회(hasIdColumn())는 SQL 파서처럼 대소문자를 자동으로
                 // 접어주지 않아 정확한 케이스가 필요하다.
-                val dump = mapOf(
-                    "tables" to mapOf(
-                        "N4USER" to listOf(
+                val backupBytes = DataBackupArchiveTestSupport.buildSiteArchive(
+                    objectMapper,
+                    tables = mapOf(
+                        "n4user" to listOf(
                             mapOf(
                                 "id" to 1,
                                 "name" to "복원된유저",
@@ -73,11 +80,11 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
                             )
                         )
                     ),
-                    "sequences" to mapOf("N4USER" to 2)
+                    // yona export 시점의 "다음 값" 캡처 대응 — id=1을 이미 점유하고 있으므로 다음 값은 2.
+                    sequences = mapOf("n4user" to 2),
                 )
-                val backupBytes = objectMapper.writeValueAsBytes(dump)
 
-                dataBackupService.importAll(backupBytes)
+                dataBackupService.importSite(ByteArrayInputStream(backupBytes))
 
                 val restoredCount = jdbc.queryForObject("SELECT COUNT(*) FROM n4user WHERE id = 1", Int::class.java)
                 restoredCount shouldBe 1
@@ -90,5 +97,35 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
                 newUser.id shouldNotBe 1L
             }
         }
+        describe("사이트 파일 백업") {
+            it("application data를 복원하면서 대상 서버의 queue 디렉터리와 활성 DB 파일을 보존한다") {
+                val appMarker = java.io.File(appData, "oauth2/backup-marker.txt").apply {
+                    parentFile?.mkdirs()
+                    writeText("backup-value")
+                }
+                val queueMarker = java.io.File(queueData, "preserve-marker.txt").apply {
+                    parentFile?.mkdirs()
+                    writeText("before-export")
+                }
+                val h2Marker = java.io.File(appData, "h2/yona.mv.db").apply {
+                    parentFile?.mkdirs()
+                    writeText("active-database-placeholder")
+                }
+                val archive = DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
+                val entries = DataBackupArchiveTestSupport.readEntryNames(archive)
+                entries.none { it.startsWith("files/data/queue/") } shouldBe true
+                entries.none { it.startsWith("files/data/h2/") } shouldBe true
+
+                appMarker.writeText("changed-after-export")
+                queueMarker.writeText("target-queue-state")
+                h2Marker.writeText("target-db-state")
+                DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, archive)
+
+                appMarker.readText() shouldBe "backup-value"
+                queueMarker.readText() shouldBe "target-queue-state"
+                h2Marker.readText() shouldBe "target-db-state"
+            }
+        }
+
     }
 }

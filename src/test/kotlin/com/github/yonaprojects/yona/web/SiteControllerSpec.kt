@@ -37,6 +37,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.util.Optional
 
 import tools.jackson.databind.ObjectMapper
+import java.io.OutputStream
 import com.github.yonaprojects.yona.domain.support.DiagnosticService
 import org.springframework.core.env.Environment
 import com.github.yonaprojects.yona.domain.support.YonaUpdateService
@@ -400,6 +401,7 @@ class SiteControllerSpec : DescribeSpec({
         describe("GET /site/data") {
             it("로그인한 주체가 관리자일 때 데이터 백업 화면 뷰를 리턴해야 한다") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
+                every { projectRepository.findAllByOrderByName() } returns emptyList()
 
                 mockMvcView.perform(
                     get("/site/data")
@@ -411,28 +413,31 @@ class SiteControllerSpec : DescribeSpec({
         }
 
         describe("GET /site/export") {
-            it("로그인한 주체가 관리자일 때 DataBackupService가 만든 전체 DB 백업을 파일로 내려주어야 한다") {
+            it("로그인한 주체가 관리자일 때 DataBackupService가 만든 백업 ZIP을 파일로 내려주어야 한다") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.exportAll() } returns "{\"n4user\":[]}".toByteArray()
+                every { dataBackupService.exportSite(any<OutputStream>()) } answers {
+                    firstArg<OutputStream>().write("zip-bytes".toByteArray())
+                }
 
                 mockMvcApi.perform(
                     get("/site/export")
                         .principal(adminAuth)
                 )
                     .andExpect(status().isOk)
-                    .andExpect(content().contentType("application/json"))
+                    .andExpect(content().contentType("application/zip"))
 
-                verify(exactly = 1) { dataBackupService.exportAll() }
+                verify(exactly = 1) { dataBackupService.exportSite(any<OutputStream>()) }
             }
         }
 
         describe("POST /site/import") {
-            it("로그인한 주체가 관리자이고 파일이 있으면 DataBackupService로 전체 DB를 복원해야 한다") {
+            it("로그인한 주체가 관리자이고 파일이 있으면 DataBackupService로 사이트를 복원해야 한다") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.importAll(any()) } returns Unit
+                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_SITE
+                every { dataBackupService.importSite(any()) } returns Unit
 
                 val file = MockMultipartFile(
-                    "data", "backup.json", "application/json", "{\"n4user\":[]}".toByteArray()
+                    "data", "backup.zip", "application/zip", "zip".toByteArray()
                 )
 
                 mockMvcApi.perform(
@@ -442,7 +447,7 @@ class SiteControllerSpec : DescribeSpec({
                 )
                     .andExpect(status().is3xxRedirection)
 
-                verify(exactly = 1) { dataBackupService.importAll(any()) }
+                verify(exactly = 1) { dataBackupService.importSite(any()) }
             }
         }
 

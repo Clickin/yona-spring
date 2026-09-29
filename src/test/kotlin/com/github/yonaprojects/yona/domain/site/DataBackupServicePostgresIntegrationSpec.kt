@@ -12,6 +12,7 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.PostgreSQLContainer
 import tools.jackson.databind.ObjectMapper
+import java.io.ByteArrayInputStream
 import javax.sql.DataSource
 import com.github.yonaprojects.yona.queue.Queue
 import com.github.yonaprojects.yona.domain.user.User
@@ -19,7 +20,8 @@ import com.github.yonaprojects.yona.domain.user.UserRepository
 
 /**
  * P1-33/34: PostgreSQL 방언 복원 경로가 실제 Testcontainers Postgres로 검증된 적이 없었고
- * (P1-34), importAll()이 백업된 PK를 명시적으로 그대로 INSERT하는 방식은 PostgreSQL의
+- * (P1-34), importAll()이 백업된 PK를 명시적으로 그대로 INSERT하는 방식은 PostgreSQL의
++ * (P1-34), importSite()가 백업된 PK를 명시적으로 그대로 INSERT하는 방식은 PostgreSQL의
  * SERIAL/시퀀스를 자동으로 전진시키지 않는다는 알려진 함정이 있다(P1-33) — MariaDB의
  * AUTO_INCREMENT는 명시적 INSERT 값을 보고 스스로 다음 채번을 올리지만, PostgreSQL의
  * nextval()은 완전히 별개로 관리되기 때문에, 복원 직후의 첫 신규 insert가 이미 복원된
@@ -67,8 +69,11 @@ class DataBackupServicePostgresIntegrationSpec @Autowired constructor(
             it("복원된 PK 이후에 저장되는 신규 행이 시퀀스 충돌 없이 저장돼야 한다") {
                 // Given: 백업 데이터 자체가 PK=1을 이미 점유하고 있는 상태(디저스터 리커버리 시나리오,
                 // 신규 빈 DB에 과거 백업을 그대로 복원하는 경우와 동일)를 구성한다.
-                val dump = mapOf(
-                    "tables" to mapOf(
+                // yona export 시점의 "다음 값" 캡처(P2-07) 대응 — id=1을 이미 점유하고 있으므로
+                // 다음으로 배정될 값은 2여야 한다.
+                val backupBytes = DataBackupArchiveTestSupport.buildSiteArchive(
+                    objectMapper,
+                    tables = mapOf(
                         "n4user" to listOf(
                             mapOf(
                                 "id" to 1,
@@ -82,14 +87,11 @@ class DataBackupServicePostgresIntegrationSpec @Autowired constructor(
                             )
                         )
                     ),
-                    // yona export 시점의 "다음 값" 캡처(P2-07) 대응 — id=1을 이미 점유하고 있으므로
-                    // 다음으로 배정될 값은 2여야 한다.
-                    "sequences" to mapOf("n4user" to 2)
+                    sequences = mapOf("n4user" to 2),
                 )
-                val backupBytes = objectMapper.writeValueAsBytes(dump)
 
                 // When: 이 백업을 복원한다.
-                dataBackupService.importAll(backupBytes)
+                dataBackupService.importSite(ByteArrayInputStream(backupBytes))
 
                 val restoredCount = jdbc.queryForObject("SELECT COUNT(*) FROM n4user WHERE id = 1", Int::class.java)
                 restoredCount shouldBe 1

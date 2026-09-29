@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import tools.jackson.databind.ObjectMapper
+import java.io.OutputStream
 import java.util.*
 
 class SiteApiControllerSpec : DescribeSpec({
@@ -394,7 +395,9 @@ class SiteApiControllerSpec : DescribeSpec({
         describe("GET /site/export") {
             it("데이터 익스포트 반환") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.exportAll() } returns "testdata".toByteArray()
+                every { dataBackupService.exportSite(any<OutputStream>()) } answers {
+                    firstArg<OutputStream>().write("testdata".toByteArray())
+                }
 
                 mockMvc.perform(get("/site/export")
                     .principal(adminAuth))
@@ -402,26 +405,65 @@ class SiteApiControllerSpec : DescribeSpec({
                     .andExpect(header().exists("Content-Disposition"))
                     .andExpect(content().bytes("testdata".toByteArray()))
             }
+
+            it("프로젝트 백업 요청은 프로젝트 범위로 내보낸다") {
+                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
+                every { dataBackupService.exportProject("owner", "name", any<OutputStream>()) } answers {
+                    thirdArg<OutputStream>().write("project-zip".toByteArray())
+                }
+
+                mockMvc.perform(get("/site/export").param("project", "owner/name")
+                    .principal(adminAuth))
+                    .andExpect(status().isOk)
+                    .andExpect(content().bytes("project-zip".toByteArray()))
+            }
+
+            it("잘못된 project 파라미터는 400") {
+                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
+
+                mockMvc.perform(get("/site/export").param("project", "ownername")
+                    .principal(adminAuth))
+                    .andExpect(status().isBadRequest)
+            }
         }
 
         describe("POST /site/import") {
-            it("파일이 비어있지 않으면 import 수행 후 리다이렉트") {
+            it("사이트 백업이면 전체 복원 후 데이터 관리 화면으로 리다이렉트") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                val file = MockMultipartFile("data", "test.json", "application/json", "testdata".toByteArray())
+                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_SITE
+                val file = MockMultipartFile("data", "backup.zip", "application/zip", "testdata".toByteArray())
 
                 mockMvc.perform(multipart("/site/import")
                     .file(file)
                     .principal(adminAuth))
                     .andExpect(status().is3xxRedirection)
-                    .andExpect(redirectedUrl("/"))
+                    .andExpect(redirectedUrl("/site/data"))
+                    .andExpect(flash().attribute("importSiteSuccess", true))
 
-                verify(exactly = 1) { dataBackupService.importAll(any()) }
+                verify(exactly = 1) { dataBackupService.importSite(any()) }
+            }
+
+            it("프로젝트 백업이면 merge 후 어느 이름으로 들어갔는지 알려준다") {
+                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
+                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_PROJECT
+                every { dataBackupService.importProject(any()) } returns "owner/name-imported-1"
+                val file = MockMultipartFile("data", "project.zip", "application/zip", "testdata".toByteArray())
+
+                mockMvc.perform(multipart("/site/import")
+                    .file(file)
+                    .principal(adminAuth))
+                    .andExpect(status().is3xxRedirection)
+                    .andExpect(redirectedUrl("/site/data"))
+                    .andExpect(flash().attribute("importProjectName", "owner/name-imported-1"))
+
+                verify(exactly = 1) { dataBackupService.importProject(any()) }
             }
 
             it("import 중 예외 발생 시 error/400 반환") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.importAll(any()) } throws RuntimeException("Error")
-                val file = MockMultipartFile("data", "test.json", "application/json", "testdata".toByteArray())
+                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_SITE
+                every { dataBackupService.importSite(any()) } throws RuntimeException("Error")
+                val file = MockMultipartFile("data", "backup.zip", "application/zip", "testdata".toByteArray())
 
                 mockMvc.perform(multipart("/site/import")
                     .file(file)
@@ -432,9 +474,10 @@ class SiteApiControllerSpec : DescribeSpec({
 
             it("미완료 큐 작업으로 거부되면 데이터 관리 화면으로 flash 메시지와 함께 리다이렉트") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.importAll(any()) } throws
+                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_SITE
+                every { dataBackupService.importSite(any()) } throws
                     com.github.yonaprojects.yona.domain.site.UnfinishedQueueJobsException("busy")
-                val file = MockMultipartFile("data", "test.json", "application/json", "testdata".toByteArray())
+                val file = MockMultipartFile("data", "backup.zip", "application/zip", "testdata".toByteArray())
 
                 mockMvc.perform(multipart("/site/import")
                     .file(file)
@@ -446,17 +489,18 @@ class SiteApiControllerSpec : DescribeSpec({
 
             it("파일이 비어있으면 import 수행 안하고 리다이렉트") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                val file = MockMultipartFile("data", "test.json", "application/json", ByteArray(0))
+                val file = MockMultipartFile("data", "backup.zip", "application/zip", ByteArray(0))
 
                 mockMvc.perform(multipart("/site/import")
                     .file(file)
                     .principal(adminAuth))
                     .andExpect(status().is3xxRedirection)
-                    .andExpect(redirectedUrl("/"))
+                    .andExpect(redirectedUrl("/site/data"))
 
-                verify(exactly = 0) { dataBackupService.importAll(any()) }
+                verify(exactly = 0) { dataBackupService.importSite(any()) }
             }
         }
+
 
         describe("GET /site/noAvatarUsers") {
             it("아바타 없는 유저 리스트 반환") {

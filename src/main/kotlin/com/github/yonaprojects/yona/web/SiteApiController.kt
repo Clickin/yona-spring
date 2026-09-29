@@ -9,8 +9,10 @@ import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.mail.MailService
 import com.github.yonaprojects.yona.domain.site.DataBackupService
+import com.github.yonaprojects.yona.domain.site.BadBackupArchiveException
 import com.github.yonaprojects.yona.domain.site.UnfinishedQueueJobsException
 import com.github.yonaprojects.yona.domain.support.YonaUpdateService
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
@@ -231,41 +233,66 @@ class SiteApiController(
         return ResponseEntity.ok(emails)
     }
 
-    // 9. 전체 데이터 백업 다운로드 (모든 테이블 — 이전에는 users/projects만 백업되던 문제를 해결)
+    // 9. 데이터 백업 다운로드 (사이트 전체 또는 ?project=owner/name 프로젝트 1개 — ZIP 스트리밍)
     @GetMapping("/export")
     fun exportData(
-        authentication: Authentication?
-    ): ResponseEntity<ByteArray> {
+        authentication: Authentication?,
+        @RequestParam(name = "project", required = false) project: String?,
+        response: HttpServletResponse,
+    ) {
         checkAdmin(authentication)
-        val jsonBytes = dataBackupService.exportAll()
-        val headers = HttpHeaders()
-        headers.contentType = MediaType.APPLICATION_JSON
-        headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"yona-data-${Instant.now().epochSecond}.json\"")
-        return ResponseEntity.ok()
-            .headers(headers)
-            .body(jsonBytes)
+        response.contentType = "application/zip"
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"yona-backup-${Instant.now().epochSecond}.zip\"")
+        if (project == null) {
+            dataBackupService.exportSite(response.outputStream)
+            return
+        }
+        val parts = project.split("/")
+        if (parts.size != 2 || parts.any { it.isBlank() }) {
+            response.status = HttpServletResponse.SC_BAD_REQUEST
+            return
+        }
+        try {
+            dataBackupService.exportProject(parts[0], parts[1], response.outputStream)
+        } catch (e: NoSuchElementException) {
+            // 응답 커밋 전이므로 상태 코드로 알릴 수 있다.
+            response.status = HttpServletResponse.SC_NOT_FOUND
+        }
     }
 
-    // 10. 데이터 업로드 복원 (모든 테이블 전체 교체 - 완전 복원)
+    // 10. 데이터 업로드 복원 — 사이트 백업이면 전체 교체, 프로젝트 백업이면 기존 사이트에 merge.
     @PostMapping("/import")
     fun importData(
         @RequestParam("data") file: MultipartFile,
         authentication: Authentication?,
-        redirectAttributes: RedirectAttributes
+        redirectAttributes: RedirectAttributes,
     ): String {
         checkAdmin(authentication)
-        if (!file.isEmpty) {
-            try {
-                dataBackupService.importAll(file.bytes)
-            } catch (e: UnfinishedQueueJobsException) {
-                // 미완료 큐 작업이 있으면 데이터 관리 화면으로 돌려보내 안내한다.
-                redirectAttributes.addFlashAttribute("importError", "site.data.import.queueBusy")
-                return "redirect:/site/data"
-            } catch (e: Exception) {
-                return "error/400"
+        if (file.isEmpty) return "redirect:/site/data"
+        val projectBackup = try {
+            dataBackupService.backupScope(file.inputStream)
+        } catch (e: Exception) {
+            null
+        } == DataBackupService.SCOPE_PROJECT
+        try {
+            if (projectBackup) {
+                val importedAs = dataBackupService.importProject(file.inputStream)
+                redirectAttributes.addFlashAttribute("importProjectName", importedAs)
+            } else {
+                dataBackupService.importSite(file.inputStream)
+                redirectAttributes.addFlashAttribute("importSiteSuccess", true)
             }
+        } catch (e: UnfinishedQueueJobsException) {
+            // 미완료 큐 작업이 있으면 데이터 관리 화면으로 돌려보내 안내한다.
+            redirectAttributes.addFlashAttribute("importError", "site.data.import.queueBusy")
+            return "redirect:/site/data"
+        } catch (e: BadBackupArchiveException) {
+            redirectAttributes.addFlashAttribute("importError", "site.data.import.badArchive")
+            return "redirect:/site/data"
+        } catch (e: Exception) {
+            return "error/400"
         }
-        return "redirect:/"
+        return "redirect:/site/data"
     }
 
     // 11. 아바타 없는 유저 리스트 조회 API
