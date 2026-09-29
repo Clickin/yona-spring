@@ -148,7 +148,7 @@ test.describe('Thymeleaf queue console', () => {
         await freshSession(context, 'admin');
         const page = await context.newPage();
         await page.goto(pagePath());
-        await expect(page.getByRole('heading', { level: 1, name: 'Job queue' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Job queue' })).toBeVisible();
         await expect(page.locator('.queue-admin')).not.toContainText(/[가-힣]/);
         await expect(page.locator('.site-setting-nav li').last()).toHaveText('Job queue');
         expect(await page.evaluate(() => {
@@ -222,7 +222,7 @@ test.describe('Thymeleaf queue console', () => {
 
       const response = await page.goto(pagePath());
       expect(response?.status()).toBe(200);
-      await expect(page.getByRole('heading', { level: 1, name: '작업 큐' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '작업 큐' })).toBeVisible();
       const table = page.getByRole('table', { name: '작업 목록 (최신 ID순, 최대 50개)' });
       await expect(table).toBeVisible();
       const row = page.locator(`tr[data-job-id="${id}"]`);
@@ -231,7 +231,7 @@ test.describe('Thymeleaf queue console', () => {
       expect(await row.getAttribute('data-job-id')).toBe(id);
       expect(await row.locator('time').first().getAttribute('datetime')).toMatch(/Z$/);
 
-      await page.getByLabel('상태').selectOption(['SUCCEEDED']);
+      await page.getByRole('checkbox', { name: '성공 (SUCCEEDED)' }).check();
       await page.getByLabel('작업 종류').fill(job.type);
       await page.getByLabel('자원').fill(resource);
       await page.getByRole('button', { name: '필터 적용' }).click();
@@ -263,6 +263,23 @@ test.describe('Thymeleaf queue console', () => {
     } finally {
       await context.close();
     }
+  });
+
+  test('invalid filters re-render the form with entered values and format guidance', async ({ page }) => {
+    const response = await page.goto(`${pagePath()}?type=Queue&resource=test`);
+    expect(response?.status()).toBe(400);
+    const filters = page.locator('form.queue-filters');
+    await expect(filters).toBeVisible();
+    await expect(filters.locator('input[name="type"]')).toHaveValue('Queue');
+    await expect(filters.locator('input[name="resource"]')).toHaveValue('test');
+    await expect(page.locator('.queue-filter-error')).toContainText('kind:id');
+    await expect(page.getByRole('alert')).toContainText('INVALID_REQUEST');
+
+    await filters.locator('input[name="type"]').fill('queue');
+    await filters.locator('input[name="resource"]').fill('test:1');
+    await page.getByRole('button', { name: '필터 적용' }).click();
+    expect(new URL(page.url()).searchParams.get('type')).toBe('queue');
+    await expect(page.locator('.queue-filter-error')).toHaveCount(0);
   });
 
   test('job cursor links paginate server rows and Back restores the exact prior page', async ({ page }) => {

@@ -1,23 +1,28 @@
 .queue-admin { min-width: 0; overflow-wrap: anywhere; }
 yona-queue-events, .queue-admin turbo-frame { display: block; }
+.queue-admin .title_area { overflow: hidden; }
 .queue-filters, .queue-command { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 1rem 0; }
-.queue-filters label, .queue-command label { display: flex; align-items: center; gap: .5rem; }
+.queue-admin input, .queue-admin select { max-width: 100%; }
+.queue-filters label, .queue-command label { display: flex; align-items: center; gap: .5rem; margin: 0; }
+.queue-status-group { display: flex; flex-wrap: wrap; gap: .25rem 1rem; }
+.queue-filters .search-bar { height: auto; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: 4px 30px 4px 8px; }
+.queue-filter-error { margin: 0; color: #e95e01; }
 .queue-table-scroll { overflow-x: auto; }
 .queue-admin table { width: 100%; min-width: 40rem; }
 .queue-admin th, .queue-admin td { text-align: left; vertical-align: top; }
-.queue-admin nav { display: flex; gap: 1rem; margin: 1rem 0; }
+.queue-admin nav { display: flex; gap: .5rem; margin: 1rem 0; }
 .queue-admin dt { font-weight: bold; }
 .queue-admin dd { margin: 0 0 .5rem; }
-.queue-admin :focus-visible { outline: 2px solid #1769aa; outline-offset: 3px; }
-.queue-admin [role=alert] { color: #a11; }
-.queue-admin .queue-priority { display: inline-block; padding: .1rem .4rem; border: 1px solid #1769aa; border-radius: .25rem; color: #174c75; background: #eef6fc; }
-.queue-admin #queue-detail { border-top: 1px solid #ccc; padding-top: 1rem; margin-top: 1rem; }
-@media (max-width: 767px) {
-  .queue-admin-page .row-fluid { width: 100%; }
-  .queue-admin-page .site-setting-wrap .span2 { float: none; width: auto; margin: 1rem; }
-  .queue-admin-page .site-setting-nav { display: flex; flex-wrap: wrap; gap: .5rem; }
-  .queue-admin-page .site-setting-nav li { width: auto; }
-  .queue-admin.span10 { float: none; width: auto; margin: 1rem; }
-  .queue-filters label, .queue-command label { flex-wrap: wrap; }
-  .queue-admin input, .queue-admin select { max-width: 100%; }
-}
+.queue-counters { list-style: none; margin: .25rem 0 0; padding: 0; }
+.queue-resources { display: block; }
+.queue-status { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 11px; color: #fff; }
+.queue-status-QUEUED, .queue-status-RETRY_WAIT { background-color: #0088cc; }
+.queue-status-RUNNING, .queue-status-CANCEL_REQUESTED { background-color: #f36c22; }
+.queue-status-SUCCEEDED { background-color: #b6da54; }
+.queue-status-FAILED, .queue-status-RECOVERY_REQUIRED, .queue-status-BLOCKED_UNSUPPORTED { background-color: #fd6956; }
+.queue-status-CANCELLED { background-color: #b1b1b1; }
+.queue-priority { display: inline-block; padding: 1px 6px; border: 1px solid #e95e01; border-radius: 2px; font-size: 11px; color: #fff; background: #f36c22; }
+.queue-admin :focus-visible { outline: 2px solid #0088cc; outline-offset: 3px; }
+.queue-admin [role=alert] { color: #e95e01; }
+.queue-detail-head { display: flex; align-items: baseline; gap: 1rem; }
+.queue-admin #queue-detail { border: 1px solid #ccc; border-radius: 3px; padding: 1rem; margin: 1rem 0; }

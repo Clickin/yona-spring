@@ -10,7 +10,16 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.util.UriComponentsBuilder
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.UUID
+
+// ponytail: view-only UTC formatting; switch to a shared formatter if other pages need it.
+internal object QueueAdminTimes {
+    private val format = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC)
+    fun utc(value: String?): String = value?.let { format.format(Instant.parse(it)) } ?: "—"
+}
 
 @Controller
 @RequestMapping(QUEUE_PAGE)
@@ -96,7 +105,8 @@ internal class QueueAdminViewController(
             model.addAttribute("currentUser", users.findById(actor).orElse(null))
         }
         model.addAttribute("state", state)
-        model.addAttribute("statuses", QueueStatus.entries.map { it.name })
+        model.addAttribute("statuses", STATUS_NAMES)
+        model.addAttribute("times", QueueAdminTimes)
         val page = queries.list(state.status, state.type, state.resource, state.cursor, 50)
         model.addAttribute("page", page)
         model.addAttribute("pageUrl", state.url())
@@ -131,6 +141,10 @@ internal class QueueAdminViewController(
         model.asMap().remove("state")
         model.asMap().remove("detail")
         model.addAttribute("message", "title.siteSetting")
+        // The filter form must survive invalid input: echo the raw values and explain the expected format.
+        model.addAttribute("draft", draft(request))
+        model.addAttribute("statuses", STATUS_NAMES)
+        model.addAttribute("filterError", failure.code == "INVALID_REQUEST")
         model.addAttribute("queueError", failure.code)
         (request.getAttribute(QUEUE_ACTOR_ATTRIBUTE) as? Long)?.let { actor ->
             model.addAttribute("currentUser", users.findById(actor).orElse(null))
@@ -158,6 +172,15 @@ internal class QueueAdminViewController(
         if (request.parameterMap.any { (key, values) -> key !in allowed || (key != "status" && values.size != 1) }) invalid()
     }
 
+    // Lenient echo of user-entered filters for error renders; invalid pieces are dropped, never trusted.
+    private fun draft(request: HttpServletRequest): ViewState {
+        fun parameter(name: String, max: Int) = request.getParameter(name)?.takeIf { it.isNotEmpty() }?.take(max)
+        val statuses = request.getParameterValues("status")?.filter { value ->
+            QueueStatus.entries.any { it.name == value }
+        }.orEmpty().distinct()
+        return ViewState(statuses, parameter("type", 120), parameter("resource", 300), null, null, null)
+    }
+
     private fun id(value: String): Long = value.toLongOrNull()?.takeIf { it > 0 && it.toString() == value } ?: invalid()
     private fun invalid(): Nothing = throw QueueHttpFailure(400, "INVALID_REQUEST", "Invalid queue request")
 
@@ -174,6 +197,8 @@ internal class QueueAdminViewController(
     }
 
     companion object {
+        private val STATUS_NAMES = QueueStatus.entries.map { it.name }
+
         // Spring's saved-request return URL includes this marker in addition to the original filters.
         private val QUERY_KEYS = setOf("status", "type", "resource", "cursor", "selected", "attemptCursor", "continue")
     }

@@ -48,6 +48,30 @@ class QueueAdminTemplateRenderingSpec @Autowired constructor(
                 }
             }
 
+            it("re-renders invalid filters with the form, entered values, and format guidance") {
+                val result = mvc.perform(get(QUEUE_PAGE).param("type", "Queue").header("Accept-Language", "en")
+                    .with(user("queue-template-admin").roles("SITE_ADMIN")))
+                    .andExpect(status().isBadRequest).andReturn()
+                val doc = Jsoup.parse(result.response.contentAsString)
+                doc.select("form.queue-filters").size shouldBe 1
+                doc.select("input[name=type]").attr("value") shouldBe "Queue"
+                doc.select(".queue-filter-error").text().contains("kind:id") shouldBe true
+                doc.select("[role=alert]").text() shouldBe "The request is invalid. (INVALID_REQUEST)"
+                doc.select("form.queue-filters input[name=status]").eachAttr("value").toSet() shouldBe
+                    QueueStatus.entries.map { it.name }.toSet()
+            }
+
+            it("renders every status choice when validation fails before the page renders") {
+                val result = mvc.perform(get(QUEUE_PAGE).param("status", "BOGUS").header("Accept-Language", "en")
+                    .with(user("queue-template-admin").roles("SITE_ADMIN")))
+                    .andExpect(status().isBadRequest).andReturn()
+                val doc = Jsoup.parse(result.response.contentAsString)
+                doc.select("form.queue-filters").size shouldBe 1
+                val choices = doc.select("form.queue-filters input[name=status]").eachAttr("value").toSet()
+                choices shouldBe QueueStatus.entries.map { it.name }.toSet()
+                doc.select("form.queue-filters input[name=status]").count { it.hasAttr("checked") } shouldBe 0
+            }
+
             for ((method, request) in listOf(
                 "GET" to get(QUEUE_PAGE).param("selected", "invalid"),
                 "POST" to post("$QUEUE_PAGE/jobs/invalid/cancel")
