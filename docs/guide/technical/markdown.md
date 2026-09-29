@@ -13,6 +13,10 @@
 
 source는 최초 mount에서 한 번만 읽는다. 다른 source를 표시하려면 새 element를 만든다. Turbo가 DOM을 `cloneNode(true)`로 캐시하므로 원문 snapshot을 비활성 `<template>`에 보존한다. 같은 element의 reconnect는 재파싱하지 않는다. source 감시용 MutationObserver나 renderer 내부 Turbo 의존성은 없다.
 
+초기 module 로딩 중에는 head에서 먼저 적용한 CSS가 raw Markdown을 가리고 `Loading Markdown…` 안내를 표시한다. `display:none`으로 접지 않고 같은 글꼴·padding과 `pre-wrap` 줄바꿈으로 원문 길이와 화면 너비에 비례하는 공간을 예약한다. 동기 렌더링과 structural plugin이 끝난 뒤 `data-markdown-ready`를 설정해 결과를 표시한다. 고정된 픽셀 높이는 남기지 않아 이후 창 크기 변경 시 빈 공간이 유지되지 않는다.
+
+200개 문단/1280px viewport의 로컬 확인에서는 약 8,478px를 예약하고 실제 결과가 약 7,448px였다. 이는 근사치이며 크기 정보가 없는 이미지와 비동기 Mermaid의 최종 높이까지 보장하지는 않는다. JavaScript를 끄거나 module 다운로드가 실패한 경우에는 원문을 읽을 수 있게 복원한다. `markdown-loading.spec.ts`가 module 전달을 의도적으로 지연해 원문 비노출·높이 예약·resize·Turbo clone·실패 fallback을 검증한다.
+
 ## 편집기
 
 공통 `markdownEditor` fragment가 `<yona-markdown-editor>` 안에 실제 `<textarea>`를 서버 렌더링한다. JavaScript는 이 노드를 유지하며 `value`·`defaultValue`·selection·form reset을 그대로 사용한다. hidden textarea나 별도 editor document를 만들지 않는다.

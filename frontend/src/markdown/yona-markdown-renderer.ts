@@ -16,6 +16,8 @@ export class YonaMarkdownRenderer extends LitElement {
   protected createRenderRoot() { return this; }
 
   connectedCallback() {
+    // A Turbo clone carries attributes but must mount its own output before becoming visible.
+    this.removeAttribute('data-markdown-ready');
     if (!this.output) {
       let hardBreak = false;
       let paragraph = false;
@@ -97,6 +99,7 @@ export class YonaMarkdownRenderer extends LitElement {
       };
       applyStructure(this.output!, context, lifetime.signal);
       enhance(this.output!, lifetime.signal);
+      this.setAttribute('data-markdown-ready', '');
       this.dispatchEvent(new CustomEvent('markdown-rendered', {bubbles: true}));
     });
   }

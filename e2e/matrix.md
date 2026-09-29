@@ -256,6 +256,7 @@
 |---|---|---|
 | Renderer/editor | `specs/15-misc/markdown-components.spec.ts` | immutable/clone snapshot, GFM/XSS, Edit/Preview, native textarea/toolbar/Tab/reset, `@/#/:`, Viewer dispose |
 | README/`.md` corpus | `specs/05-code/markdown-documents.spec.ts` | 실제 Git push 후 상대 링크 왕복/이미지 로딩, 한글·중복 heading, GFM/safe HTML/code, 200문단 |
+| Initial loading | `specs/15-misc/markdown-loading.spec.ts` | module 지연 중 원문 비노출·내용 비례 높이 예약, resize, clone readiness, no-JS/다운로드 실패 fallback |
 | Reference/structural plugins | `frontend/scripts/check-markdown-structure.mjs` | 100개 mount의 1 batch, cache/context/abort, unsafe metadata, 상대 URL, task PATCH |
 | Highlight/Mermaid | `frontend/scripts/check-markdown-enhancements.mjs` | legacy 59개 포함 162 identifier/alias, lazy loading, 10 diagrams, strict SVG/공격/크기/edge 제한 |
 

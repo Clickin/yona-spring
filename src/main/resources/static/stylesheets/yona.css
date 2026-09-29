@@ -11367,7 +11367,8 @@ code {
   white-space: inherit;
   word-break: break-all;
 }
-.markdown-wrap {
+.markdown-wrap,
+yona-markdown-renderer {
   font-size: 1.1em;
   clear: both;
   overflow: auto;
@@ -11381,6 +11382,28 @@ code {
   font-kerning: normal;
   padding: 15px 20px !important;
   word-wrap: break-word;
+}
+/* ponytail: native source wrapping reserves text space; images/diagrams settle after rendering. */
+yona-markdown-renderer:not([data-markdown-ready]) {
+  display: block;
+  position: relative;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  min-height: 2.8em;
+}
+html.markdown-loading yona-markdown-renderer:not([data-markdown-ready]) {
+  visibility: hidden;
+}
+html.markdown-loading yona-markdown-renderer:not([data-markdown-ready])::before {
+  content: "Loading Markdown…";
+  position: absolute;
+  top: 15px;
+  left: 20px;
+  visibility: visible;
+  color: #777;
+  font-size: 13px;
+  white-space: normal;
 }
 .markdown-wrap > *:first-child {
   margin-top: 0 !important;

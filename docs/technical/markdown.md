@@ -13,6 +13,10 @@ Always bind escaped text (`th:text`), never pre-rendered HTML or a Markdown attr
 
 Each element captures its source once. Replacing content requires a new element. The renderer retains an inert `<template>` snapshot so Turbo's `cloneNode(true)` cache restores Markdown rather than reparsing rendered text. Reconnecting the same element does not parse again. There is no MutationObserver or Turbo dependency in the renderer.
 
+The blocking `yona.css` stylesheet reserves loading space using the escaped source's native `pre-wrap` layout (including line breaks and width-dependent wrapping), with the renderer's typography and padding. A small head bootstrap opts JavaScript-capable browsers into source concealment and a visible loading cue before module download. No-JavaScript browsers retain readable source; module network/evaluation failures remove concealment. This is an approximate text-height reservation, not a prediction of heading, image or Mermaid dimensions. No fixed height or duplicate visible source survives rendering or resizing.
+
+`data-markdown-ready` is removed on connection, including Turbo clones, and added only after Lit mounts output and synchronous structural plugins/enhancement setup completes. The `markdown-rendered` event follows that marker. Asynchronous references, syntax highlighting, images and diagrams can settle afterward. Source removal and Lit mounting run in the same browser turn, without painting an empty intermediate host.
+
 ## Editor
 
 `site/layout :: markdownEditor` renders the real form textarea inside `<yona-markdown-editor>`. JavaScript retains that node; its `value`, `defaultValue`, selection and native form reset remain authoritative. The form is usable without JavaScript.

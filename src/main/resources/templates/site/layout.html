@@ -29,9 +29,20 @@
   <!-- Styles are shared; highlight core and grammars load only for code fences. -->
   <link rel="stylesheet" type="text/css" href="/javascripts/lib/highlight/styles/default.css" />
   <link rel="stylesheet" type="text/css" media="all" href="/stylesheets/usermenu.css">
-  <link rel="stylesheet" type="text/css" media="all" href="/stylesheets/yona.css?v=20260614-2">
+  <link rel="stylesheet" type="text/css" media="all" href="/stylesheets/yona.css?v=20260929-markdown-loading">
   <link rel="stylesheet" type="text/css" media="all" href="/javascripts/lib/nprogress/nprogress.css">
   <link rel="stylesheet" href="/javascripts/lib/viewerjs/viewer.css">
+  <script>
+    if ('customElements' in window && 'noModule' in document.createElement('script')) {
+      document.documentElement.classList.add('markdown-loading');
+      // Also restore source after module evaluation errors, not just network failures.
+      window.addEventListener('load', function () {
+        if (!customElements.get('yona-markdown-renderer')) {
+          document.documentElement.classList.remove('markdown-loading');
+        }
+      }, {once: true});
+    }
+  </script>
   <script type="text/javascript" src="/javascripts/yona-layout.js"></script>
   <script type="text/javascript" src="/messages.js"></script>
   <script type="text/javascript" sec:authorize="isAuthenticated()">
@@ -643,7 +654,8 @@
     <script type="text/javascript" src="/javascripts/common/yona.Usermenu.js"></script>
     <script type="text/javascript" src="/javascripts/common/yona.LoginDialog.js"></script>
     <script type="text/javascript" src="/javascripts/lib/viewerjs/viewer.js"></script>
-    <script type="module" src="/javascripts/markdown/yona-markdown-renderer.js"></script>
+    <script type="module" src="/javascripts/markdown/yona-markdown-renderer.js"
+            onerror="document.documentElement.classList.remove('markdown-loading')"></script>
     <script type="module" src="/javascripts/markdown/yona-markdown-editor.js"></script>
 
     <script type="text/javascript">
