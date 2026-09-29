@@ -35,6 +35,10 @@ class DataBackupServiceImplSpec : DescribeSpec({
         every { connection.metaData } returns metaData
         every { connection.catalog } returns "test_catalog"
         every { connection.schema } returns "test_schema"
+        // importAll()의 미완료 큐 작업 확인 — 기본은 0건
+        every {
+            jdbcTemplate.queryForObject(match<String> { it.contains("FROM queue_job") }, Long::class.javaObjectType)
+        } returns 0L
     }
 
     // hasIdColumn()과 dateTimeColumns() 둘 다 getColumns(catalog, schema, table, null)를 같은
@@ -433,6 +437,64 @@ class DataBackupServiceImplSpec : DescribeSpec({
             service.importAll(json)
 
             // Exception 안나면 성공
+        }
+    }
+
+    describe("큐 테이블 제외") {
+        it("exportAll은 큐 테이블(대소문자 무관)의 행과 sequence를 조회하지 않는다") {
+            every { metaData.databaseProductName } returns "Oracle"
+            val tablesRs = mockk<ResultSet>(relaxed = true)
+            every { metaData.getTables(any(), any(), any(), any()) } returns tablesRs
+            every { tablesRs.next() } returnsMany listOf(true, true, true, false)
+            every { tablesRs.getString("TABLE_NAME") } returnsMany listOf("N4USER", "QUEUE_JOB", "queue_meta")
+            every { jdbcTemplate.queryForList("SELECT * FROM N4USER") } returns listOf(mapOf("id" to 1))
+
+            val json = String(service.exportAll())
+
+            json.contains("QUEUE_JOB") shouldBe false
+            json.contains("queue_meta") shouldBe false
+            verify(exactly = 0) { jdbcTemplate.queryForList("SELECT * FROM QUEUE_JOB") }
+            verify(exactly = 0) { jdbcTemplate.queryForList("SELECT * FROM queue_meta") }
+        }
+
+        it("importAll은 백업에 큐 테이블이 있어도 DELETE/INSERT하지 않는다") {
+            every { metaData.databaseProductName } returns "OTHER"
+            val dump = """{"tables":{"QUEUE_JOB":[{"id":1}],"queue_meta":[{"counter_name":"next-id"}]},"sequences":{}}"""
+
+            service.importAll(dump.toByteArray())
+
+            verify(exactly = 0) { jdbcTemplate.update(match<String> { it.contains("queue_", ignoreCase = true) }) }
+            verify(exactly = 0) { jdbcTemplate.update(match<String> { it.contains("queue_", ignoreCase = true) }, *anyVararg()) }
+        }
+
+        it("미완료 큐 작업이 있으면 아무것도 삭제하지 않고 UnfinishedQueueJobsException으로 거부한다") {
+            every { metaData.databaseProductName } returns "MySQL"
+            every {
+                jdbcTemplate.queryForObject(match<String> { it.contains("FROM queue_job") }, Long::class.javaObjectType)
+            } returns 2L
+            val dump = """{"tables":{"n4user":[{"id":1}]},"sequences":{}}"""
+
+            io.kotest.assertions.throwables.shouldThrow<UnfinishedQueueJobsException> {
+                service.importAll(dump.toByteArray())
+            }
+
+            verify(exactly = 0) { jdbcTemplate.update(match<String> { it.startsWith("DELETE") }) }
+            verify(exactly = 0) { jdbcTemplate.execute(match<String> { it.contains("FOREIGN_KEY_CHECKS") }) }
+        }
+
+        it("복원 실패 시 FK 재활성화 실패가 원래 예외를 덮어쓰지 않고 suppressed로 붙는다") {
+            every { metaData.databaseProductName } returns "MySQL"
+            val original = RuntimeException("insert failed")
+            every { jdbcTemplate.update("DELETE FROM n4user") } throws original
+            every { jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1") } throws IllegalStateException("aborted")
+            val dump = """{"tables":{"n4user":[{"id":1}]},"sequences":{}}"""
+
+            val thrown = io.kotest.assertions.throwables.shouldThrow<RuntimeException> {
+                service.importAll(dump.toByteArray())
+            }
+
+            thrown shouldBe original
+            thrown.suppressed.size shouldBe 1
         }
     }
 })

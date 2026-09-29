@@ -13,6 +13,7 @@ import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.PostgreSQLContainer
 import tools.jackson.databind.ObjectMapper
 import javax.sql.DataSource
+import com.github.yonaprojects.yona.queue.Queue
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 
@@ -30,7 +31,8 @@ class DataBackupServicePostgresIntegrationSpec @Autowired constructor(
     private val dataBackupService: DataBackupService,
     private val userRepository: UserRepository,
     private val dataSource: DataSource,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val queue: Queue
 ) : DescribeSpec() {
 
     override fun extensions() = listOf(SpringExtension)
@@ -59,6 +61,8 @@ class DataBackupServicePostgresIntegrationSpec @Autowired constructor(
     private val jdbc: JdbcTemplate by lazy { JdbcTemplate(dataSource) }
 
     init {
+        queueBackupScenarios(dataBackupService, queue, userRepository, jdbc, objectMapper)
+
         describe("DataBackupService PostgreSQL 복원 시퀀스 재설정 (P1-33/34)") {
             it("복원된 PK 이후에 저장되는 신규 행이 시퀀스 충돌 없이 저장돼야 한다") {
                 // Given: 백업 데이터 자체가 PK=1을 이미 점유하고 있는 상태(디저스터 리커버리 시나리오,

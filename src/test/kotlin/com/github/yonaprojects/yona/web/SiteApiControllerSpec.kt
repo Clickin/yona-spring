@@ -430,6 +430,20 @@ class SiteApiControllerSpec : DescribeSpec({
                     .andExpect(view().name("error/400"))
             }
 
+            it("미완료 큐 작업으로 거부되면 데이터 관리 화면으로 flash 메시지와 함께 리다이렉트") {
+                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
+                every { dataBackupService.importAll(any()) } throws
+                    com.github.yonaprojects.yona.domain.site.UnfinishedQueueJobsException("busy")
+                val file = MockMultipartFile("data", "test.json", "application/json", "testdata".toByteArray())
+
+                mockMvc.perform(multipart("/site/import")
+                    .file(file)
+                    .principal(adminAuth))
+                    .andExpect(status().is3xxRedirection)
+                    .andExpect(redirectedUrl("/site/data"))
+                    .andExpect(flash().attribute("importError", "site.data.import.queueBusy"))
+            }
+
             it("파일이 비어있으면 import 수행 안하고 리다이렉트") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
                 val file = MockMultipartFile("data", "test.json", "application/json", ByteArray(0))

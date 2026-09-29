@@ -22,6 +22,15 @@ const val QUEUE_PRIORITY_MIN: Short = -128
 const val QUEUE_PRIORITY_DEFAULT: Short = 0
 const val QUEUE_PRIORITY_MAX: Short = 127
 
+// 큐 엔티티가 사용하는 테이블 전체. 사이트 데이터 export/import가 이 테이블을 제외할 때 쓴다.
+// prefix 매칭 대신 명시 목록만 사용하며, 비교는 소문자 기준이다(H2는 대문자로 보고한다).
+val QUEUE_TABLE_NAMES: Set<String> = setOf(
+    "queue_meta", "queue_job", "queue_idempotency_key", "queue_attempt",
+    "queue_job_resource", "queue_resource_lock", "queue_admin_audit", "queue_artifact",
+)
+
+fun isQueueTable(name: String): Boolean = name.lowercase() in QUEUE_TABLE_NAMES
+
 @Entity
 @Table(name = "queue_meta")
 class QueueCounter(

@@ -12,6 +12,7 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import tools.jackson.databind.ObjectMapper
 import javax.sql.DataSource
+import com.github.yonaprojects.yona.queue.Queue
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 
@@ -28,7 +29,8 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
     private val dataBackupService: DataBackupService,
     private val userRepository: UserRepository,
     private val dataSource: DataSource,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val queue: Queue
 ) : DescribeSpec() {
 
     override fun extensions() = listOf(SpringExtension)
@@ -48,6 +50,8 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
     private val jdbc: JdbcTemplate by lazy { JdbcTemplate(dataSource) }
 
     init {
+        queueBackupScenarios(dataBackupService, queue, userRepository, jdbc, objectMapper)
+
         describe("DataBackupService H2 복원 시퀀스 재설정") {
             it("복원된 PK 이후에 저장되는 신규 행이 시퀀스 충돌 없이 저장돼야 한다") {
                 // H2는 unquoted DDL 식별자를 대문자로 접어 저장한다(listTables()가 실제

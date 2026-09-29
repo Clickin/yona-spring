@@ -9,6 +9,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.mail.MailService
 import com.github.yonaprojects.yona.domain.site.DataBackupService
+import com.github.yonaprojects.yona.domain.site.UnfinishedQueueJobsException
 import com.github.yonaprojects.yona.domain.support.YonaUpdateService
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpHeaders
@@ -256,6 +257,10 @@ class SiteApiController(
         if (!file.isEmpty) {
             try {
                 dataBackupService.importAll(file.bytes)
+            } catch (e: UnfinishedQueueJobsException) {
+                // 미완료 큐 작업이 있으면 데이터 관리 화면으로 돌려보내 안내한다.
+                redirectAttributes.addFlashAttribute("importError", "site.data.import.queueBusy")
+                return "redirect:/site/data"
             } catch (e: Exception) {
                 return "error/400"
             }

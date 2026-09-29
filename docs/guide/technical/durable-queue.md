@@ -142,6 +142,10 @@ Spring MVC `SseEmitter`를 사용하며 Tomcat 내부 API나 connector protocol 
 
 권한·세션을 잃으면 2초 안에 추가 전송을 중단하고 `complete()`를 요청한다. Write가 2초 이상 막힌 stream은 다른 stream과 격리하고 이후 이벤트를 보내지 않는다. 이미 진행 중인 write와 실제 OS socket 종료 시점은 컨테이너 write timeout에 맡기며 앱이 보장하지 않는다. 종료 시 신규 연결을 거부하고 웹 서버 graceful shutdown보다 먼저 모든 emitter의 종료를 요청한다.
 
+## 사이트 데이터 export/import
+
+사이트 데이터 export/import(`/sites/export`, `/sites/import`)는 `queue_*` 테이블 8개(`queue_meta`, `queue_job`, `queue_idempotency_key`, `queue_attempt`, `queue_job_resource`, `queue_resource_lock`, `queue_admin_audit`, `queue_artifact`)를 제외한다. Export 파일에는 큐 데이터가 없고, 구버전 백업에 큐 테이블이 있어도 import는 무시하며 대상의 큐 이력·멱등성 키·감사·카운터를 그대로 둔다. 대상에 QUEUED/RUNNING/RETRY_WAIT/CANCEL_REQUESTED 작업이 있으면 아무것도 변경하지 않고 import를 거부하고 데이터 관리 화면에 안내를 표시한다. Export/import로 DB 엔진을 옮길 때 큐 이력과 감사는 이전되지 않으므로, 먼저 큐를 비우고(작업을 완료하거나 취소) 진행한다.
+
 ## 관측과 업그레이드
 
 - `yona.queue.jobs{status=...}`: QUEUED/RUNNING/RETRY_WAIT/CANCEL_REQUESTED/FAILED 현재 수.

@@ -1,5 +1,6 @@
 package com.github.yonaprojects.yona.domain.site
 
+import com.github.yonaprojects.yona.queue.isQueueTable
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
@@ -40,7 +41,15 @@ import javax.sql.DataSource
  * `Instant`→`Timestamp`로 변환해 바인딩하도록 수정했다. yona는 애초에 `DefaultExchanger`의
  * `putTimestamp()`/`timestamp()` 헬퍼로 각 필드를 타입 그대로 다루기 때문에 이 문제 자체가
  * 없었다 — 자동 테이블 탐지 방식으로 단순화하며 새로 생긴, yona에는 없던 결함이었다.
+ *
+ * durable queue 테이블(`isQueueTable()`)은 export/import 대상에서 제외한다. `queue_job.payload`가
+ * 바이너리 컬럼이라 JSON(base64 문자열) 왕복 시 H2/MariaDB에서는 payload가 조용히 손상되고
+ * PostgreSQL에서는 복원 전체가 실패한다. 대상 DB의 큐 이력/멱등성 키/감사/카운터는 그대로
+ * 유지하며, 미완료 큐 작업이 있으면 import를 거부한다(`UnfinishedQueueJobsException`).
  */
+/** 대기·실행 중인 작업 큐 작업이 있어 import를 거부할 때 던진다(IllegalArgumentException 서브타입이 아니다). */
+class UnfinishedQueueJobsException(message: String) : RuntimeException(message)
+
 @Service
 class DataBackupServiceImpl(
     private val dataSource: DataSource,
@@ -53,7 +62,7 @@ class DataBackupServiceImpl(
     private enum class Dialect { MYSQL_COMPATIBLE, POSTGRES, H2, CUBRID, OTHER }
 
     override fun exportAll(): ByteArray {
-        val tables = listTables()
+        val tables = listTables().filterNot { isQueueTable(it) }
         val dialect = detectDialect()
         val dump = LinkedHashMap<String, List<Map<String, Any?>>>()
         val sequences = LinkedHashMap<String, Long>()
@@ -75,9 +84,20 @@ class DataBackupServiceImpl(
             ?: emptyMap()
         val dialect = detectDialect()
 
+        // 삭제/FK 토글 전에 거부해야 아무것도 바뀌지 않는다.
+        val unfinished = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM queue_job WHERE status IN ('QUEUED','RUNNING','RETRY_WAIT','CANCEL_REQUESTED')",
+            Long::class.javaObjectType
+        ) ?: 0L
+        if (unfinished > 0) {
+            throw UnfinishedQueueJobsException("완료되지 않은 작업 큐 작업이 ${unfinished}건 있어 import할 수 없습니다")
+        }
+
         setForeignKeyChecks(dialect, enabled = false)
         try {
             for ((table, rows) in dump) {
+                // 구버전 백업에 들어있는 큐 테이블은 무시한다(DELETE/INSERT 모두 하지 않는다).
+                if (isQueueTable(table)) continue
                 jdbcTemplate.update("DELETE FROM $table")
                 val dateTimeColumns = dateTimeColumns(table)
                 for (row in rows) {
@@ -85,10 +105,17 @@ class DataBackupServiceImpl(
                 }
                 sequences[table]?.let { restoreSequence(table, dialect, it) }
             }
-            logger.info("데이터 복원 완료: ${dump.size}개 테이블")
-        } finally {
-            setForeignKeyChecks(dialect, enabled = true)
+            logger.info("데이터 복원 완료: ${dump.count { !isQueueTable(it.key) }}개 테이블")
+        } catch (e: Throwable) {
+            // 복원 실패 원인을 finally의 FK 재활성화 실패(예: PostgreSQL 25P02)가 덮어쓰지 않도록 suppressed로 붙인다.
+            try {
+                setForeignKeyChecks(dialect, enabled = true)
+            } catch (restoreFailure: Exception) {
+                e.addSuppressed(restoreFailure)
+            }
+            throw e
         }
+        setForeignKeyChecks(dialect, enabled = true)
     }
 
     // CUBRID JDBC 드라이버는 Connection.getSchema()(JDBC 4.1)를 지원하지 않아 UnsupportedOperationException을

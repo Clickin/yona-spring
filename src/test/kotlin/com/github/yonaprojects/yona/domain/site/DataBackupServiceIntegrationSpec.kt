@@ -8,6 +8,8 @@ import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
+import com.github.yonaprojects.yona.queue.Queue
+import tools.jackson.databind.ObjectMapper
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
 import org.springframework.beans.factory.annotation.Autowired
@@ -25,7 +27,9 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
     private val userRepository: UserRepository,
     private val projectRepository: ProjectRepository,
     private val organizationRepository: OrganizationRepository,
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
+    private val queue: Queue,
+    private val objectMapper: ObjectMapper
 ) : AbstractIntegrationTest() {
 
     override fun extensions() = listOf(SpringExtension)
@@ -38,6 +42,8 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
         // 같은 메커니즘을 DataBackupServicePostgresIntegrationSpec이 방언에 맞는 SQL로 이미
         // 별도 검증하므로, 여기서는 MariaDB(기본값)일 때만 실행한다.
         if (System.getProperty("yona.it.db", "mariadb") == "mariadb") {
+        queueBackupScenarios(dataBackupService, queue, userRepository, jdbc, objectMapper)
+
         describe("DataBackupService export/import 왕복") {
             it("백업 시점 이후에 추가된 데이터는 해당 백업으로 복원하면 사라져야 한다") {
                 // Given: 기준 시점 데이터
