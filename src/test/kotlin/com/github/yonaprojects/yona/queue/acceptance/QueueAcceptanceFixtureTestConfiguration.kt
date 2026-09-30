@@ -264,7 +264,7 @@ class ProcessQueueAcceptanceFixture(
         val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
         val classpath = System.getProperty("yona.test.runtime-classpath")?.takeIf { it.isNotBlank() }
             ?: throw TestAbortedException("SETUP: Gradle did not expose this test task's runtime classpath")
-        val command = mutableListOf(java, "-cp", classpath, QueueWorkerProcessMain::class.java.name)
+        val command = mutableListOf(java, "-Dh2.bindAddress=127.0.0.1", "-cp", classpath, QueueWorkerProcessMain::class.java.name)
         val applicationData = database.dataDirectory.resolve("applications").resolve(instanceId).toAbsolutePath()
         val properties = linkedMapOf(
             "spring.profiles.active" to "test",
@@ -540,7 +540,7 @@ private class ChildQueueWorkerProcess(
         try {
             awaitMessage(timeoutMillis, "QUEUE_ACCEPTANCE_READY:$instanceId")
         } catch (failure: IllegalStateException) {
-            throw TestAbortedException("SETUP: worker JVM $instanceId did not become ready", failure)
+            throw AssertionError("Worker JVM $instanceId did not become ready", failure)
         }
 
     }

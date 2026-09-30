@@ -266,3 +266,10 @@ e2e/node_modules/.bin/playwright test --config=e2e/queue/playwright.config.ts
 주기 작업의 발화는 poller, 실제 실행은 일반 worker claim 경로가 맡는다. 발화 시 `enqueue(type, v, payload, dueAt = 발화시각, idempotencyKey = "<type>@<발화시각 epoch>", callerScope = "recurring")`를 호출한다. 여러 node가 발화해도 idempotency로 job 한 건만 생성하므로 leader election은 필요 없다. 이전 발화와 겹칠 때 `overlap = SKIP | QUEUE`를 제공하며 기본 SKIP으로 설계한다. 발화용 enqueue의 lock timeout은 1초로 제한하고 실패하면 다음 loop에서 재시도해 next-id 대기가 poller를 장시간 막지 않게 한다.
 
 Worker는 자기 handler의 종결 전이, resource 해제, staging 정리, 물리 guard 해제와 slot 반환을 마지막 `finally`에서 책임진다. Poller는 lease가 만료된 소유자 복구를 맡으며 handler를 직접 실행하지 않는다. 주기적인 소량의 orphan 정리는 전용 scheduler가 맡는다.
+
+## 로컬 H2 다중 프로세스 acceptance
+
+파일 기반 H2 `AUTO_SERVER=TRUE` fixture는 테스트 JVM과 자식 worker JVM 모두
+`h2.bindAddress=127.0.0.1`을 사용한다. 호스트의 외부 인터페이스를 advertise하여
+자식 worker가 로컬 DB에 연결하지 못하는 상황을 피한다. DB fixture가 준비된 뒤
+worker application이 READY를 내지 못하면 setup skip이 아니라 테스트 실패로 처리한다.

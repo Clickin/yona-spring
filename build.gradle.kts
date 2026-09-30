@@ -261,6 +261,8 @@ tasks.withType<Test> {
 	maxHeapSize = "2048m"
 	systemProperty("spring.profiles.active", "test")
 	systemProperty("testcontainers.host", "127.0.0.1")
+	// AUTO_SERVER must advertise loopback to the separate local acceptance worker JVMs.
+	systemProperty("h2.bindAddress", "127.0.0.1")
 	systemProperty("api.version", "1.44")
 	// AbstractIntegrationTest의 DB 컨테이너 선택 스위치(mariadb|postgres|mysql|mssql|cubrid).
 	// -Dyona.it.db=... 로 gradle CLI에 준 값을 포크된 테스트 JVM까지 그대로 전달한다.
