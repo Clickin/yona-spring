@@ -6,7 +6,7 @@ import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.user.UserState
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.mail.MailService
-import com.github.yonaprojects.yona.domain.site.DataBackupService
+import com.github.yonaprojects.yona.domain.site.DataBackupJobs
 import com.github.yonaprojects.yona.domain.support.YonaUpdateService
 import io.kotest.core.spec.style.DescribeSpec
 import io.mockk.*
@@ -18,7 +18,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import tools.jackson.databind.ObjectMapper
-import java.io.OutputStream
 import java.util.*
 
 class SiteApiControllerSpec : DescribeSpec({
@@ -27,7 +26,7 @@ class SiteApiControllerSpec : DescribeSpec({
     val projectRepository = mockk<ProjectRepository>(relaxed = true)
     val mailService = mockk<MailService>(relaxed = true)
     val yonaUpdateService = mockk<YonaUpdateService>(relaxed = true)
-    val dataBackupService = mockk<DataBackupService>(relaxed = true)
+    val dataBackupJobs = mockk<DataBackupJobs>(relaxed = true)
     val objectMapper = mockk<ObjectMapper>(relaxed = true)
     val environment = mockk<Environment>(relaxed = true)
 
@@ -37,7 +36,7 @@ class SiteApiControllerSpec : DescribeSpec({
         projectRepository,
         mailService,
         yonaUpdateService,
-        dataBackupService,
+        dataBackupJobs,
         objectMapper,
         environment
     )
@@ -51,7 +50,7 @@ class SiteApiControllerSpec : DescribeSpec({
             projectRepository,
             mailService,
             yonaUpdateService,
-            dataBackupService,
+            dataBackupJobs,
             objectMapper,
             environment
         )
@@ -392,112 +391,68 @@ class SiteApiControllerSpec : DescribeSpec({
             }
         }
 
-        describe("GET /site/export") {
-            it("데이터 익스포트 반환") {
+        describe("archive job submission") {
+            it("redirects a project export submission to its queue job under the context path") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.exportSite(any<OutputStream>()) } answers {
-                    firstArg<OutputStream>().write("testdata".toByteArray())
-                }
+                every { dataBackupJobs.export("owner/name", any()) } returns 42L
 
-                mockMvc.perform(get("/site/export")
+                mockMvc.perform(post("/yona/sites/export")
+                    .contextPath("/yona")
+                    .param("project", "owner/name")
                     .principal(adminAuth))
-                    .andExpect(status().isOk)
-                    .andExpect(header().exists("Content-Disposition"))
-                    .andExpect(content().bytes("testdata".toByteArray()))
+                    .andExpect(status().isSeeOther)
+                    .andExpect(redirectedUrl("/yona/site/admin/queue?selected=42"))
             }
 
-            it("프로젝트 백업 요청은 프로젝트 범위로 내보낸다") {
-                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.exportProject("owner", "name", any<OutputStream>()) } answers {
-                    thirdArg<OutputStream>().write("project-zip".toByteArray())
-                }
-
-                mockMvc.perform(get("/site/export").param("project", "owner/name")
-                    .principal(adminAuth))
-                    .andExpect(status().isOk)
-                    .andExpect(content().bytes("project-zip".toByteArray()))
-            }
-
-            it("잘못된 project 파라미터는 400") {
+            it("rejects malformed project names without submitting a job") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
 
-                mockMvc.perform(get("/site/export").param("project", "ownername")
+                mockMvc.perform(post("/site/export").param("project", "ownername")
                     .principal(adminAuth))
                     .andExpect(status().isBadRequest)
+                verify(exactly = 0) { dataBackupJobs.export(any(), any()) }
             }
-        }
 
-        describe("POST /site/import") {
-            it("사이트 백업이면 전체 복원 후 데이터 관리 화면으로 리다이렉트") {
+            it("does not allow GET to submit exports") {
+                mockMvc.perform(get("/site/export"))
+                    .andExpect(status().isMethodNotAllowed)
+                verify(exactly = 0) { dataBackupJobs.export(any(), any()) }
+            }
+
+            it("rejects non-admin archive submissions") {
+                every { userRepository.findByLoginId("user") } returns Optional.of(normalUser)
+                val file = MockMultipartFile("data", "backup.zip", "application/zip", byteArrayOf(1))
+
+                mockMvc.perform(post("/site/export").principal(normalAuth))
+                    .andExpect(status().isForbidden)
+                mockMvc.perform(multipart("/site/import").file(file).principal(normalAuth))
+                    .andExpect(status().isForbidden)
+                verify(exactly = 0) { dataBackupJobs.export(any(), any()) }
+                verify(exactly = 0) { dataBackupJobs.import(any(), any()) }
+            }
+
+            it("redirects an uploaded archive to its queued job under the context path") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_SITE
-                val file = MockMultipartFile("data", "backup.zip", "application/zip", "testdata".toByteArray())
+                every { dataBackupJobs.import(any(), any()) } returns 43L
+                val file = MockMultipartFile("data", "backup.zip", "application/zip", byteArrayOf(1))
 
-                mockMvc.perform(multipart("/site/import")
+                mockMvc.perform(multipart("/yona/sites/import")
                     .file(file)
+                    .contextPath("/yona")
                     .principal(adminAuth))
-                    .andExpect(status().is3xxRedirection)
-                    .andExpect(redirectedUrl("/site/data"))
-                    .andExpect(flash().attribute("importSiteSuccess", true))
-
-                verify(exactly = 1) { dataBackupService.importSite(any()) }
+                    .andExpect(status().isSeeOther)
+                    .andExpect(redirectedUrl("/yona/site/admin/queue?selected=43"))
             }
 
-            it("프로젝트 백업이면 merge 후 어느 이름으로 들어갔는지 알려준다") {
-                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_PROJECT
-                every { dataBackupService.importProject(any()) } returns "owner/name-imported-1"
-                val file = MockMultipartFile("data", "project.zip", "application/zip", "testdata".toByteArray())
-
-                mockMvc.perform(multipart("/site/import")
-                    .file(file)
-                    .principal(adminAuth))
-                    .andExpect(status().is3xxRedirection)
-                    .andExpect(redirectedUrl("/site/data"))
-                    .andExpect(flash().attribute("importProjectName", "owner/name-imported-1"))
-
-                verify(exactly = 1) { dataBackupService.importProject(any()) }
-            }
-
-            it("import 중 예외 발생 시 error/400 반환") {
-                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_SITE
-                every { dataBackupService.importSite(any()) } throws RuntimeException("Error")
-                val file = MockMultipartFile("data", "backup.zip", "application/zip", "testdata".toByteArray())
-
-                mockMvc.perform(multipart("/site/import")
-                    .file(file)
-                    .principal(adminAuth))
-                    .andExpect(status().isOk)
-                    .andExpect(view().name("error/400"))
-            }
-
-            it("미완료 큐 작업으로 거부되면 데이터 관리 화면으로 flash 메시지와 함께 리다이렉트") {
-                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_SITE
-                every { dataBackupService.importSite(any()) } throws
-                    com.github.yonaprojects.yona.domain.site.UnfinishedQueueJobsException("busy")
-                val file = MockMultipartFile("data", "backup.zip", "application/zip", "testdata".toByteArray())
-
-                mockMvc.perform(multipart("/site/import")
-                    .file(file)
-                    .principal(adminAuth))
-                    .andExpect(status().is3xxRedirection)
-                    .andExpect(redirectedUrl("/site/data"))
-                    .andExpect(flash().attribute("importError", "site.data.import.queueBusy"))
-            }
-
-            it("파일이 비어있으면 import 수행 안하고 리다이렉트") {
+            it("returns empty uploads to the form with validation feedback") {
                 every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
                 val file = MockMultipartFile("data", "backup.zip", "application/zip", ByteArray(0))
 
-                mockMvc.perform(multipart("/site/import")
-                    .file(file)
-                    .principal(adminAuth))
+                mockMvc.perform(multipart("/site/import").file(file).principal(adminAuth))
                     .andExpect(status().is3xxRedirection)
                     .andExpect(redirectedUrl("/site/data"))
-
-                verify(exactly = 0) { dataBackupService.importSite(any()) }
+                    .andExpect(flash().attribute("importError", "site.data.import.badArchive"))
+                verify(exactly = 0) { dataBackupJobs.import(any(), any()) }
             }
         }
 

@@ -19,6 +19,8 @@ data class TaskDefinition(
     val replaySafe: Boolean = false,
     val maxAttempts: Int = 5,
     val laneLimit: Int = 1,
+    /** Runs without other queue handlers; uncertain recovery keeps the queue blocked. */
+    val exclusive: Boolean = false,
 )
 
 internal data class DecodedTaskPayload(val node: JsonNode, val resourceKeys: List<String>)
@@ -52,13 +54,16 @@ class TaskRegistry(definitions: List<TaskDefinition>) {
         require(node != null && node.isObject) { "Payload must be a JSON object" }
         definition.validate(node)
         val keys = definition.resourceKeys(node)
+        require(EXCLUSIVE_RESOURCE !in keys) { "Reserved queue resource identity" }
+        val executionKeys = if (definition.exclusive) keys + EXCLUSIVE_RESOURCE else keys
         require(keys.all { it.length <= 300 && RESOURCE.matches(it) }) { "Invalid queue resource identity" }
-        val normalized = if (keys.size < 2) keys else keys.toSortedSet().toList()
+        val normalized = if (executionKeys.size < 2) executionKeys else executionKeys.toSortedSet().toList()
         require(normalized.size <= 16) { "Too many queue resource identities" }
         return DecodedTaskPayload(node, normalized)
     }
 
     companion object {
+        internal const val EXCLUSIVE_RESOURCE = "queue:exclusive"
         internal val TYPE = Regex("[a-z0-9._-]{1,120}")
         internal val RESOURCE = Regex("[a-z0-9._-]+:[a-z0-9._-]+")
     }

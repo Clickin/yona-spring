@@ -464,9 +464,10 @@ class IssueViewController(
 
         // legacy issue/partial_comment.scala.html의 isAllowed(..., Operation.DELETE) 대응 —
         // 매니저는 남의 댓글도 삭제할 수 있다(CommentController의 실제 권한 체크와 동일 기준).
-        val isProjectManager = loginUser != null && projectUserRepository.findByProjectIdAndUserId(project.id!!, loginUser.id!!)
-            .map { it.role.id == RoleType.MANAGER.roleType }
-            .orElse(false)
+        val isProjectManager = loginUser != null && (loginUser.isSiteManager ||
+            projectUserRepository.findByProjectIdAndUserId(project.id!!, loginUser.id!!)
+                .map { it.role.id == RoleType.MANAGER.roleType }
+                .orElse(false))
 
         model.addAttribute("childCommentsByParentId", childCommentsByParentId)
         model.addAttribute("isProjectManager", isProjectManager)

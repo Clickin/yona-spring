@@ -25,6 +25,7 @@ internal data class QueueTransitionPolicy(
     val maxGenerationAttempts: Int,
     val handlerRegistered: Boolean,
     val replaySafe: Boolean,
+    val exclusive: Boolean = false,
 )
 
 internal sealed interface QueueTransitionEvent {
@@ -120,11 +121,13 @@ internal object QueueTransition {
                 else -> reject()
             }
             QueueTransitionEvent.UnclassifiedFailure -> when {
+                cancelling && policy.exclusive -> accept(QueueStatus.RECOVERY_REQUIRED, AttemptOutcome.RECOVERY_REQUIRED)
                 cancelling -> accept(QueueStatus.CANCELLED, AttemptOutcome.RECOVERY_REQUIRED)
                 running -> accept(QueueStatus.RECOVERY_REQUIRED, AttemptOutcome.RECOVERY_REQUIRED)
                 else -> reject()
             }
             QueueTransitionEvent.LeaseExpired -> when {
+                cancelling && policy.exclusive -> accept(QueueStatus.RECOVERY_REQUIRED, AttemptOutcome.LEASE_LOST)
                 cancelling -> accept(QueueStatus.CANCELLED, AttemptOutcome.LEASE_LOST)
                 !running -> reject()
                 !policy.replaySafe -> accept(QueueStatus.RECOVERY_REQUIRED, AttemptOutcome.LEASE_LOST)

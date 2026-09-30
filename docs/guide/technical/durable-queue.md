@@ -1,6 +1,6 @@
 # Durable queue: store, executor and administration
 
-enqueue/query, 순수 상태 전이 모델, 애플리케이션 내부 실행기와 관리자 REST/SSE API 및 Thymeleaf 관리 UI를 제공한다. Archive exporter/importer는 포함하지 않는다. 기존 메일·웹훅 등 callback 호출 경로는 변경하지 않는다. Queue는 항상 켜지는 핵심 인프라이며 별도 활성화 스위치는 없다. 실행할 수 있는 작업은 애플리케이션이 명시적으로 등록한 handler뿐이다.
+enqueue/query, 순수 상태 전이 모델, 애플리케이션 내부 실행기와 관리자 REST/SSE API 및 Thymeleaf 관리 UI를 제공한다. 사이트/프로젝트 archive exporter/importer도 이 큐의 handler로 실행한다. 기존 메일·웹훅 등 callback 호출 경로는 변경하지 않는다. Queue는 항상 켜지는 핵심 인프라이며 별도 활성화 스위치는 없다. 실행할 수 있는 작업은 애플리케이션이 명시적으로 등록한 handler뿐이다.
 
 ## 애플리케이션 인터페이스
 
@@ -41,7 +41,11 @@ Hibernate 7.4.5의 [CUBRID dialect](https://github.com/hibernate/hibernate-orm/b
 Quartz 등 별도 scheduler의 실행 상태와 업무 DB 상태를 중복 관리하지 않고, 이 store가 요구하는 caller transaction·정확한 idempotency·상태 전이를 직접 보존한다. 이 선택은 애플리케이션 전체의 active-active 지원을 의미하지 않는다.
 ## 실행과 복구
 
-`TaskDefinition`에 `handler`, `replaySafe`, `maxAttempts`, `laneLimit`을 등록한다. Validation-only 등록에는 handler가 없으므로 실행하지 않는다. 알 수 없는 type/version은 원본 payload를 유지한 채 `BLOCKED_UNSUPPORTED`로 남으며, 등록만으로 자동 재실행하지 않는다.
+`TaskDefinition`에 `handler`, `replaySafe`, `maxAttempts`, `laneLimit`, `exclusive`를 등록한다. Validation-only 등록에는 handler가 없으므로 실행하지 않는다. 알 수 없는 type/version은 원본 payload를 유지한 채 `BLOCKED_UNSUPPORTED`로 남으며, 등록만으로 자동 재실행하지 않는다.
+
+`exclusive=true`는 짧은 claim transaction에서 기존 `next-id` 잠금을 공유해 다른 RUNNING/CANCEL_REQUESTED/RECOVERY_REQUIRED 작업과의 동시 claim을 막는다. 일반 작업도 실행 중이거나 미해결 복구 상태인 exclusive 작업을 넘어서 claim하지 못한다. 제출 자체는 계속 가능하다. 예약 resource `queue:exclusive`를 registry가 자동 추가하므로 정의가 없는 node에서도 배타 상태를 식별하며, task가 이 key를 직접 지정할 수는 없다. 배타 task는 자체 resource를 최대 15개 지정할 수 있다.
+
+이는 durable 상태의 배타 규칙이지 임의의 stale filesystem handler를 중단하는 기능이 아니다. 현재 archive 작업은 `site:archive` 물리 guard도 공유한다. 앞으로 DB/저장소를 변경하는 유지보수 handler(`git gc` 등)를 추가할 때도 archive와 충돌하는 작업은 이 guard에 참여해야 한다. 일반 HTTP 쓰기와 큐 밖의 작업은 별도 운영 절차로 중지한다.
 
 기본 `yona.queue` 설정:
 
@@ -89,7 +93,7 @@ Java 21에서는 `synchronized` 안의 blocking IO가 carrier 스레드를 pinni
 
 명시적 `RetryableTaskFailure`만 자동 재시도한다. `PermanentTaskFailure`는 실패, `RecoveryRequiredTaskFailure`와 미분류 예외는 운영자 확인 상태가 된다. 기본 attempt 한도는 generation당 5회이며, 지연은 exponential ceiling의 1/2~1 사이 deterministic jitter다. 수동 retry는 generation만 새로 시작하고 전체 attempt 번호·fence·이력을 지우지 않는다.
 
-`QueueControl.cancel/retry/abandon/prioritize`는 DB의 `SITE_ADMIN` 상태를 다시 확인하며 command UUID로 중복을 처리한다. 실행 중 취소는 `CANCEL_REQUESTED`일 뿐 종료가 아니다. 취소 중 handler가 실패하면 실패 종류와 관계없이 즉시 `CANCELLED`로 끝내되 attempt에는 원래 failure outcome, job에는 안전한 error code/summary를 보존한다. 취소 요청 뒤 lease가 만료되면 replay-safe 여부와 관계없이 `CANCELLED`(attempt `LEASE_LOST`)로 끝난다. Job의 error code는 `LEASE_LOST`이고 종료 시각을 기록하며 failed counter는 바꾸지 않는다. 이전 handler가 반환될 때까지 resource는 해제되지 않는다. 종료 중 협력 취소(`CooperativeCancel` + `shutdownRequested`)의 계약은 바꾸지 않는다. 이미 취소 중/취소된 작업에 새 cancel을 보내면 멱등성용 audit만 남기고 change-generation은 늘리지 않는다. 메모리 취소 신호는 외부 업무 트랜잭션까지 commit된 뒤에 전달한다. `RECOVERY_REQUIRED` 재실행은 명시적 확인과 최대 300 Unicode code points의 사유가 필요하다. 수동 retry도 enqueue와 같은 admission lock·현재 pending 수를 사용하며, 용량이 가득 차면 `QUEUE_FULL`로 거부하고 상태·감사를 변경하지 않는다.
+`QueueControl.cancel/retry/abandon/prioritize`는 DB의 `SITE_ADMIN` 상태를 다시 확인하며 command UUID로 중복을 처리한다. 실행 중 취소는 `CANCEL_REQUESTED`일 뿐 종료가 아니다. 일반 작업은 취소 중 실패/lease 만료 시 `CANCELLED`로 끝내되 attempt의 원래 outcome과 안전한 error code/summary를 보존한다. **Exclusive 작업의 미분류 실패 또는 lease 만료는 취소 중이어도 `RECOVERY_REQUIRED`다.** 변경된 DB·파일이 불확실한 상태를 취소 성공으로 숨기지 않는다. 안전한 협력 취소 완료는 `CANCELLED`로 끝난다. 메모리 취소 신호는 외부 업무 트랜잭션까지 commit된 뒤 전달한다. `RECOVERY_REQUIRED` 재실행은 이전 handler가 중지되고 외부 효과가 대조됐다는 명시적 확인과 최대 300 Unicode code points의 사유가 필요하다. 수동 retry도 enqueue와 같은 admission lock·현재 pending 수를 사용하며, 용량이 가득 차면 `QUEUE_FULL`로 거부하고 상태·감사를 변경하지 않는다.
 
 `abandon`은 `FAILED`, `RECOVERY_REQUIRED`, `BLOCKED_UNSUPPORTED`를 `CANCELLED`로 종결한다. 사유는 필수이며 최대 300 Unicode code points다. `RECOVERY_REQUIRED`에는 별도 확인도 필요하다. FAILED를 종결하면 failed-jobs counter도 같은 트랜잭션에서 줄어든다. 지원하지 않는 handler와 달리 payload 검증 실패는 `INVALID_PAYLOAD`, resource key 불일치는 `RESOURCE_MISMATCH`로 구분하며 모두 `BLOCKED_UNSUPPORTED`에 남긴다.
 
@@ -144,7 +148,21 @@ Spring MVC `SseEmitter`를 사용하며 Tomcat 내부 API나 connector protocol 
 
 ## 사이트 데이터 export/import
 
-사이트 데이터 export/import(`/sites/export`, `/sites/import`)는 `queue_*` 테이블 8개(`queue_meta`, `queue_job`, `queue_idempotency_key`, `queue_attempt`, `queue_job_resource`, `queue_resource_lock`, `queue_admin_audit`, `queue_artifact`)를 제외한다. Export 파일에는 큐 데이터가 없고, 구버전 백업에 큐 테이블이 있어도 import는 무시하며 대상의 큐 이력·멱등성 키·감사·카운터를 그대로 둔다. 대상에 QUEUED/RUNNING/RETRY_WAIT/CANCEL_REQUESTED 작업이 있으면 아무것도 변경하지 않고 import를 거부하고 데이터 관리 화면에 안내를 표시한다. Export/import로 DB 엔진을 옮길 때 큐 이력과 감사는 이전되지 않으므로, 먼저 큐를 비우고(작업을 완료하거나 취소) 진행한다.
+`POST /site/export`, `POST /site/import`(`/sites` 별칭 유지)는 각각 `site.backup-export`, `site.backup-import`를 제출하고 303으로 선택 작업 화면에 이동한다. Export는 `writeArtifact`로 ZIP을 게시한다. Import는 요청 중 파일을 영속 보관한 뒤 식별자·크기·SHA-256만 enqueue하며 upload 동안 DB transaction을 잡지 않는다. Worker에서 무결성을 확인하고 복원한다. 행/바이트 진행과 취소 확인은 복원 transaction과 별도 짧은 transaction으로 처리해 heartbeat를 막지 않는다.
+
+큐 테이블 8개와 큐 파일은 export/import 대상에서 제외하며 큐 이력·멱등성 키·감사·카운터를 유지한다. Import는 `exclusive=true`, `replaySafe=false`이고 자신을 미완료 작업으로 오인하지 않는다. 대기 작업은 import 이후 실행할 수 있다. 변경 시작 후 실패/취소는 `BACKUP_RESTORE_UNCERTAIN`으로 운영자 확인이 필요하다. DB와 파일 교체는 분산 원자적 commit이 아니다. 입력은 성공 후에도 보관하며 종결 확인 후 관리자가 정리한다. 자세한 절차와 디스크·쓰기 중지 요건은 [백업/복원 안내](../backup-restore.md)를 따른다.
+
+Archive는 format 3 / target 2.0이며 manifest 첫 엔트리와 `integrity.ndjson`의 엔트리별 SHA-256/크기,
+중복·경로 안전성·지원 capability를 복원 전에 검사한다. 대상 DB 메타데이터 기반의 디스크 H2 staging으로
+테이블/컬럼/키/참조와 파일을 검증하며 이 단계에서는 대상 행/파일을 변경하지 않는다.
+1.16 CLI migration capability는 raw legacy schema가 아닌 변환된 대상 행만 허용하고,
+명시적 `bootstrapSourceLogin=admin`과 fresh-target 조건을 검사한다. 대상 bootstrap 관리자 자격증명과
+보안/큐 상태는 유지하며 원본 site-admin 권한을 추가하지 않는다. LDAP-only 원본은 대상도 LDAP-only여야 한다.
+Format/target/capability, 무결성, 스키마 또는 준비 단계의 거부는 `BACKUP_INPUT_REJECTED`로 실패한다.
+첫 DB/파일 변경 직전에 mutation marker를 세우며 그 이후 예외는 기존처럼 `RECOVERY_REQUIRED`다.
+PostgreSQL FK 제어 권한 등 준비 실패를 실제 변경 시작으로 오인하지 않는다.
+정확한 archive 계약과 제외 정책은 [백업/복원 안내](../backup-restore.md#아카이브-형식과-116-마이그레이션)를 참고한다.
+
 
 ## 관측과 업그레이드
 

@@ -8,13 +8,12 @@ import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.mail.MailService
-import com.github.yonaprojects.yona.domain.site.DataBackupService
+import com.github.yonaprojects.yona.domain.site.DataBackupJobs
 import com.github.yonaprojects.yona.domain.site.BadBackupArchiveException
 import com.github.yonaprojects.yona.domain.site.UnfinishedQueueJobsException
 import com.github.yonaprojects.yona.domain.support.YonaUpdateService
-import jakarta.servlet.http.HttpServletResponse
+import org.springframework.http.HttpStatus
 import org.springframework.core.env.Environment
-import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
@@ -24,8 +23,10 @@ import org.springframework.util.MultiValueMap
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.servlet.mvc.support.RedirectAttributes
+import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.servlet.ModelAndView
+import org.springframework.web.servlet.view.RedirectView
 import tools.jackson.databind.ObjectMapper
-import java.time.Instant
 
 @Controller
 @RequestMapping(value = ["/site", "/sites"])
@@ -35,7 +36,7 @@ class SiteApiController(
     private val projectRepository: ProjectRepository,
     private val mailService: MailService,
     private val yonaUpdateService: YonaUpdateService,
-    private val dataBackupService: DataBackupService,
+    private val dataBackupJobs: DataBackupJobs,
     private val objectMapper: ObjectMapper,
     private val environment: Environment
 ) {
@@ -233,66 +234,46 @@ class SiteApiController(
         return ResponseEntity.ok(emails)
     }
 
-    // 9. 데이터 백업 다운로드 (사이트 전체 또는 ?project=owner/name 프로젝트 1개 — ZIP 스트리밍)
-    @GetMapping("/export")
+    // 9. 데이터 백업 작업 제출
+    @PostMapping("/export")
     fun exportData(
         authentication: Authentication?,
         @RequestParam(name = "project", required = false) project: String?,
-        response: HttpServletResponse,
-    ) {
+    ): RedirectView {
         checkAdmin(authentication)
-        response.contentType = "application/zip"
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"yona-backup-${Instant.now().epochSecond}.zip\"")
-        if (project == null) {
-            dataBackupService.exportSite(response.outputStream)
-            return
+        if (project != null) {
+            val parts = project.split("/")
+            if (parts.size != 2 || parts.any { it.isBlank() }) {
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST)
+            }
         }
-        val parts = project.split("/")
-        if (parts.size != 2 || parts.any { it.isBlank() }) {
-            response.status = HttpServletResponse.SC_BAD_REQUEST
-            return
-        }
-        try {
-            dataBackupService.exportProject(parts[0], parts[1], response.outputStream)
-        } catch (e: NoSuchElementException) {
-            // 응답 커밋 전이므로 상태 코드로 알릴 수 있다.
-            response.status = HttpServletResponse.SC_NOT_FOUND
+        val jobId = dataBackupJobs.export(project, "site-admin:${authentication!!.name}")
+        return RedirectView("/site/admin/queue?selected=$jobId", true).apply {
+            setStatusCode(HttpStatus.SEE_OTHER)
         }
     }
 
-    // 10. 데이터 업로드 복원 — 사이트 백업이면 전체 교체, 프로젝트 백업이면 기존 사이트에 merge.
+    // 10. 업로드를 보관한 뒤 데이터 복원 작업 제출
     @PostMapping("/import")
     fun importData(
         @RequestParam("data") file: MultipartFile,
         authentication: Authentication?,
         redirectAttributes: RedirectAttributes,
-    ): String {
+    ): ModelAndView {
         checkAdmin(authentication)
-        if (file.isEmpty) return "redirect:/site/data"
-        val projectBackup = try {
-            dataBackupService.backupScope(file.inputStream)
-        } catch (e: Exception) {
-            null
-        } == DataBackupService.SCOPE_PROJECT
-        try {
-            if (projectBackup) {
-                val importedAs = dataBackupService.importProject(file.inputStream)
-                redirectAttributes.addFlashAttribute("importProjectName", importedAs)
-            } else {
-                dataBackupService.importSite(file.inputStream)
-                redirectAttributes.addFlashAttribute("importSiteSuccess", true)
-            }
+        val jobId = try {
+            if (file.isEmpty) throw BadBackupArchiveException("Empty backup archive")
+            file.inputStream.use { dataBackupJobs.import(it, "site-admin:${authentication!!.name}") }
         } catch (e: UnfinishedQueueJobsException) {
-            // 미완료 큐 작업이 있으면 데이터 관리 화면으로 돌려보내 안내한다.
             redirectAttributes.addFlashAttribute("importError", "site.data.import.queueBusy")
-            return "redirect:/site/data"
+            return ModelAndView("redirect:/site/data")
         } catch (e: BadBackupArchiveException) {
             redirectAttributes.addFlashAttribute("importError", "site.data.import.badArchive")
-            return "redirect:/site/data"
-        } catch (e: Exception) {
-            return "error/400"
+            return ModelAndView("redirect:/site/data")
         }
-        return "redirect:/site/data"
+        return ModelAndView(RedirectView("/site/admin/queue?selected=$jobId", true).apply {
+            setStatusCode(HttpStatus.SEE_OTHER)
+        })
     }
 
     // 11. 아바타 없는 유저 리스트 조회 API

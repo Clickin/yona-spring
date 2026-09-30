@@ -72,7 +72,7 @@ class YonaAuthenticationProvider(
             throw BadCredentialsException("비밀번호가 일치하지 않습니다.")
         }
 
-        val principal = if (onLoginSuccess(userDetails.id, password, userDetails.password)) {
+        val principal = if (onLoginSuccess(userDetails.id, password, userDetails.password, userDetails.passwordSalt)) {
             // Remember-me signs with the principal's password hash; use the upgraded persisted hash.
             userDetailsService.loadUserByUsername(userDetails.loginId)
         } else userDetails
@@ -100,36 +100,20 @@ class YonaAuthenticationProvider(
     // 잠근다. lockedUntil이 지나면(checkAccountState 참고) 별도 조작 없이 자동 해제된다 —
     // 관리자가 즉시 풀어주고 싶다면 UserController의 unlockBruteForceLock() 엔드포인트를 쓴다.
     private fun onLoginFailure(userId: Long) {
-        userRepository.findById(userId).ifPresent { user ->
-            user.failedLoginAttempts += 1
-            if (user.failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
-                user.lockedUntil = Instant.now().plus(LOCK_DURATION)
-            }
-            userRepository.save(user)
-        }
+        userRepository.recordLoginFailure(userId, MAX_FAILED_LOGIN_ATTEMPTS, Instant.now().plus(LOCK_DURATION))
     }
 
-    private fun onLoginSuccess(userId: Long, rawPassword: String, storedHash: String): Boolean {
-        var upgraded = false
-        userRepository.findById(userId).ifPresent { user ->
-            var dirty = false
-            if (user.failedLoginAttempts != 0 || user.lockedUntil != null) {
-                user.failedLoginAttempts = 0
-                user.lockedUntil = null
-                dirty = true
-            }
-            // 레거시 SHA-256 해시로 저장된 계정이 로그인에 성공한 순간 그 자리에서 Argon2id로
-            // 재해싱해 저장한다 — 강제 비밀번호 재설정 없이 기존 가입자를 전부 새 포맷으로
-            // 점진적으로 이전하기 위함(PasswordEncodingService 주석 참고).
-            if (passwordEncodingService.needsUpgrade(storedHash)) {
-                user.password = passwordEncodingService.encode(rawPassword)
-                user.passwordSalt = null
-                dirty = true
-                upgraded = true
-            }
-            if (dirty) userRepository.save(user)
-        }
-        return upgraded
+    private fun onLoginSuccess(userId: Long, rawPassword: String, storedHash: String, storedSalt: String): Boolean {
+        userRepository.resetLoginFailures(userId)
+        if (!passwordEncodingService.needsUpgrade(storedHash)) return false
+
+        val user = userRepository.findById(userId).orElse(null) ?: return false
+        if (user.password != storedHash || user.passwordSalt.orEmpty() != storedSalt) return false
+
+        // Preserve the exact nullable DB salt in the CAS; a concurrent reset must win over rehashing.
+        return userRepository.replacePasswordIfUnchanged(
+            userId, user.password, user.passwordSalt, passwordEncodingService.encode(rawPassword)
+        ) != 0
     }
 
     override fun supports(authentication: Class<*>): Boolean {

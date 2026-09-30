@@ -4,18 +4,20 @@ import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserState
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.orm.jpa.JpaTransactionManager
 import org.springframework.orm.jpa.SharedEntityManagerCreator
 import java.time.Instant
 import java.util.UUID
 
 class QueueCancelLeaseExpiryTest {
-    /** An administrator already asked for cancellation; losing the lease must not demand a second decision. */
-    @Test
-    fun leaseExpiryAfterCancelRequestEndsCancelled() {
+    /** Destructive exclusive work needs reconciliation even when cancellation was requested. */
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun leaseExpiryAfterCancelRequestPreservesExclusiveRecovery(exclusive: Boolean) {
         withQueueReviewFixture { fixture ->
-            val definition = TaskDefinition("queue.review.cancel-lease", 1, {}, handler = { _, _ -> })
+            val definition = TaskDefinition("queue.review.cancel-lease", 1, {}, handler = { _, _ -> }, exclusive = exclusive)
             fixture.registry.register(definition)
             val manager = SharedEntityManagerCreator.createSharedEntityManager(
                 (fixture.transactionManager as JpaTransactionManager).entityManagerFactory!!,
@@ -39,7 +41,7 @@ class QueueCancelLeaseExpiryTest {
             assertEquals("CANCEL_REQUESTED", fixture.jobRow(job)?.status)
             Thread.sleep(600)
             assertTrue(store.recoverExpired(job))
-            assertEquals("CANCELLED", fixture.jobRow(job)?.status)
+            assertEquals(if (exclusive) "RECOVERY_REQUIRED" else "CANCELLED", fixture.jobRow(job)?.status)
             assertEquals(listOf("LEASE_LOST"), fixture.attemptRows(job).map { it.status })
             assertEquals("LEASE_LOST", fixture.jdbc.queryForObject("SELECT error_code FROM queue_job WHERE id = ?", String::class.java, job))
             assertNotNull(fixture.jdbc.queryForObject("SELECT finished_at_epoch_ms FROM queue_job WHERE id = ?", Long::class.javaObjectType, job))

@@ -46,6 +46,26 @@ class FavoriteServiceSpec @Autowired constructor(
                 issue = issueRepository.save(Issue(title = "test-issue", body = "body", project = project, number = 1L))
             }
 
+            it("같은 리소스의 즐겨찾기는 사용자별로 독립적으로 추가하고 해제한다") {
+                val other = userRepository.save(User(loginId = "other-favorite", name = "Other", email = "other@example.invalid"))
+                favoriteService.toggleFavoriteProject(user.id!!, project.id!!) shouldBe true
+                favoriteService.toggleFavoriteProject(other.id!!, project.id!!) shouldBe true
+                favoriteService.toggleFavoriteOrganization(user.id!!, organization.id!!) shouldBe true
+                favoriteService.toggleFavoriteOrganization(other.id!!, organization.id!!) shouldBe true
+                favoriteService.toggleFavoriteIssue(user.id!!, issue.id!!) shouldBe true
+                favoriteService.toggleFavoriteIssue(other.id!!, issue.id!!) shouldBe true
+
+                favoriteService.toggleFavoriteProject(user.id!!, project.id!!) shouldBe false
+                favoriteService.toggleFavoriteOrganization(user.id!!, organization.id!!) shouldBe false
+                favoriteService.toggleFavoriteIssue(user.id!!, issue.id!!) shouldBe false
+                favoriteService.getFavoriteProjects(user.id!!).isEmpty() shouldBe true
+                favoriteService.getFavoriteOrganizations(user.id!!).isEmpty() shouldBe true
+                favoriteService.getFavoriteIssues(user.id!!).isEmpty() shouldBe true
+                favoriteService.getFavoriteProjects(other.id!!).map { it.project.id } shouldBe listOf(project.id)
+                favoriteService.getFavoriteOrganizations(other.id!!).map { it.organization.id } shouldBe listOf(organization.id)
+                favoriteService.getFavoriteIssues(other.id!!).map { it.issue.id } shouldBe listOf(issue.id)
+            }
+
             describe("Project 즐겨찾기") {
                 it("추가 및 해제") {
                     favoriteService.toggleFavoriteProject(user.id!!, project.id!!) shouldBe true

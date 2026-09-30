@@ -40,6 +40,7 @@ class DataBackupServicePostgresIntegrationSpec @Autowired constructor(
     override fun extensions() = listOf(SpringExtension)
 
     companion object {
+        private val appData = java.nio.file.Files.createTempDirectory("yona-backup-postgres").toFile()
         private val postgres = PostgreSQLContainer("postgres:16-alpine").apply {
             withDatabaseName("yona")
             withUsername("yona")
@@ -57,6 +58,11 @@ class DataBackupServicePostgresIntegrationSpec @Autowired constructor(
             registry.add("spring.datasource.username") { postgres.username }
             registry.add("spring.datasource.password") { postgres.password }
             registry.add("spring.datasource.driver-class-name") { postgres.driverClassName }
+            registry.add("yona.data") { appData.absolutePath }
+            registry.add("yona.queue.data-dir") { java.io.File(appData, "queue").absolutePath }
+            for (kind in listOf("git", "svn", "lfs", "upload")) {
+                registry.add("yona.$kind.base-dir") { java.io.File(appData, kind).absolutePath }
+            }
         }
     }
 

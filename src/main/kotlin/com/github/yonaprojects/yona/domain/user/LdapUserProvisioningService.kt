@@ -1,7 +1,10 @@
 package com.github.yonaprojects.yona.domain.user
 
+import org.springframework.security.authentication.DisabledException
+import org.springframework.security.authentication.LockedException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 
 /**
  * yona의 UserApp.authenticateWithLdap() 성공 분기(LDAP 인증 자체가 아니라
@@ -40,15 +43,28 @@ class LdapUserProvisioningService(
     }
 
     private fun syncExistingUser(user: User, ldapUser: LdapUser, rawPassword: String): User {
-        if (!passwordEncodingService.matches(rawPassword, user.password, user.passwordSalt)) {
-            user.password = passwordEncodingService.encode(rawPassword)
-            user.passwordSalt = null
+        // Reject before syncing credentials: provider account checks happen after reconcile returns.
+        if (user.state == UserState.LOCKED) {
+            throw LockedException("계정이 잠겨 있습니다.")
         }
-        user.name = ldapUser.fullDisplayName
-        if (!ldapUser.englishName.isNullOrBlank()) {
-            user.englishName = ldapUser.englishName
+        if (user.state == UserState.DELETED) {
+            throw DisabledException("탈퇴한 계정입니다.")
         }
-        user.isGuest = ldapUser.isGuestUser
-        return userRepository.save(user)
+        if (user.lockedUntil?.isAfter(Instant.now()) == true) {
+            throw LockedException("로그인 실패 횟수가 많아 계정이 일시적으로 잠겼습니다. 잠시 후 다시 시도하거나 관리자에게 문의하세요.")
+        }
+
+        val userId = user.id!!
+        if (!passwordEncodingService.matches(rawPassword, user.password, user.passwordSalt) ||
+            passwordEncodingService.needsUpgrade(user.password)
+        ) {
+            userRepository.replacePasswordIfUnchanged(
+                userId, user.password, user.passwordSalt, passwordEncodingService.encode(rawPassword)
+            )
+        }
+        userRepository.syncLdapProfile(
+            userId, ldapUser.fullDisplayName, ldapUser.englishName?.takeUnless { it.isBlank() }, ldapUser.isGuestUser
+        )
+        return userRepository.findById(userId).orElseThrow()
     }
 }

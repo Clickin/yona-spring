@@ -51,6 +51,7 @@ class DataBackupProjectMergeH2Spec @Autowired constructor(
     override fun extensions() = listOf(SpringExtension)
 
     companion object {
+        private val appData = Files.createTempDirectory("yona-merge-data").toFile()
         private val uploadsDir = Files.createTempDirectory("yona-merge-uploads").toFile()
         private val gitDir = Files.createTempDirectory("yona-merge-git").toFile()
         private val lfsDir = Files.createTempDirectory("yona-merge-lfs").toFile()
@@ -66,6 +67,9 @@ class DataBackupProjectMergeH2Spec @Autowired constructor(
             registry.add("yona.upload.base-dir") { uploadsDir.absolutePath }
             registry.add("yona.git.base-dir") { gitDir.absolutePath }
             registry.add("yona.lfs.base-dir") { lfsDir.absolutePath }
+            registry.add("yona.data") { appData.absolutePath }
+            registry.add("yona.queue.data-dir") { java.io.File(appData, "queue").absolutePath }
+            registry.add("yona.svn.base-dir") { java.io.File(appData, "svn").absolutePath }
         }
     }
 

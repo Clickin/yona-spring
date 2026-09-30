@@ -173,6 +173,19 @@ class QueueWorkerStore(
     ): QueueAttemptToken? {
         try {
             return inTransaction {
+                // Serialize claim decisions, not execution, across workers and application instances.
+                entityManager.find(QueueCounter::class.java, "next-id", LockModeType.PESSIMISTIC_WRITE)
+                    ?: error("Queue admission counter is unavailable")
+                val conflicting = entityManager.createQuery(
+                    "select count(j) from QueueJob j where j.status in :states and " +
+                        "(:exclusive = true or exists (select r.id.jobId from QueueJobResource r " +
+                        "where r.id.jobId = j.id and r.id.resourceKey = :resource))",
+                    Long::class.javaObjectType,
+                ).setParameter("states", listOf(
+                    QueueStatus.RUNNING, QueueStatus.CANCEL_REQUESTED, QueueStatus.RECOVERY_REQUIRED,
+                )).setParameter("exclusive", definition.exclusive)
+                    .setParameter("resource", TaskRegistry.EXCLUSIVE_RESOURCE).singleResult
+                if (conflicting != 0L) return@inTransaction null
                 val job = entityManager.find(QueueJob::class.java, candidate.id, LockModeType.PESSIMISTIC_WRITE)
                     ?: return@inTransaction null
                 if (job.rowVersion != candidate.rowVersion || job.taskType != definition.type ||
@@ -183,7 +196,7 @@ class QueueWorkerStore(
                 val decision = QueueTransition.decide(
                     QueueTransitionInput(
                         state, QueueTransitionEvent.ClaimDue(true, true),
-                        QueueTransitionPolicy(definition.maxAttempts, handlerRegistered = true, replaySafe = definition.replaySafe),
+                        QueueTransitionPolicy(definition.maxAttempts, true, definition.replaySafe, definition.exclusive),
                     ),
                 )
                 if (!decision.accepted) return@inTransaction null
@@ -490,7 +503,7 @@ class QueueWorkerStore(
                 val decision = QueueTransition.decide(
                     QueueTransitionInput(
                         stateOf(job, attempt.outcome), event,
-                        QueueTransitionPolicy(token.definition.maxAttempts, true, token.definition.replaySafe),
+                        QueueTransitionPolicy(token.definition.maxAttempts, true, token.definition.replaySafe, token.definition.exclusive),
                     ),
                 )
                 if (!decision.accepted) return@inTransaction false
@@ -614,7 +627,7 @@ class QueueWorkerStore(
         val decision = QueueTransition.decide(
             QueueTransitionInput(
                 stateOf(job, attempt.outcome), QueueTransitionEvent.LeaseExpired,
-                QueueTransitionPolicy(definition?.maxAttempts ?: 5, definition?.handler != null, replaySafe),
+                QueueTransitionPolicy(definition?.maxAttempts ?: 5, definition?.handler != null, replaySafe, definition?.exclusive != false),
             ),
         )
         if (!decision.accepted) return@inTransaction false

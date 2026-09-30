@@ -14,6 +14,8 @@ import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import java.time.Instant
 import javax.sql.DataSource
 
@@ -34,6 +36,20 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
 
     override fun extensions() = listOf(SpringExtension)
 
+    companion object {
+        private val appData = java.nio.file.Files.createTempDirectory("yona-backup-mariadb").toFile()
+
+        @JvmStatic
+        @DynamicPropertySource
+        fun archiveDirectories(registry: DynamicPropertyRegistry) {
+            registry.add("yona.data") { appData.absolutePath }
+            registry.add("yona.queue.data-dir") { java.io.File(appData, "queue").absolutePath }
+            for (kind in listOf("git", "svn", "lfs", "upload")) {
+                registry.add("yona.$kind.base-dir") { java.io.File(appData, kind).absolutePath }
+            }
+        }
+    }
+
     private val jdbc: JdbcTemplate by lazy { JdbcTemplate(dataSource) }
 
     init {
@@ -45,6 +61,18 @@ class DataBackupServiceIntegrationSpec @Autowired constructor(
         queueBackupScenarios(dataBackupService, queue, userRepository, jdbc, objectMapper)
 
         describe("DataBackupService export/import 왕복") {
+            it("서로 다른 사용자의 같은 프로젝트 즐겨찾기는 비고유 FK 인덱스와 함께 복원된다") {
+                val first = userRepository.save(User(loginId = "favorite-first", name = "First", email = "first@example.invalid"))
+                val second = userRepository.save(User(loginId = "favorite-second", name = "Second", email = "second@example.invalid"))
+                val project = projectRepository.save(Project(name = "favorite-project", owner = first.loginId, projectScope = ProjectScope.PUBLIC))
+                jdbc.update("INSERT INTO favorite_project(user_id,project_id) VALUES (?,?),(?,?)", first.id, project.id, second.id, project.id)
+                val backup = DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
+                jdbc.update("DELETE FROM favorite_project WHERE project_id=?", project.id)
+                DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, backup)
+                jdbc.queryForList("SELECT user_id FROM favorite_project WHERE project_id=? ORDER BY user_id", Long::class.java, project.id) shouldBe
+                    listOf(first.id, second.id).sortedBy { it }
+            }
+
             it("백업 시점 이후에 추가된 데이터는 해당 백업으로 복원하면 사라져야 한다") {
                 // Given: 기준 시점 데이터
                 val baseline = userRepository.save(

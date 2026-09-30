@@ -4,6 +4,8 @@ import tools.jackson.databind.ObjectMapper
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
+import java.security.MessageDigest
+import java.util.HexFormat
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
@@ -30,26 +32,40 @@ object DataBackupArchiveTestSupport {
         objectMapper: ObjectMapper,
         tables: Map<String, List<Map<String, Any?>>>,
         sequences: Map<String, Long> = emptyMap(),
+        manifestOverrides: Map<String, Any?> = emptyMap(),
+        files: Map<String, ByteArray> = emptyMap(),
+        corruptIntegrity: Boolean = false,
     ): ByteArray {
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
+            val index = mutableListOf<Map<String, Any?>>()
+            fun entry(name: String, bytes: ByteArray) {
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(bytes)
+                zip.closeEntry()
+                index.add(mapOf("path" to name, "size" to bytes.size.toLong(),
+                    "sha256" to if (corruptIntegrity) "0".repeat(64) else HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))))
+            }
             zip.putNextEntry(ZipEntry("manifest.json"))
             zip.write(objectMapper.writeValueAsBytes(mapOf(
                 "format" to DataBackupService.FORMAT, "formatVersion" to DataBackupService.FORMAT_VERSION,
                 "scope" to "site", "project" to null, "createdAt" to "2026-01-01T00:00:00Z",
-            )))
+                "sourceVersion" to "2.0", "targetVersion" to "2.0", "producer" to "yona", "producerVersion" to "2.0",
+                "integrity" to DataBackupService.INTEGRITY, "requiredCapabilities" to emptyList<String>(),
+            ) + manifestOverrides))
             zip.closeEntry()
             for ((table, rows) in tables) {
-                zip.putNextEntry(ZipEntry("db/${table.lowercase()}.ndjson"))
+                val bytes = ByteArrayOutputStream()
                 for (row in rows) {
-                    zip.write(objectMapper.writeValueAsBytes(row))
-                    zip.write('\n'.code)
+                    bytes.write(objectMapper.writeValueAsBytes(row))
+                    bytes.write('\n'.code)
                 }
-                zip.closeEntry()
+                entry("db/${table.lowercase()}.ndjson", bytes.toByteArray())
             }
-            zip.putNextEntry(ZipEntry("db/_sequences.json"))
-            zip.write(objectMapper.writeValueAsBytes(sequences))
-            zip.closeEntry()
+            entry("db/_sequences.json", objectMapper.writeValueAsBytes(sequences))
+            for ((name, bytes) in files) entry(name, bytes)
+            zip.putNextEntry(ZipEntry("integrity.ndjson"))
+            index.forEach { zip.write(objectMapper.writeValueAsBytes(it)); zip.write('\n'.code) }
         }
         return out.toByteArray()
     }

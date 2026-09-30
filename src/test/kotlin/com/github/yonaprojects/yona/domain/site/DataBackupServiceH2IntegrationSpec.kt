@@ -50,6 +50,9 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
             registry.add("spring.jpa.database-platform") { "org.hibernate.dialect.H2Dialect" }
             registry.add("yona.data") { appData.absolutePath }
             registry.add("yona.queue.data-dir") { queueData.absolutePath }
+            for (kind in listOf("git", "svn", "lfs", "upload")) {
+                registry.add("yona.$kind.base-dir") { java.io.File(appData, kind).absolutePath }
+            }
         }
     }
 

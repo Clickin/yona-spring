@@ -24,12 +24,6 @@
           <div th:if="${importError}" class="alert alert-error">
             <p th:text="#{${importError}}"></p>
           </div>
-          <div th:if="${importProjectName}" class="alert alert-success">
-            <p th:text="#{site.data.import.projectSuccess(${importProjectName})}"></p>
-          </div>
-          <div th:if="${importSiteSuccess}" class="alert alert-success">
-            <p th:text="#{site.data.import.siteSuccess}"></p>
-          </div>
 
           <div class="cu-desc">
             <ul>
@@ -43,15 +37,15 @@
           <h3 th:text="#{site.data.export}"></h3>
           <p th:text="#{site.data.export.info}"></p>
 
-          <a th:href="@{/sites/export}" class="ybtn ybtn-primary">
-            <strong th:text="#{site.data.export}"></strong>
-          </a>
+          <form th:action="@{/sites/export}" method="post" data-turbo="false">
+            <button type="submit" class="ybtn ybtn-primary" th:text="#{site.data.export}"></button>
+          </form>
 
           <h3 th:text="#{site.data.exportProject}"></h3>
           <p th:text="#{site.data.exportProject.info}"></p>
 
-          <form th:action="@{/sites/export}" method="get" class="form-inline">
-            <select name="project" required>
+          <form th:action="@{/sites/export}" method="post" class="form-inline" data-turbo="false">
+            <select name="project" required th:aria-label="#{site.data.exportProject}">
               <option th:each="p : ${projects}" th:value="${p.owner + '/' + p.name}"
                       th:text="${p.owner + '/' + p.name}"></option>
             </select>
@@ -60,11 +54,12 @@
 
           <h3 th:text="#{site.data.import}"></h3>
           <p th:text="#{site.data.import.info}"></p>
+          <p th:text="#{site.data.import.migration}"></p>
 
-          <form th:action="@{/sites/import}" method="post" enctype="multipart/form-data">
-            <input type="file" name="data">
+          <form th:action="@{/sites/import}" method="post" enctype="multipart/form-data" data-turbo="false">
+            <input type="file" name="data" required accept=".zip,application/zip" th:aria-label="#{site.data.import}">
             <p>
-              <input type="submit">
+              <input type="submit" th:value="#{site.data.import}">
             </p>
           </form>
         </div>

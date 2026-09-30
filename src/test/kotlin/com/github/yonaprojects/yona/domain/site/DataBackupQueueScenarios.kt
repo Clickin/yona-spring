@@ -60,11 +60,11 @@ fun DescribeSpec.queueBackupScenarios(
             queueSnapshot() shouldBe queueBefore
         }
 
-        it("작업이 종료되면 import가 성공하고 백업에 든 큐 테이블은 무시해 기존 큐 데이터를 그대로 둬야 한다") {
+        it("큐 테이블이 주입된 백업을 변경 전에 거부하며 큐 데이터를 그대로 유지한다") {
             jdbc.update("UPDATE queue_job SET status = 'SUCCEEDED'")
             val queueBefore = queueSnapshot()
 
-            // 구버전/외부 백업 흉내 — 큐 테이블을 주입해도 import가 무시해야 한다(그대로 복원되면 손상될 값들).
+            // 외부 백업에 큐 운영 상태가 주입되면 무시하지 않고 명시적으로 거부한다.
             val exported = DataBackupArchiveTestSupport.readTables(
                 objectMapper, DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
             )
@@ -76,7 +76,7 @@ fun DescribeSpec.queueBackupScenarios(
                 .first { it.key.equals("n4user", ignoreCase = true) }.value.size
 
             val dump = DataBackupArchiveTestSupport.buildSiteArchive(objectMapper, injected, sequences = mapOf("queue_job" to 5000))
-            DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, dump)
+            shouldThrow<BadBackupArchiveException> { DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, dump) }
 
             queueSnapshot() shouldBe queueBefore
             jdbc.queryForObject("SELECT COUNT(*) FROM n4user", Int::class.java) shouldBe usersInDump

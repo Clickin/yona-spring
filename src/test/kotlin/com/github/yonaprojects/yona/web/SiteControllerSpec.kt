@@ -32,19 +32,15 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.model
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.util.Optional
 
 import tools.jackson.databind.ObjectMapper
-import java.io.OutputStream
 import com.github.yonaprojects.yona.domain.support.DiagnosticService
 import org.springframework.core.env.Environment
 import com.github.yonaprojects.yona.domain.support.YonaUpdateService
-import com.github.yonaprojects.yona.domain.site.DataBackupService
+import com.github.yonaprojects.yona.domain.site.DataBackupJobs
 import io.mockk.clearMocks
-import org.springframework.mock.web.MockMultipartFile
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.http.MediaType
 
 class SiteControllerSpec : DescribeSpec({
@@ -61,7 +57,7 @@ class SiteControllerSpec : DescribeSpec({
     val objectMapper = ObjectMapper()
 
     val siteService = mockk<SiteService>()
-    val dataBackupService = mockk<DataBackupService>()
+    val dataBackupJobs = mockk<DataBackupJobs>()
 
     val siteViewController = SiteViewController(
         userRepository,
@@ -79,7 +75,7 @@ class SiteControllerSpec : DescribeSpec({
         projectRepository,
         mailService,
         yonaUpdateService,
-        dataBackupService,
+        dataBackupJobs,
         objectMapper,
         environment
     )
@@ -412,44 +408,6 @@ class SiteControllerSpec : DescribeSpec({
             }
         }
 
-        describe("GET /site/export") {
-            it("로그인한 주체가 관리자일 때 DataBackupService가 만든 백업 ZIP을 파일로 내려주어야 한다") {
-                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.exportSite(any<OutputStream>()) } answers {
-                    firstArg<OutputStream>().write("zip-bytes".toByteArray())
-                }
-
-                mockMvcApi.perform(
-                    get("/site/export")
-                        .principal(adminAuth)
-                )
-                    .andExpect(status().isOk)
-                    .andExpect(content().contentType("application/zip"))
-
-                verify(exactly = 1) { dataBackupService.exportSite(any<OutputStream>()) }
-            }
-        }
-
-        describe("POST /site/import") {
-            it("로그인한 주체가 관리자이고 파일이 있으면 DataBackupService로 사이트를 복원해야 한다") {
-                every { userRepository.findByLoginId("admin") } returns Optional.of(adminUser)
-                every { dataBackupService.backupScope(any()) } returns DataBackupService.SCOPE_SITE
-                every { dataBackupService.importSite(any()) } returns Unit
-
-                val file = MockMultipartFile(
-                    "data", "backup.zip", "application/zip", "zip".toByteArray()
-                )
-
-                mockMvcApi.perform(
-                    MockMvcRequestBuilders.multipart("/site/import")
-                        .file(file)
-                        .principal(adminAuth)
-                )
-                    .andExpect(status().is3xxRedirection)
-
-                verify(exactly = 1) { dataBackupService.importSite(any()) }
-            }
-        }
 
         describe("GET /site/noAvatarUsers") {
             it("아바타가 설정되지 않은 회원들의 리스트를 JSON 형태로 반환해야 한다") {

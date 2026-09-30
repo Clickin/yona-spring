@@ -17,7 +17,6 @@ import io.kotest.matchers.string.shouldStartWith
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import org.springframework.security.authentication.AuthenticationServiceException
 import org.springframework.security.authentication.BadCredentialsException
@@ -40,17 +39,34 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
     )
 
     beforeTest {
-        // userRepository는 이 스펙에서 verify(exactly = 0){...}로도 검증하므로, 이전 테스트의
-        // 호출 기록이 다음 테스트로 새는 것을 막기 위해 매번 초기화한다.
-        clearMocks(userRepository, answers = false)
+        clearMocks(userRepository)
         every { ldapService.enabled } returns false
-        // 레거시 해시로 로그인 성공 시 자동 재해싱 업그레이드가 시도된다 — 이 스펙의 관심사가
-        // 아닌 테스트에서는 대상 사용자가 없는 것으로 취급해 업그레이드를 조용히 건너뛴다.
         every { userRepository.findById(any()) } returns Optional.empty()
+        every { userRepository.recordLoginFailure(any(), any(), any()) } returns 0
+        every { userRepository.resetLoginFailures(any()) } returns 0
     }
 
     fun getLegacyHashedPassword(password: String, salt: String): String =
         PasswordEncodingService.legacyHash(password, salt)
+
+    fun stubStoredUser(user: User) {
+        every { userRepository.findById(user.id!!) } returns Optional.of(user)
+        every { userRepository.recordLoginFailure(user.id!!, any(), any()) } answers {
+            user.failedLoginAttempts += 1
+            if (user.failedLoginAttempts >= arg<Int>(1)) user.lockedUntil = arg(2)
+            1
+        }
+        every { userRepository.resetLoginFailures(user.id!!) } answers {
+            user.failedLoginAttempts = 0
+            user.lockedUntil = null
+            1
+        }
+        every { userRepository.replacePasswordIfUnchanged(user.id!!, user.password, user.passwordSalt, any()) } answers {
+            user.password = arg(3)
+            user.passwordSalt = null
+            1
+        }
+    }
 
     describe("YonaAuthenticationProvider") {
         it("올바른 비밀번호를 입력하면 인증이 정상적으로 완료되어야 한다") {
@@ -96,6 +112,8 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
             )
             
             every { userDetailsService.loadUserByUsername("gildong") } returns userDetails
+            val storedUser = User(id = 1L, loginId = "gildong", password = expectedHashed, passwordSalt = salt)
+            stubStoredUser(storedUser)
             
             val authRequest = UsernamePasswordAuthenticationToken("gildong", "wrongPassword")
 
@@ -103,6 +121,8 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
             shouldThrow<BadCredentialsException> {
                 authenticationProvider.authenticate(authRequest)
             }
+            storedUser.password shouldBe expectedHashed
+            storedUser.passwordSalt shouldBe salt
         }
 
         it("계정 상태가 LOCKED인 사용자는 비밀번호가 맞아도 LockedException이 발생해야 한다") {
@@ -121,6 +141,10 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
             )
 
             every { userDetailsService.loadUserByUsername("lockedUser") } returns userDetails
+            val storedUser = User(
+                id = 1L, loginId = "lockedUser", password = expectedHashed, passwordSalt = salt, state = UserState.LOCKED
+            )
+            stubStoredUser(storedUser)
 
             val authRequest = UsernamePasswordAuthenticationToken("lockedUser", rawPassword)
 
@@ -128,6 +152,8 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
             shouldThrow<LockedException> {
                 authenticationProvider.authenticate(authRequest)
             }
+            storedUser.password shouldBe expectedHashed
+            storedUser.passwordSalt shouldBe salt
         }
 
         it("계정 상태가 DELETED인 사용자는 비밀번호가 맞아도 DisabledException이 발생해야 한다") {
@@ -305,20 +331,17 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
                     authoritiesVal = listOf(SimpleGrantedAuthority("ROLE_ACTIVE")),
                 )
             }
-            every { userRepository.findById(42L) } returns Optional.of(storedUser)
-            every { userRepository.save(any()) } answers { firstArg() }
+            stubStoredUser(storedUser)
 
             val authRequest = UsernamePasswordAuthenticationToken("upgrademe", rawPassword)
             val authResult = authenticationProvider.authenticate(authRequest)
 
             authResult.isAuthenticated shouldBe true
-            val savedUser = slot<User>()
-            verify(exactly = 1) { userRepository.save(capture(savedUser)) }
-            savedUser.captured.password!!.shouldStartWith("$")
-            savedUser.captured.passwordSalt shouldBe null
-            passwordEncodingService.matches(rawPassword, savedUser.captured.password, null) shouldBe true
+            storedUser.password!!.shouldStartWith("\$argon2id\$")
+            storedUser.passwordSalt shouldBe null
+            passwordEncodingService.matches(rawPassword, storedUser.password, null) shouldBe true
             val principal = authResult.principal as YonaUserDetails
-            principal.password shouldBe savedUser.captured.password
+            principal.password shouldBe storedUser.password
             principal.password shouldNotBe legacyHashed
         }
 
@@ -331,12 +354,15 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
             )
 
             every { userDetailsService.loadUserByUsername("already-argon2") } returns userDetails
+            val storedUser = User(id = 99L, loginId = "already-argon2", password = argon2Hashed, passwordSalt = null)
+            stubStoredUser(storedUser)
 
             val authRequest = UsernamePasswordAuthenticationToken("already-argon2", rawPassword)
             val authResult = authenticationProvider.authenticate(authRequest)
 
             authResult.isAuthenticated shouldBe true
-            verify(exactly = 0) { userRepository.save(any()) }
+            storedUser.password shouldBe argon2Hashed
+            (authResult.principal as YonaUserDetails).password shouldBe argon2Hashed
         }
     }
 
@@ -352,8 +378,7 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
             val storedUser = User(id = 55L, loginId = "bruteforced", password = hashed, passwordSalt = salt)
 
             every { userDetailsService.loadUserByUsername("bruteforced") } returns userDetails
-            every { userRepository.findById(55L) } returns Optional.of(storedUser)
-            every { userRepository.save(any()) } answers { firstArg() }
+            stubStoredUser(storedUser)
 
             repeat(5) {
                 shouldThrow<BadCredentialsException> {
@@ -388,8 +413,7 @@ class YonaAuthenticationProviderSpec : DescribeSpec({
             val storedUser = User(id = 56L, loginId = "recovers", password = hashed, passwordSalt = salt, failedLoginAttempts = 3)
 
             every { userDetailsService.loadUserByUsername("recovers") } returns userDetails
-            every { userRepository.findById(56L) } returns Optional.of(storedUser)
-            every { userRepository.save(any()) } answers { firstArg() }
+            stubStoredUser(storedUser)
 
             val authResult = authenticationProvider.authenticate(UsernamePasswordAuthenticationToken("recovers", rawPassword))
 
