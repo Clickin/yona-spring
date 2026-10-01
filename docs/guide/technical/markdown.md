@@ -30,6 +30,7 @@ CM6·Vue Markdown editor/review-form bundle·Marked·전역 highlighter·서버 
 ## 보안과 비동기 처리
 
 - DOMPurify HTML profile을 사용하되 form, inline style, 이벤트 handler, SVG/MathML, 위험한 protocol은 허용하지 않는다. structural plugin은 안전한 DOM node/text를 생성한다.
+- reference 자동 링크는 기존 서버 `AutoLinkRenderer`의 5단계(`경로#N`, `#N`, `경로@sha`, `sha`, `@user|@org|@owner/project`)를 같은 순서로 재현한다. fork 축약형(`owner#N`, `owner@sha`), ASCII 기준 단어 경계(`이슈#3`의 `#3`도 링크), `@`가 있을 때만 프로젝트 링크, 번역된 이슈 상태, 사용자 hover popover(`이름 로그인ID`)를 포함한다.
 - reference는 프로젝트별 25ms 고정 window로 batch/dedupe하고 page memory에 cache한다. 서버 `POST /api/{owner}/{project}/markdown/references/resolve`는 최대 100개, token당 200자까지 받으며 대상 프로젝트·이슈 READ와 member-only code 권한을 검사한다. HTML 대신 metadata만 반환한다. disconnect된 subscriber는 취소한다.
 - 외부 링크는 `noopener`, `application.noreferrer=true`일 때 `noreferrer`도 적용한다.
 - highlight core/grammar는 해당 fence에서만 lazy-load한다. 1.x의 59개 언어와 alias, 기존 2.0 언어를 합친 66개 grammar fixture를 유지한다. 모르는 언어는 원문 코드로 표시하며 자동 언어 추측은 하지 않는다.

@@ -1,7 +1,11 @@
-export type ReferenceType = 'issue' | 'user' | 'project' | 'commit';
-export type ReferenceMetadata = {key: string; type: ReferenceType; href: string; label: string; state?: string};
+import type {ReferenceType} from '../plugins/reference-tokens';
+export type {ReferenceType};
+export type ReferenceMetadata = {
+  key: string; type: ReferenceType; href: string; label: string;
+  state?: string; stateLabel?: string; kind?: 'user' | 'org'; popover?: string;
+};
 type Context = {owner: string; project: string};
-type Subscriber = {apply: (metadata: ReferenceMetadata) => void; signal: AbortSignal; cancel: () => void};
+type Subscriber = {apply: (metadata: ReferenceMetadata | null) => void; signal: AbortSignal; cancel: () => void};
 type Entry = {
   context: Context; type: ReferenceType; value: string; subscribers: Set<Subscriber>;
   result?: ReferenceMetadata | null; batch?: Batch;
@@ -12,13 +16,18 @@ const pending = new Set<Entry>();
 let timer: number | undefined;
 const entryKey = (context: Context, type: ReferenceType, value: string) => JSON.stringify([context.owner, context.project, type, value]);
 
+/** Settles with metadata, or null when the reference does not resolve; never settles once aborted. */
 export function resolveReference(context: Context, type: ReferenceType, value: string, signal: AbortSignal,
-  apply: (metadata: ReferenceMetadata) => void): void {
-  if (signal.aborted || !context.owner || !context.project || value.length > 200) return;
+  apply: (metadata: ReferenceMetadata | null) => void): void {
+  if (signal.aborted) return;
+  if (!context.owner || !context.project || value.length > 200) {
+    apply(null);
+    return;
+  }
   const key = entryKey(context, type, value);
   let entry = entries.get(key);
   if (entry?.result !== undefined) {
-    if (entry.result) apply(entry.result);
+    apply(entry.result);
     return;
   }
   if (!entry) {
@@ -91,7 +100,7 @@ async function send(items: Entry[]): Promise<void> {
       entry.batch = undefined;
       for (const subscriber of entry.subscribers) {
         subscriber.signal.removeEventListener('abort', subscriber.cancel);
-        if (!subscriber.signal.aborted && result) subscriber.apply(result);
+        if (!subscriber.signal.aborted) subscriber.apply(result);
       }
       entry.subscribers.clear();
     }

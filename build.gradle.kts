@@ -233,6 +233,22 @@ val buildMarkdown = tasks.register<Exec>("buildMarkdown") {
 	outputs.file(layout.buildDirectory.file("generated/frontend/markdown-meta.json"))
 }
 
+val testMarkdown = tasks.register<Exec>("testMarkdown") {
+	dependsOn(npmCi)
+	workingDir("frontend")
+	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "npm.cmd" else "npm", "test")
+	inputs.files("frontend/package.json", "frontend/package-lock.json")
+	inputs.dir("frontend/src")
+	inputs.dir("frontend/test")
+	val stamp = layout.buildDirectory.file("generated/frontend/markdown-test.stamp")
+	outputs.file(stamp)
+	doLast { stamp.get().asFile.writeText("passed\n") }
+}
+
+tasks.test {
+	dependsOn(testMarkdown)
+}
+
 tasks.processResources {
 	dependsOn(copyTurbo, buildMarkdown)
 	from(markdownResources) {

@@ -10,6 +10,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import org.springframework.context.MessageSource
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -30,11 +31,16 @@ class MarkdownReferenceController(
     private val organizationRepository: OrganizationRepository,
     private val repositoryService: RepositoryService,
     private val accessControl: AccessControl,
-    private val projectUserRepository: ProjectUserRepository
+    private val projectUserRepository: ProjectUserRepository,
+    private val messageSource: MessageSource
 ) {
     data class Reference(val type: String, val value: String)
     data class Request(val items: List<Reference>)
-    data class Metadata(val key: String, val type: String, val href: String, val label: String, val state: String? = null)
+    data class Metadata(
+        val key: String, val type: String, val href: String, val label: String,
+        val state: String? = null, val stateLabel: String? = null,
+        val kind: String? = null, val popover: String? = null
+    )
     data class Response(val items: List<Metadata>)
 
     @PostMapping("/api/{owner}/{project}/markdown/references/resolve")
@@ -58,9 +64,11 @@ class MarkdownReferenceController(
         val projects = mutableMapOf<String, Project?>("${context.owner}/${context.name}" to context)
         fun target(path: String): Project? {
             if (path.isEmpty()) return context
-            if (!PROJECT.matches(path) || path.split('/').any { it == "." || it == ".." }) return null
-            val found = projects.getOrPut(path) {
-                projectRepository.findByOwnerAndName(path.substringBefore('/'), path.substringAfter('/')).orElse(null)
+            // Legacy fork shorthand: a bare owner names that owner's project with the current project's name.
+            val fullPath = if ('/' in path) path else "$path/${context.name}"
+            if (!PROJECT.matches(fullPath) || fullPath.split('/').any { it == "." || it == ".." }) return null
+            val found = projects.getOrPut(fullPath) {
+                projectRepository.findByOwnerAndName(fullPath.substringBefore('/'), fullPath.substringAfter('/')).orElse(null)
             } ?: return null
             return found.takeIf { accessControl.isAllowed(user, it, Operation.READ) }
         }
@@ -74,8 +82,10 @@ class MarkdownReferenceController(
                     val number = match.groupValues[2].toLongOrNull() ?: return@mapNotNull null
                     val issue = issueRepository.findByProjectAndNumber(destination, number) ?: return@mapNotNull null
                     if (!accessControl.isAllowed(user, destination, issue, Operation.READ)) return@mapNotNull null
+                    val state = issue.state.state()
                     Metadata(key, "issue", "${projectUrl(destination)}/issue/${issue.number}",
-                        "${match.groupValues[1]}#${issue.number}.${issue.title}", issue.state.state())
+                        "${match.groupValues[1]}#${issue.number}.${issue.title}", state,
+                        messageSource.getMessage("issue.state.$state", null, state, LocaleContextHolder.getLocale()))
                 }
                 "project" -> {
                     val destination = target(value) ?: return@mapNotNull null
@@ -109,12 +119,13 @@ class MarkdownReferenceController(
         val organization = organizationRepository.findByName(login).orElse(null)
         if (organization != null) {
             if (!accessControl.isAllowed(viewer, organization, Operation.READ)) return null
-            return Metadata(key, "user", "/org/${segment(organization.name)}", "@${organization.name}")
+            return Metadata(key, "user", "/org/${segment(organization.name)}", "@${organization.name}", kind = "org")
         }
         // User profiles are global readable resources; anonymous/deleted identities are not references.
         val user = userRepository.findByLoginId(login).orElse(null) ?: return null
         if (user.id == null || user.loginId == "anonymous") return null
-        return Metadata(key, "user", "/user/${segment(user.loginId)}", "@${user.getPureNameOnly(LocaleContextHolder.getLocale().language)}")
+        return Metadata(key, "user", "/user/${segment(user.loginId)}", "@${user.getPureNameOnly(LocaleContextHolder.getLocale().language)}",
+            kind = "user", popover = "${user.name} ${user.loginId}")
     }
 
     private fun projectUrl(project: Project) = "/${segment(project.owner.orEmpty())}/${segment(project.name)}"
@@ -124,8 +135,8 @@ class MarkdownReferenceController(
         private val TYPES = setOf("issue", "user", "project", "commit")
         private const val NAME = "[a-zA-Z0-9_.가-힣-]+"
         private val PROJECT = Regex("$NAME/$NAME")
-        private val ISSUE = Regex("(?:($NAME/$NAME))?#([0-9]+)")
-        private val COMMIT = Regex("(?:($NAME/$NAME)@)?([a-f0-9]{7,40})")
+        private val ISSUE = Regex("(?:($NAME(?:/$NAME)?))?#([0-9]+)")
+        private val COMMIT = Regex("(?:($NAME(?:/$NAME)?)@)?([a-f0-9]{7,40})")
         private val USER = Regex("@$NAME")
     }
 }

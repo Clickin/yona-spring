@@ -1,9 +1,8 @@
 import GithubSlugger from 'github-slugger';
-import {resolveReference, type ReferenceType} from '../runtime/reference-batch-resolver';
+import {resolveReference, type ReferenceMetadata} from '../runtime/reference-batch-resolver';
+import {linkLegacyReferences, type Candidate} from './reference-tokens';
 
 export type MarkdownContext = {mode: string; owner: string; project: string; ref: string; path: string};
-const name = '[a-zA-Z0-9_.가-힣-]+';
-const candidates = new RegExp(`(?<![\\p{L}\\p{N}_/@])(?:@?${name}/${name}#[0-9]+|${name}/${name}@[a-f0-9]{7,40}|#[0-9]+|@?${name}/${name}|@${name}|[a-f0-9]{7,40})(?![\\p{L}\\p{N}_/])`, 'gu');
 
 export function applyStructure(root: HTMLElement, context: MarkdownContext, signal: AbortSignal): void {
   if (signal.aborted) return;
@@ -63,61 +62,84 @@ function relativeLinks(root: HTMLElement, context: MarkdownContext): void {
 
 function references(root: HTMLElement, context: MarkdownContext, signal: AbortSignal): void {
   if (!context.owner || !context.project) return;
-  function subscribe(placeholder: HTMLElement, type: ReferenceType, value: string): void {
-    resolveReference(context, type, value, signal, metadata => {
-      if (signal.aborted || !root.isConnected) return;
-      const anchor = document.createElement('a');
-      anchor.href = metadata.href;
-      anchor.className = type === 'issue' ? 'issueLink' : `${type}-link`;
-      anchor.dataset.yonaReference = metadata.key;
-      anchor.textContent = metadata.label;
-      if (type === 'issue' && metadata.state && /^(open|closed|draft)$/i.test(metadata.state)) {
-        const state = document.createElement('span');
-        state.className = `issue-state ${metadata.state.toLowerCase()}`;
-        state.textContent = metadata.state;
-        anchor.append(state);
-      }
-      placeholder.replaceWith(anchor);
-    });
-  }
-  // A moved immutable renderer keeps its placeholders, but owns a new abort signal.
-  root.querySelectorAll<HTMLElement>('span[data-yona-reference]').forEach(placeholder => {
-    const key = placeholder.dataset.yonaReference!;
-    const separator = key.indexOf(':');
-    subscribe(placeholder, key.slice(0, separator) as ReferenceType, key.slice(separator + 1));
-  });
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: node => node.parentElement?.closest('code,pre,a,[data-yona-reference],script,style,textarea')
+    acceptNode: node => node.parentElement?.closest('code,pre,a,script,style,textarea')
       ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
   });
   const nodes: Text[] = [];
   while (walker.nextNode()) nodes.push(walker.currentNode as Text);
-  for (const node of nodes) {
-    const text = node.data;
-    const fragment = document.createDocumentFragment();
-    let offset = 0;
-    for (const match of text.matchAll(candidates)) {
-      const token = match[0];
-      let value = token;
-      let type: ReferenceType;
-      if (token.includes('#')) { type = 'issue'; value = token.replace(/^@/, ''); }
-      else if (/^(?:[^@]+\/[^@]+@|@)?[a-f0-9]{7,40}$/.test(token)) {
-        type = 'commit';
-        value = token.replace(/^@/, '');
+  if (!nodes.length) return;
+  const results = new Map<string, ReferenceMetadata | null>();
+  const keyOf = ({type, value}: Candidate) => `${type}:${value}`;
+  const lookup = (candidate: Candidate) => {
+    const key = keyOf(candidate);
+    return results.has(key) ? results.get(key) !== null : undefined;
+  };
+  void (async () => {
+    // The legacy passes fall through on unresolved matches; a later pass can reveal a new candidate.
+    for (let round = 0; round < 4; round++) {
+      const pending = new Map<string, Candidate>();
+      for (const node of nodes) {
+        for (const candidate of linkLegacyReferences(node.data, lookup).unknown) pending.set(keyOf(candidate), candidate);
       }
-      else if (token.includes('/')) { type = 'project'; value = token.replace(/^@/, ''); }
-      else type = 'user';
-      fragment.append(document.createTextNode(text.slice(offset, match.index)));
-      const placeholder = document.createElement('span');
-      placeholder.dataset.yonaReference = `${type}:${value}`;
-      placeholder.textContent = token;
-      fragment.append(placeholder);
-      subscribe(placeholder, type, value);
-      offset = match.index! + token.length;
+      if (!pending.size) break;
+      await Promise.all([...pending.values()].map(candidate => new Promise<void>(settle => {
+        resolveReference(context, candidate.type, candidate.value, signal, metadata => {
+          results.set(keyOf(candidate), metadata);
+          settle();
+        });
+      })));
+      if (signal.aborted || !root.isConnected) return;
     }
-    if (offset) {
-      fragment.append(document.createTextNode(text.slice(offset)));
+    let linkedUser = false;
+    for (const node of nodes) {
+      if (!node.isConnected) continue;
+      const {pieces} = linkLegacyReferences(node.data, candidate => Boolean(results.get(keyOf(candidate))));
+      if (pieces.length === 1 && typeof pieces[0] === 'string') continue;
+      const fragment = document.createDocumentFragment();
+      for (const piece of pieces) {
+        if (typeof piece === 'string') fragment.append(piece);
+        else {
+          const metadata = results.get(keyOf(piece))!;
+          linkedUser ||= metadata.type === 'user' && metadata.kind !== 'org';
+          fragment.append(referenceLink(metadata));
+        }
+      }
       node.replaceWith(fragment);
     }
+    const common = (window as Window & {$yona?: {initHoverPopovers?: (selector: string) => void}}).$yona;
+    if (linkedUser) common?.initHoverPopovers?.('.markdown-output .user-link [data-toggle="popover"]');
+  })();
+}
+
+/** Same markup as the server AutoLinkRenderer, built from text only. */
+function referenceLink(metadata: ReferenceMetadata): HTMLAnchorElement {
+  const anchor = document.createElement('a');
+  anchor.href = metadata.href;
+  anchor.dataset.yonaReference = metadata.key;
+  const label = document.createElement('span');
+  label.textContent = metadata.label;
+  if (metadata.type === 'issue') {
+    anchor.className = 'issueLink';
+    anchor.textContent = metadata.label;
+    if (metadata.state && /^(open|closed|draft)$/i.test(metadata.state)) {
+      const state = document.createElement('span');
+      state.className = `issue-state ${metadata.state.toLowerCase()}`;
+      state.textContent = metadata.stateLabel ?? metadata.state;
+      anchor.append(state);
+    }
+  } else if (metadata.type === 'commit') {
+    anchor.textContent = metadata.label;
+  } else if (metadata.type === 'project' || metadata.kind === 'org') {
+    label.className = metadata.type === 'project' ? 'project-link' : 'org-link';
+    anchor.append(label);
+  } else {
+    anchor.className = 'no-text-decoration user-link';
+    if (metadata.popover) {
+      // The current popover renders text only, so the legacy avatar <img> is omitted.
+      Object.assign(label.dataset, {toggle: 'popover', placement: 'top', trigger: 'hover', content: metadata.popover});
+    }
+    anchor.append(label);
   }
+  return anchor;
 }

@@ -47,10 +47,12 @@ for (const engine of browsers) {
     await expect(batchPage.locator('a.issueLink')).toHaveCount(200);
     assert.equal(requests.length, 1, '100 simultaneous comments use one batch');
     assert.deepEqual(requests[0].items.map(item => `${item.type}:${item.value}`).sort(),
-      ['issue:#1', 'issue:#2', 'issue:#404', 'user:@reader', 'project:owner/project', 'commit:abcdef0'].sort());
+      ['issue:#1', 'issue:#2', 'issue:#404', 'user:@reader', 'project:owner/project', 'commit:abcdef0', 'user:@abcdef0'].sort());
     await expect(batchPage.locator('img,[onerror],a[href^="javascript:"]')).toHaveCount(0);
-    await expect(batchPage.locator('span[data-yona-reference="issue:#2"]')).toHaveCount(100);
-    await expect(batchPage.locator('span[data-yona-reference="issue:#404"]')).toHaveCount(100);
+    // Unsafe and missing metadata leave the source text, as the legacy server renderer did.
+    await expect(batchPage.locator('[data-yona-reference="issue:#2"], [data-yona-reference="issue:#404"]')).toHaveCount(0);
+    assert.equal(await batchPage.evaluate(() => [...document.querySelectorAll('yona-markdown-renderer')]
+      .filter(renderer => /#2 #404/.test(renderer.textContent)).length), 100);
     assert.equal(await batchPage.evaluate(() => window.referenceXss), undefined);
     await batchPage.evaluate(async () => {
       const renderer = document.createElement('yona-markdown-renderer');
@@ -87,7 +89,7 @@ for (const engine of browsers) {
     assert.deepEqual(scopes.sort(), ['/api/owner/first/markdown/references/resolve', '/api/owner/second/markdown/references/resolve']);
     await scopedPage.close();
 
-    // Detaching cancels the request, and reconnecting resubscribes unresolved placeholders.
+    // Detaching cancels the request, and reconnecting rescans the still-unlinked text.
     const abortPage = await pageWithRenderer();
     let aborted = false;
     let firstRoute;
