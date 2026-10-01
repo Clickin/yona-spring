@@ -21,7 +21,7 @@ source는 최초 mount에서 한 번만 읽는다. 다른 source를 표시하려
 
 공통 `markdownEditor` fragment가 `<yona-markdown-editor>` 안에 실제 `<textarea>`를 서버 렌더링한다. JavaScript는 이 노드를 유지하며 `value`·`defaultValue`·selection·form reset을 그대로 사용한다. hidden textarea나 별도 editor document를 만들지 않는다.
 
-GitHub Markdown toolbar/text-expander를 사용한다. `@/#`는 기존 `mentionList` endpoint에 취소 가능한 요청을 보내고, `:`는 기존 65개 로컬 emoji에서 검색한다. 결과 label은 HTML이 아닌 text로 삽입한다. Tab/Shift+Tab, 첨부파일 삽입, draft 복구/삭제는 같은 textarea와 editor `.value` 계약을 사용한다.
+GitHub Markdown toolbar/text-expander를 사용한다. `@/#`는 기존 `mentionList` endpoint에 취소 가능한 요청을 보내고, `:`는 기존 65개 로컬 emoji에서 검색한다. 결과 label은 HTML이 아닌 text로 삽입한다. Tab/Shift+Tab, 첨부파일 삽입, draft 복구/삭제는 같은 textarea와 editor `.value` 계약을 사용한다. textarea에 이미지를 붙여넣으면 업로드 후 링크로 바뀌는 `<!--_id_-->` 표식을 넣는다.
 
 Preview 진입마다 textarea를 한 번 읽는 renderer를 새로 mount하고 Edit 복귀 시 제거한다. 입력 중 파싱/live preview는 없다. `.value` setter와 form reset은 stale preview를 종료한다. Wiki preview는 document 모드다. Inline review도 기존 vanilla CodeCommentBox와 SSR form을 사용한다.
 

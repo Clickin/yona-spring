@@ -21,7 +21,7 @@ The blocking `yona.css` stylesheet reserves loading space using the escaped sour
 
 `site/layout :: markdownEditor` renders the real form textarea inside `<yona-markdown-editor>`. JavaScript retains that node; its `value`, `defaultValue`, selection and native form reset remain authoritative. The form is usable without JavaScript.
 
-The Lit editor uses GitHub's Markdown toolbar and text expander. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea.
+The Lit editor uses GitHub's Markdown toolbar and text expander. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea. `<yona-attachments>` binds paste/drop to that textarea: a pasted image inserts a temporary `<!--_id_-->` marker replaced by its link after upload (`e2e/specs/15-misc/markdown-editor-attachments.spec.ts`).
 
 Preview is explicit: entering Preview mounts a new renderer with the textarea as `sourceElement`; Edit removes it. Typing does not parse Markdown. Setting editor `.value` or resetting its form exits a stale preview. Wiki previews use document mode. Inline code reviews use the existing vanilla CodeCommentBox with a server-rendered form, rather than a second Vue editor.
 
