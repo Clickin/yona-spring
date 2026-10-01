@@ -97,7 +97,7 @@
                                         <th:block th:each="member : ${members}">
                                             <option th:value="${member.id}"
                                                     th:selected="${authorId == member.id}"
-                                                    th:data-avatar-url="@{/images/default-avatar-128.png}"
+                                                    th:data-avatar-url="${member.avatarUrl}"
                                                     th:data-login-id="${member.loginId}"
                                                     th:text="${member.name}">
                                             </option>
@@ -119,7 +119,7 @@
                                         <th:block th:each="member : ${members}">
                                             <option th:value="${member.id}"
                                                     th:selected="${assigneeId == member.id}"
-                                                    th:data-avatar-url="@{/images/default-avatar-128.png}"
+                                                    th:data-avatar-url="${member.avatarUrl}"
                                                     th:data-login-id="${member.loginId}"
                                                     th:text="${member.name}">
                                             </option>

@@ -448,6 +448,8 @@ class IssueViewController(
         loginUser: User?,
         model: Model
     ) {
+        val authorIds = (listOfNotNull(issue.authorId) + comments.mapNotNull { it.authorId }).toSet()
+        model.addAttribute("authorsById", userRepository.findAllById(authorIds).associateBy { it.id })
         val events = issueEventRepository.findByIssueOrderByCreatedAsc(issue)
             .filter { it.eventType != EventType.ISSUE_BODY_CHANGED }
         // legacy issue/partial_comment.scala.html/common.childComments() 대응 — 대댓글(parentComment != null)은

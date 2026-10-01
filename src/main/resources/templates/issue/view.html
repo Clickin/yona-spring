@@ -49,7 +49,7 @@
                     <div class="author-info">
                         <a href="javascript:void(0);" class="usf-group">
                             <span class="avatar-wrap smaller">
-                                <img src="/images/default-avatar-128.png" width="20" height="20">
+                                <img th:src="${authorsById?.get(issue.authorId)?.avatarUrl ?: '/assets/images/default-avatar-128.png'}" width="20" height="20">
                             </span>
                             <strong class="name" th:text="${issue.authorName != null ? issue.authorName : issue.authorLoginId}">작성자</strong>
                             <span class="loginid"> <strong>@</strong><span th:text="${issue.authorLoginId}">loginId</span></span>
@@ -201,7 +201,7 @@
                                     class="comment" th:classappend="${currentUser != null and comment.authorLoginId == currentUser.loginId} ? ' author'" th:id="'comment-' + ${comment.id}">
                                     <div th:replace="~{common/childCommentsAnchorDiv :: anchorDiv(${children})}"></div>
                                     <div class="comment-avatar">
-                                        <span class="avatar-wrap"><img src="/images/default-avatar-128.png" width="32" height="32"></span>
+                                        <span class="avatar-wrap"><img th:src="${authorsById?.get(comment.authorId)?.avatarUrl ?: '/assets/images/default-avatar-128.png'}" width="32" height="32"></span>
                                     </div>
                                     <div class="media-body">
                                     <div class="comment-body">

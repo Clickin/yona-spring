@@ -145,6 +145,7 @@ yona는 저장 위치가 설정 키별로 분리되어 있다. 백업 대상은 
 - 원본 DB·파일 무변경, 대상 bootstrap credential/security 보존.
 - 실제 이슈 title/body 렌더링, 원본 native HEAD tree와 Yona/JGit browse 비교, 인증된 첨부 다운로드 byte 비교.
 - 사용자 아이콘의 `USER_AVATAR` 첨부를 공통 사용자 조회에서 연결하고, 실제 프로필의 이미지 응답과 복원 파일의 byte 일치를 확인했다.
+- 이슈 작성자·댓글의 고정 기본 이미지도 사용자 아이콘으로 교체했다. 실제 이슈 간 이동, 목록 링크 클릭, 타임라인 갱신에서 이미지 디코딩을 확인했다.
 - 실제 관리자 queue export → 인증된 streaming 결과 다운로드 → 결과 무결성 비교.
 - 미지원 형식과 populated target 재이관의 변경 전 거부. 재이관 거부 전후 업무 테이블 checksum 일치.
 - 원본 사용자의 비밀번호를 추측하지 않았다. 별도의 합성 1.16 fixture를 CLI부터 UI import까지 이관한 뒤
