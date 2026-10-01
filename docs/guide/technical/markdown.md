@@ -39,7 +39,7 @@ CM6·Vue Markdown editor/review-form bundle·Marked·전역 highlighter·서버 
 
 ## 빌드와 검증
 
-Gradle `processResources`/`bootJar`가 pinned lockfile의 `npm ci --ignore-scripts --no-audit --no-fund`와 esbuild를 실행한다. ESM/chunk 결과물은 `build/generated/frontend/markdown`에만 생성하며 Git에 vendoring하지 않는다. 기존 Turbo build는 별도로 유지하고 Windows에서는 `npm.cmd`를 선택한다.
+Gradle `processResources`/`bootJar`가 pinned lockfile의 `npm ci --ignore-scripts --no-audit --no-fund`와 esbuild를 실행한다. ESM/chunk 결과물은 `build/generated/frontend/web`에만 생성하며 Git에 vendoring하지 않는다. 기존 Turbo build는 별도로 유지하고 Windows에서는 `npm.cmd`를 선택한다.
 
 실행 명령, 상세 정책, 이전 CM6/Marked/highlight gzip·Brotli baseline은 [영문 기술 문서](../../technical/markdown.md)를 참고한다. `frontend/scripts/check-markdown-{structure,enhancements}.mjs`는 기존 E2E Playwright로 Chromium/Firefox/WebKit을 검증한다.
 

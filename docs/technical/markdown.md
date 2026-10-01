@@ -43,12 +43,13 @@ Mermaid loads only for Mermaid fences. A shared 24 ms queue renders sequentially
 
 ## Build and checks
 
-`./gradlew processResources` and `bootJar` depend on `npmCi` and `buildMarkdown`. The pinned lockfile is installed with `--ignore-scripts --no-audit --no-fund`. esbuild emits ESM and lazy chunks into `build/generated/frontend/markdown`; generated Markdown bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `npm.cmd` on Windows.
+`./gradlew processResources` and `bootJar` depend on `npmCi` and `buildFrontend`. The pinned lockfile is installed with `--ignore-scripts --no-audit --no-fund`. esbuild emits ESM entries for each `frontend/src/<area>/yona-*.ts` and shared lazy chunks into `build/generated/frontend/web`, served under `/javascripts/<area>/`; generated Markdown bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `npm.cmd` on Windows.
 
 ```sh
 cd frontend
 npm ci --ignore-scripts --no-audit --no-fund
-npm run build:markdown
+npm run build
+npm test
 npx tsc --noEmit
 # From the repository root, against a running application:
 node frontend/scripts/check-markdown-structure.mjs http://localhost:8080
