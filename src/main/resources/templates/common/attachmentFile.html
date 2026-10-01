@@ -5,9 +5,8 @@
 <body>
 <!--
  댓글 인라인 수정 폼(common/commentUpdateForm.html)의 <yona-attachments> 라이트 DOM 자식으로
- 쓰이는 순수 데이터 홀더 - Vue 위젯이 마운트 시점에 이 마커(data-id/data-name/data-href/
- data-mime/data-size)만 한 번 읽어 자신의 files 배열을 채우고, 실제 카드는 Shadow DOM에서
- 다시 그린다(<slot> 없음, 화면에는 안 보임). data-href는 GET(다운로드)/POST(삭제,
+ 쓰이는 순수 데이터 홀더 - 컴포넌트가 연결 시점에 이 마커(data-id/data-name/data-href/
+ data-mime/data-size)를 읽어 목록을 채우고, 실제 카드는 별도로 렌더링한다(마커는 화면에 안 보임). data-href는 GET(다운로드)/POST(삭제,
  _method=delete) 겸용 URL.
 -->
 <div th:fragment="attachmentFile(attachment)" class="attached-file-marker"

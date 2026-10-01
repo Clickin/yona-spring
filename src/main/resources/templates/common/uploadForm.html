@@ -3,9 +3,9 @@
 <head>
 </head>
 <body>
-<!-- 드롭존/업로드 버튼/첨부파일 카드 목록: Vue 3 SFC(components/vue-widgets) -
-     <yona-attachments>가 원본 마크업 전체를 Shadow DOM에서 자체 소유한다.
-     yona.Attachments.js가 하이브리드 어댑터로 configure()에 위임한다(태그명으로 판별). -->
+<!-- 드롭존/업로드 버튼/첨부파일 카드 목록: <yona-attachments>(frontend/src/attachments)가
+     site/layout의 #yona-attachments-template을 light DOM으로 복제하고 목록만 렌더링한다.
+     yona.Attachments.js가 configure()에 위임한다(태그명으로 판별). -->
 <yona-attachments th:fragment="uploadForm(resourceType, resourceId, formId)"
      th:id="${formId}"
      th:attr="data-resource-type=${resourceType},data-resource-id=${resourceId}">
