@@ -135,7 +135,6 @@
             _initElement();
             _attachEvent();
 
-            _initFileUploader();
             _initFileDownloader();
             _initToggleCommentsButton();
             _initCodeComment();
@@ -184,7 +183,6 @@
             htElement.waBtnToggleReviewWrap = htElement.welContainer ? htElement.welContainer.querySelectorAll("button.btn-show-reviewcards,button.btn-hide-reviewcards") : [];
             htElement.welReviewList = htElement.welContainer ? htElement.welContainer.querySelector("div.review-list") : null;
             // 전체 댓글 (Non-Ranged comment thread)
-            htElement.welUploader = document.getElementById("upload");
             htElement.welTextarea = document.querySelector('textarea[data-editor-mode="comment-body"]');
 
             // 지켜보기
@@ -396,40 +394,6 @@
             }
 
             htElement.welReviewContainer.classList.add('sticky-review-container');
-        }
-
-        /**
-         * initialize fileUploader
-         */
-        function _initFileUploader(){
-            var oUploader = yona.Files.getUploader(htElement.welUploader, htElement.welTextarea);
-
-            if(oUploader){
-                // yona.Files.getUploader()는 [elContainer] 형태의 순수 배열을 반환하므로
-                // oUploader[0]로 raw element를 꺼낸다.
-                (new yona.Attachments({
-                    "elContainer"  : htElement.welUploader,
-                    "elTextarea"   : htElement.welTextarea,
-                    "sTplFileItem" : htVar.sTplFileItem,
-                    "sUploaderId"  : oUploader[0].getAttribute("data-namespace")
-                }));
-            }
-
-            document.querySelectorAll("form.review-form").forEach(function(form){
-                var container = form.querySelector(".upload-wrap");
-                var textarea = form.querySelector("textarea");
-                var uploader = yona.Files.getUploader(container, textarea);
-
-                if(uploader){
-                    (new yona.Attachments({
-                        "elTextarea"   : textarea,
-                        "elContainer"  : container,
-                        "sTplFileItem" : htVar.sTplFileItem,
-                        "sUploaderId"  : uploader[0].getAttribute("data-namespace")
-                    }));
-
-                }
-            });
         }
 
         /**

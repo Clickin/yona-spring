@@ -378,14 +378,6 @@ yona.Files = (function(){
             "sNamespace" : sNamespace
         });
 
-        // <yona-attachments> 컴포넌트(frontend/src/attachments)가 drag/drop/paste/input-change
-        // 리스너를 직접 소유한다 - 여기서 컨테이너에 동일한 리스너를 또 걸면 업로드가 중복 실행된다.
-        // data-namespace 설정과 반환값 모양은 그대로 유지하고 리스너 연결만 건너뛴다.
-        if(elContainerNode && elContainerNode.tagName.toLowerCase() === "yona-attachments"){
-            elContainerNode._yonaIsUploader = true;
-            return [htElements[sNamespace].welContainer];
-        }
-
         _attachEvent(sNamespace);
 
         // 모든 호출부가 이미 raw element 관례(oUploader[0].getAttribute(...))를 쓰고

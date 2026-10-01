@@ -34,9 +34,8 @@
                      첨부파일은 resourceType/resourceId 기반 네트워크 조회 대신(백엔드
                      AccessControl.isAllowedAttachment()가 ISSUE_COMMENT/NONISSUE_COMMENT를 지원하지
                      않아 항상 403) 서버가 이미 렌더링해둔 마커(common/attachmentFile.html, 화면엔
-                     안 보임)를 마운트 시점에 한 번만 읽어 채운다. 외부 textarea 연결(붙여넣기/
-                     드래그/링크 삽입)은 "수정" 버튼 클릭 시 1회 configure()로 지연 배선한다
-                     (issue/board view.html의 [data-toggle="comment-edit"] 핸들러 참고). -->
+                     안 보임)를 연결 시점에 읽어 채운다. 같은 form의 에디터 textarea에는 컴포넌트가
+                     스스로 연결된다. -->
                 <yona-attachments>
                     <th:block th:each="attachment : ${attachments}">
                         <div th:replace="~{common/attachmentFile :: attachmentFile(${attachment})}"></div>

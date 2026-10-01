@@ -21,7 +21,6 @@
             _initVar(htOptions || {});
             _attachEvent();
 
-            _initFileUploader();
             htElement.welInputTitle.focus();
             htElement.welInputTitle.addEventListener('keydown', function (e) {
                 if((e.keyCode || e.which) === 13) {
@@ -36,16 +35,13 @@
          */
         function _initVar(htOptions){
             htVar.sMode = htOptions.sMode || "new";
-            htVar.sTplFileItem = htOptions.sTplFileItem || (htElement.welTplFileItem ? htElement.welTplFileItem.textContent : "");
         }
 
         /**
          * initialize element variable
          */
         function _initElement(htOptions){
-            htElement.welUploader = document.querySelector(htOptions.elTarget || "#upload");
             htElement.welTextarea = document.querySelector(htOptions.elTextarea || "#body");
-            htElement.welTplFileItem = document.getElementById('tplAttachedFile');
 
             // Validate
             htElement.welForms = document.querySelectorAll("form");
@@ -88,22 +84,6 @@
             removeCurrentPageTemprarySavedContent();
 
             return true;
-        }
-
-        /**
-         * initialize fileUploader
-         */
-        function _initFileUploader(){
-            var oUploader = yona.Files.getUploader(htElement.welUploader, htElement.welTextarea);
-
-            if(oUploader){
-                (new yona.Attachments({
-                    "elContainer"  : htElement.welUploader,
-                    "elTextarea"   : htElement.welTextarea,
-                    "sTplFileItem" : htVar.sTplFileItem,
-                    "sUploaderId"  : oUploader[0].getAttribute("data-namespace")
-                }));
-            }
         }
 
         _init(htOptions);

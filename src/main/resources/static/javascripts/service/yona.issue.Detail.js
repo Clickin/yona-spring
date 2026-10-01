@@ -159,9 +159,6 @@
                 if (body) { body.style.display = editing ? 'none' : 'block'; }
                 if (editForm) {
                     editForm.style.display = editing ? 'block' : 'none';
-                    var attachments = editForm.querySelector('yona-attachments');
-                    var editTextarea = editForm.querySelector('textarea[data-editor-mode="update-comment-body"]');
-                    if (editing && attachments && editTextarea) { attachments.configure({textarea: editTextarea}); }
                 }
                 root.querySelectorAll('.add-a-comment').forEach(function (element) { element.style.display = 'none'; });
                 autosize.update(root.querySelectorAll('textarea'));

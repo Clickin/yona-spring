@@ -83,3 +83,45 @@ test('pasting spreadsheet cells (text plus image) inserts a Markdown table, not 
   await expect(textarea).toHaveValue('| Name | Title |\n|------|-------|\n| Jane | CEO   |');
   await expect(page.locator('yona-attachments#upload .attached-file')).toHaveCount(0);
 });
+
+// Legacy yobi.git.Write wired the pull request body to its uploader; the port lost that wiring.
+test('pasting an image into the pull request body inserts its link', async ({ page }) => {
+  const owner = requireSeed('projectOwner');
+  const name = requireSeed('projectName');
+  const branch = requireSeed('pullRequestFeatureBranch');
+  await page.goto(`/${owner}/${name}/pull/new?fromBranch=${encodeURIComponent(branch)}&toBranch=main`);
+  const selector = '#pull-request-form yona-markdown-editor textarea[name="body"]';
+  const textarea = page.locator(selector);
+  await expect(textarea).toBeVisible();
+  await textarea.focus();
+  await dispatch(page, 'paste', { png: 'pull.png' }, selector);
+  await expect(textarea).toHaveValue(/^!\[[^\]]+\.png\]\(\/files\/\d+\) ?$/, { timeout: 15_000 });
+});
+
+test('pasting an image while editing an issue comment inserts its link', async ({ page }) => {
+  await page.goto(`/${requireSeed('projectOwner')}/${requireSeed('projectName')}/issue/${requireSeed('issueNumber')}`);
+  const edit = page.locator('[data-toggle="comment-edit"]').first();
+  const commentId = await edit.getAttribute('data-comment-id');
+  await edit.click();
+  const selector = `#comment-update-form-${commentId} yona-markdown-editor textarea`;
+  const textarea = page.locator(selector);
+  await expect(textarea).toBeVisible();
+  await textarea.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(element.value.length, element.value.length));
+  await dispatch(page, 'paste', { png: 'edit.png' }, selector);
+  await expect(textarea).toHaveValue(/!\[[^\]]+\.png\]\(\/files\/\d+\) ?$/, { timeout: 15_000 });
+});
+
+test('pasting an image into a commit review thread reply uploads it once', async ({ page }) => {
+  await page.goto(`/${requireSeed('projectOwner')}/${requireSeed('projectName')}/commit/${requireSeed('codeDiffSecondCommit')}`);
+  const form = page.locator('form.review-form').first();
+  const selector = 'form.review-form >> nth=0 >> yona-markdown-editor textarea';
+  const textarea = form.locator('yona-markdown-editor textarea');
+  await expect(textarea).toBeVisible();
+  await textarea.focus();
+  const uploads: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/files') uploads.push(request.url()); });
+  await dispatch(page, 'paste', { png: 'thread.png' }, selector);
+  await expect(textarea).toHaveValue(/^!\[[^\]]+\.png\]\(\/files\/\d+\) ?$/, { timeout: 15_000 });
+  await expect(form.locator('.attached-file.complete')).toHaveCount(1);
+  expect(uploads).toHaveLength(1);
+});

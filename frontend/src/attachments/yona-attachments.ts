@@ -6,9 +6,6 @@ import {
 
 type Item = {key: string; id?: string; name: string; url?: string; mimeType?: string; size: number; progress: number};
 type Uploaded = {id: string | number; name: string; url: string; mimeType: string; size: number};
-export type AttachmentOptions = {
-  textarea?: HTMLTextAreaElement | null; uploadURL?: string; listURL?: string; resourceType?: string; resourceId?: string;
-};
 type Globals = Window & {
   Messages?: (key: string, ...args: unknown[]) => string;
   $yona?: {notify?: (message: string, duration?: number) => void};
@@ -30,7 +27,7 @@ function notify(key: string, ...args: unknown[]): void {
 /**
  * Light-DOM attachment uploader. The shell markup and messages come from the server-rendered
  * <template id="yona-attachments-template"> (site/layout); Lit renders only the file list.
- * `configure({textarea})` keeps the contract of the Vue widget this replaces.
+ * It wires itself to the Markdown editor textarea of its own form, so pages need no script.
  */
 export class YonaAttachments extends LitElement {
   static properties = {items: {state: true}, dragging: {state: true}};
@@ -40,8 +37,7 @@ export class YonaAttachments extends LitElement {
   private list?: HTMLUListElement;
   private temporary?: HTMLInputElement;
   private textarea: HTMLTextAreaElement | null = null;
-  private uploadURL = '/files';
-  private listURL = '/files';
+  private listRequested = false;
 
   constructor() {
     super();
@@ -52,28 +48,24 @@ export class YonaAttachments extends LitElement {
   connectedCallback() {
     if (!this.shell) this.mountShell();
     super.connectedCallback();
+    // Every template places one editor in the same form; forms moved in the DOM rebind here.
+    this.textarea = this.closest('form')?.querySelector<HTMLTextAreaElement>('yona-markdown-editor textarea') ?? null;
     if (this.textarea) this.bindTextarea(this.textarea);
+    const type = this.dataset.resourceType;
+    if (type && !this.listRequested) {
+      this.listRequested = true;
+      void this.loadList(type, this.dataset.resourceId);
+    }
   }
 
   disconnectedCallback() {
     if (this.textarea) this.unbindTextarea(this.textarea);
+    this.textarea = null;
     super.disconnectedCallback();
   }
 
   protected createRenderRoot() {
     return this.list ?? document.createElement('ul');
-  }
-
-  /** Same contract as the Vue widget: attach a textarea and load the resource's attachments. */
-  configure(options: AttachmentOptions = {}): void {
-    if (this.textarea) this.unbindTextarea(this.textarea);
-    this.textarea = options.textarea ?? null;
-    if (this.textarea && this.isConnected) this.bindTextarea(this.textarea);
-    this.uploadURL = options.uploadURL ?? this.uploadURL;
-    this.listURL = options.listURL ?? this.listURL;
-    const type = options.resourceType ?? this.dataset.resourceType;
-    const id = options.resourceId ?? this.dataset.resourceId;
-    if (type) void this.loadList(type, id);
   }
 
   private mountShell(): void {
@@ -178,7 +170,7 @@ export class YonaAttachments extends LitElement {
     const body = new FormData();
     body.append('filePath', file, name);
     const request = new XMLHttpRequest();
-    request.open('POST', this.uploadURL);
+    request.open('POST', '/files');
     for (const [header, value] of Object.entries(xsrfHeaders())) request.setRequestHeader(header, value);
     request.upload?.addEventListener('progress', event => {
       if (event.lengthComputable) this.patch(key, {progress: Math.ceil(event.loaded / event.total * 100)});
@@ -233,12 +225,12 @@ export class YonaAttachments extends LitElement {
   private async loadList(resourceType: string, resourceId?: string): Promise<void> {
     const query = new URLSearchParams({containerType: resourceType, containerId: resourceId ?? ''});
     try {
-      const response = await fetch(`${this.listURL}?${query}`);
+      const response = await fetch(`/files?${query}`);
       if (!response.ok) return;
       const body = await response.json() as {attachments?: Uploaded[]; tempFiles?: Uploaded[]};
       const files = [...body.attachments ?? [], ...(resourceId ? [] : body.tempFiles ?? [])];
       const known = new Set(this.items.map(item => item.id));
-      // configure() may run again for the same form; keep each attachment once.
+      // Marker children may already list some of them; keep each attachment once.
       const added = files.filter(file => !known.has(String(file.id))).map(file => ({
         key: String(file.id), id: String(file.id), name: file.name, url: file.url, mimeType: file.mimeType,
         size: file.size, progress: 100,

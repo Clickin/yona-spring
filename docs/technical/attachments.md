@@ -1,12 +1,18 @@
 # Attachments
 
-`<yona-attachments>` (`frontend/src/attachments/yona-attachments.ts`) is a light-DOM Lit custom element. It replaces the Vue widget of the same tag, whose source was not in the repository. The tag name, `data-resource-type`/`data-resource-id`, `.attached-file-marker` children and `configure({textarea, uploadURL, listURL, resourceType, resourceId})` are unchanged, so templates and `yona.Attachments`, `CodeCommentBox`, `issue.Detail` and `board/view.html` callers need no changes.
+`<yona-attachments>` (`frontend/src/attachments/yona-attachments.ts`) is a light-DOM Lit custom element. It replaces the Vue widget of the same tag, whose source was not in the repository. The tag name, `data-resource-type`/`data-resource-id` and `.attached-file-marker` children are unchanged.
 
 ## Markup
 
 `site/layout` renders `<template id="yona-attachments-template">` with the pre-Vue `common/uploadForm` markup and `common.attach.*` messages. Each element clones that shell into its light DOM on first connection; Lit renders only the `<li class="attached-file">` list into the shell's `<ul>`. Existing `yona.css` rules style it, so the Vue widget's embedded CSS copy is gone, and messages follow the user's locale instead of the widget's hard-coded Korean. A Turbo cache clone keeps its shell; its list restarts from the marker children, as the Vue widget's remount did.
 
 `temporaryUploadFiles` is a real hidden input inside the shell and therefore part of the surrounding form.
+
+## Wiring
+
+On each connection the element binds to `yona-markdown-editor textarea` in its closest `<form>`; every template places exactly one editor there, and forms moved in the DOM (diff line comments) rebind. When `data-resource-type` is set, it loads `GET /files?containerType=&containerId=` once. No page script configures it: the former `configure({textarea})` calls in the issue, board, milestone and SVN diff scripts, `CodeCommentBox`, `issue.Detail` and `board/view.html` are gone, and `yona.Files`/`yona.Attachments` no longer special-case the tag. This also restores uploads in the pull request body and commit review thread replies, which legacy `yobi.git.Write`/`yobi.code.Diff` wired but the port never configured.
+
+`yona.Files` (avatar upload) and `yona.Attachments` (read-only download lists in `.attachments`) remain for their other uses.
 
 ## Behavior
 

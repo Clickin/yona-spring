@@ -309,16 +309,6 @@
                 if (elEditForm) { elEditForm.style.display = "block"; }
                 document.querySelectorAll(".add-a-comment").forEach(function(el){ el.style.display = "none"; });
                 autosize.update(document.querySelectorAll('textarea'));
-                // <yona-attachments>는 실제 textarea 참조를 명령형으로 주입받아야
-                // 붙여넣기/드래그/링크 삽입 등이 그 textarea를 대상으로 동작한다 - 폼이
-                // 실제로 열리는 시점에 지연 배선한다(configure()는 멱등).
-                if (elEditForm) {
-                    var elAttachments = elEditForm.querySelector('yona-attachments');
-                    var elEditTextarea = elEditForm.querySelector('textarea[data-editor-mode="update-comment-body"]');
-                    if (elAttachments && elEditTextarea) {
-                        elAttachments.configure({"textarea": elEditTextarea});
-                    }
-                }
                 return;
             }
             var matchedCancel = event.target.closest('.ybtn-cancel');

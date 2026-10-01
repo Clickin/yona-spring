@@ -35,7 +35,6 @@
             _initElement(htOptions || {});
             _attachEvent();
 
-            _initFileUploader();
             _initFileDownloader();
             _affixIssueInfoWrap();
         }
@@ -44,10 +43,6 @@
          * initialize variables except HTML Element
          */
         function _initVar(htOptions){
-            var tplFileItemEl = document.getElementById("tplAttachedFile");
-            // jQuery `$('#tplAttachedFile').text()`는 매치가 없어도 빈 문자열을
-            // 반환한다(undefined가 아님) - 그 quirk를 그대로 재현.
-            htVar.sTplFileItem = tplFileItemEl ? tplFileItemEl.textContent : "";
             htVar.sAction = htOptions.sAction;
             htVar.sWatchUrl = htOptions.sWatchUrl;
             htVar.sUnwatchUrl = htOptions.sUnwatchUrl;
@@ -60,7 +55,6 @@
          * initialize HTML Element variables
          */
         function _initElement(htOptions){
-            htElement.welUploader = document.getElementById("upload");
             htElement.welTextarea = document.querySelector('textarea[data-editor-mode="comment-body"]');
 
             htElement.welAttachments = document.querySelectorAll(".attachments");
@@ -134,24 +128,6 @@
                 $yona.notify(Messages("error.failedTo", Messages("issue.update.labelIds"),
                     oErr && oErr.status || "", oErr && oErr.statusText || ""), 3000);
             });
-        }
-
-        /**
-         * initialize fileUploader
-         */
-        function _initFileUploader(){
-            var oUploader = yona.Files.getUploader(htElement.welUploader, htElement.welTextarea);
-
-            if(oUploader){
-                // yona.Files.getUploader()는 [elContainer] 형태의 순수 배열을 반환한다 -
-                // oUploader[0]로 raw element를 꺼낸다.
-                (new yona.Attachments({
-                    "elContainer"  : htElement.welUploader,
-                    "elTextarea"   : htElement.welTextarea,
-                    "sTplFileItem" : htVar.sTplFileItem,
-                    "sUploaderId"  : oUploader[0].getAttribute("data-namespace")
-                }));
-            }
         }
 
         /**

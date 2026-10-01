@@ -29,7 +29,6 @@
             _initElement(htOptions || {});
             _initVar(htOptions || {});
             _attachEvent();
-            _initFileUploader();
 
             htElement.welInputTitle.focus();
             htElement.welInputTitle.addEventListener('keydown', function (e) {
@@ -48,7 +47,6 @@
             htVar.sIssueId = htOptions.sIssueId || null;
             htVar.sIssueListURL = htOptions.sIssueListURL;
             htVar.sIssueFormURL = htOptions.sIssueFormURL;
-            htVar.sTplFileItem = htOptions.sTplFileItem || htElement.welTplFileItem.textContent;
             htVar.bUnloadEvent = false;
         }
 
@@ -56,7 +54,6 @@
          * initialize element variable
          */
         function _initElement(htOptions){
-            htElement.welUploader = document.querySelector(htOptions.elUploader || "#upload");
             htElement.welIssueOptions = document.querySelector(htOptions.elIssueOptions || "#options");
             htElement.welTextarea = document.querySelector(htOptions.elTextarea || "#body");
             htElement.welInputTitle = document.querySelector(htOptions.elInputTitle || "#title");
@@ -64,7 +61,6 @@
             // 이 값은 아래 _attachEvent의 기존 버그(비델리게이트 바인딩) 때문에 실제로는
             // 셀렉터로 쓰이지 않는다 - 저장만 하고 값 자체는 사용하지 않는다.
             htElement.welMilestoneRefresh = htOptions.elMilestoneRefresh;
-            htElement.welTplFileItem = document.getElementById('tplAttachedFile');
             htElement.welAssignee = document.getElementById("assignee");
             htElement.welDueDate = _toElement(htOptions.elDueDate) || document.getElementById("issueDueDate");
         }
@@ -141,22 +137,6 @@
                 }
                 (new yona.ui.Dropdown({"elContainer":"#milestoneId"}));
             });
-        }
-
-        /**
-         * initialize fileUploader
-         */
-        function _initFileUploader(){
-            var oUploader = yona.Files.getUploader(htElement.welUploader, htElement.welTextarea);
-
-            if(oUploader){
-                (new yona.Attachments({
-                    "elContainer"  : htElement.welUploader,
-                    "elTextarea"   : htElement.welTextarea,
-                    "sTplFileItem" : htVar.sTplFileItem,
-                    "sUploaderId"  : oUploader[0].getAttribute("data-namespace")
-                }));
-            }
         }
 
         function _onSubmitForm(event){

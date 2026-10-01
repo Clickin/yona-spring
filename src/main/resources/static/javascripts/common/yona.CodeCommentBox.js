@@ -22,10 +22,6 @@ yona.CodeCommentBox = (function(){
         htElement.welCommentForm = htElement.welCommentWrap.querySelector("form");
         htElement.welCommentTextarea = htElement.welCommentForm.querySelector('[data-toggle="markdown-editor"] textarea');
         htElement.welInitialParent = htElement.welCommentWrap.parentElement;
-        var attachments = htElement.welCommentForm.querySelector("yona-attachments");
-        if(attachments){
-            attachments.configure({"textarea": htElement.welCommentTextarea});
-        }
     }
 
     function _attachEvent(){

@@ -109,7 +109,6 @@
             _attachEvent();
             _render();
 
-            _initFileUploader();
             _initFileDownloader();
             _initToggleCommentsButton();
             _initMiniMap();
@@ -131,18 +130,12 @@
             // 미니맵
             htVar.sQueryMiniMap = htOptions.sQueryMiniMap || "li.comment";
             htVar.sTplMiniMapLink = '<a href="#${id}" style="top:${top}px; height:${height}px;"></a>';
-
-            // yona.Attachments
-            // jQuery `$('#tplAttachedFile').text()`는 매치가 없어도 빈 문자열을 반환한다.
-            var elTplFileItem = document.getElementById("tplAttachedFile");
-            htVar.sTplFileItem = elTplFileItem ? elTplFileItem.textContent : "";
         }
 
         /**
          * initialize element
          */
         function _initElement(htOptions){
-            htElement.welUploader = document.getElementById("upload");
             htElement.welTextarea = document.querySelector('textarea[data-editor-mode="comment-body"]');
 
             htElement.welDiff = document.getElementById("commit");
@@ -237,24 +230,6 @@
             document.querySelectorAll('[data-commit-origin="true"]').forEach(function(el){
                 el.classList.remove("hide");
             });
-        }
-
-        /**
-         * initialize fileUploader
-         */
-        function _initFileUploader(){
-            var oUploader = yona.Files.getUploader(htElement.welUploader, htElement.welTextarea);
-
-            if(oUploader){
-                // yona.Files.getUploader()는 [elContainer] 형태의 배열을 반환하므로
-                // oUploader[0]로 raw element를 꺼내 네이티브로 읽는다.
-                (new yona.Attachments({
-                    "elContainer"  : htElement.welUploader,
-                    "elTextarea"   : htElement.welTextarea,
-                    "sTplFileItem" : htVar.sTplFileItem,
-                    "sUploaderId"  : oUploader[0].getAttribute("data-namespace")
-                }));
-            }
         }
 
         /**

@@ -17,8 +17,6 @@
         var root = options.root || document;
         var lifecycle = new AbortController();
         var timelineRenderTimer;
-        var uploaderId;
-        var uploaderAttachment;
         var downloaders = [];
         function listen(target, type, listener){
             target.addEventListener(type, listener, {signal: lifecycle.signal});
@@ -104,7 +102,6 @@
             _initVar(options || {});
             _attachEvent();
 
-            _initFileUploader();
             _initFileDownloader();
             _initCommentAndCloseButton();
 
@@ -118,7 +115,6 @@
          * @private
          */
         function _initElement(options){
-            elements.uploader = root.querySelector("#upload");
             elements.textarea = root.querySelector('textarea[data-editor-mode="comment-body"]');
 
             elements.btnWatch = root.querySelector('#watch-button');
@@ -141,9 +137,6 @@
             vars.issueId = options.issueId;
             vars.urls = options.urls;
             vars.nextState = options.nextState;
-            var tplFileItemEl = document.getElementById("tplAttachedFile");
-            // jQuery `$('#tplAttachedFile').text()`는 매치가 없어도 빈 문자열을 반환한다.
-            vars.tplFileItem = tplFileItemEl ? tplFileItemEl.textContent : "";
 
             // for auto-update
             vars.isTimelineUpdating = false;
@@ -449,28 +442,6 @@
         }
 
         /**
-         * Initialize fileUploader
-         *
-         * @private
-         */
-        function _initFileUploader(){
-            if (!elements.uploader) { return; }
-            var oUploader = yona.Files.getUploader(elements.uploader, elements.textarea);
-
-            if(oUploader){
-                // yona.Files.getUploader()는 [elContainer] 형태의 배열을 반환하므로
-                // oUploader[0]로 raw element를 꺼내 네이티브로 읽는다.
-                uploaderId = oUploader[0].getAttribute("data-namespace");
-                uploaderAttachment = new yona.Attachments({
-                    "elContainer"  : elements.uploader,
-                    "elTextarea"   : elements.textarea,
-                    "sTplFileItem" : vars.tplFileItem,
-                    "sUploaderId"  : uploaderId
-                });
-            }
-        }
-
-        /**
          * Initialize fileDownloader
          *
          * @param target
@@ -700,8 +671,6 @@
             lifecycle.abort();
             _unsetTimelineUpdateTimer();
             clearTimeout(timelineRenderTimer);
-            if (uploaderAttachment) { uploaderAttachment.destroy(); }
-            if (uploaderId) { yona.Files.destroyUploader(uploaderId); }
             downloaders.forEach(function (item) {
                 item.attachment.destroy();
                 item.container.replaceChildren();

@@ -56,10 +56,6 @@ yona.Attachments = function(htOptions) {
         _initVar(htOptions);
         _initElement(htOptions);
 
-        if(htVar.bIsVueAttachments){
-            return;
-        }
-
         // Request attachments only if the container is specified.
         if (htVar.attachments) {
             _updateAttachments(htVar.attachments);
@@ -90,15 +86,6 @@ yona.Attachments = function(htOptions) {
      */
     function _initElement(htOptions){
         var elContainer = _toElement(htOptions.elContainer);
-
-        // 컨테이너가 <yona-attachments>면 드롭존/업로드/카드 목록을 그 커스텀 엘리먼트가 전부
-        // 담당한다 - configure()로 textarea 참조만 넘기고 이 파일의 나머지 초기화는 건너뛴다.
-        if(elContainer && elContainer.tagName.toLowerCase() === "yona-attachments"){
-            htVar.bIsVueAttachments = true;
-            elContainer._isYonaAttachment = true;
-            elContainer.configure({"textarea": _toElement(htOptions.elTextarea)});
-            return;
-        }
 
         // parentForm
         htElements.welToAttach = _toElement(htOptions.targetFormId) || elContainer;
@@ -705,10 +692,6 @@ yona.Attachments = function(htOptions) {
     }
 
     function _destroy(){
-        if(htVar.bIsVueAttachments){
-            return;
-        }
-
         if(htOptions.sUploaderId){
             _detachUploaderEvent(htOptions.sUploaderId);
         }

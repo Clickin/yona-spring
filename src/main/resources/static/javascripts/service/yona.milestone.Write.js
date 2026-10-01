@@ -30,7 +30,6 @@
             _initElement(htOptions);
             _initDatePicker();
             _attachEvent();
-            _initFileUploader();
 
             htElement.welInputTitle.focus();
             htElement.welInputTitle.addEventListener('keydown', function (e) {
@@ -48,7 +47,6 @@
         function _initVar(htOptions){
             htVar.sDateFormat  = htOptions.sDateFormat  || "YYYY-MM-DD";
             htVar.rxDateFormat = htOptions.rxDateFormat || /\d{4}-\d{2}-\d{2}$/;
-            htVar.sTplFileItem = document.getElementById('tplAttachedFile').textContent;
         }
 
         /**
@@ -60,7 +58,6 @@
             htElement.welInputDueDate = _toElement(htOptions.elDueDate);
             htElement.welInputTitle   = document.getElementById('title');
             htElement.welInputContent = document.querySelector('textarea[data-editor-mode="content-body"]');
-            htElement.welUploader = document.querySelector(htOptions.elUploader || "#upload");
         }
 
         /**
@@ -158,22 +155,6 @@
                     htVar.oPicker.setDate(sValue, true, sFlatpickrFormat);
                 }
             });
-        }
-
-        /**
-         * initialize fileUploader
-         */
-        function _initFileUploader(){
-            var oUploader = yona.Files.getUploader(htElement.welUploader, htElement.welInputContent);
-
-            if(oUploader){
-                (new yona.Attachments({
-                    "elContainer"  : htElement.welUploader,
-                    "elTextarea"   : htElement.welInputContent,
-                    "sTplFileItem" : htVar.sTplFileItem,
-                    "sUploaderId"  : oUploader[0].getAttribute("data-namespace")
-                }));
-            }
         }
 
         _init(htOptions || {});
