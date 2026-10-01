@@ -5,7 +5,7 @@ import jakarta.persistence.*
 import java.time.Instant
 
 @Entity
-@Table(name = "attachment")
+@Table(name = "attachment", indexes = [Index(name = "ix_attachment_container_avatar", columnList = "container_type,container_id,id")])
 class Attachment(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

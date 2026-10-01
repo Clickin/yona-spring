@@ -102,7 +102,7 @@ class UserController(
         }.take(10)
 
         val result = users.map { user ->
-            val avatarUrl = "/images/default-avatar-128.png"
+            val avatarUrl = user.avatarUrl
             val sb = StringBuilder()
             sb.append("<img class='mention_image' src='$avatarUrl'>")
             sb.append("<b class='mention_name'>${user.name}</b>")

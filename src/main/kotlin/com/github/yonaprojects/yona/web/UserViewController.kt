@@ -366,7 +366,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
 
@@ -381,7 +380,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("emails", loginUser.emails)
         model.addAttribute("currentUser", loginUser)
@@ -449,7 +447,6 @@ class UserViewController(
             EventType.ORGANIZATION_MEMBER_ENROLL_ACCEPT to "조직 멤버 가입 승인"
         )
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("projects", projects)
         model.addAttribute("notiTypes", notiTypes)
@@ -581,7 +578,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
 
@@ -596,7 +592,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
 
@@ -615,7 +610,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
         model.addAttribute("tokens", apiTokenService.listByOwner(loginUser))
@@ -631,7 +625,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         fillTokenNewFormModel(loginUser, model)
 
         return "user/edit_tokens_new"
@@ -658,7 +651,6 @@ class UserViewController(
             ApiTokenPermission.entries.find { it.name == raw } ?: ApiTokenPermission.NONE
         }
 
-        fillAvatarId(loginUser)
         try {
             val issued = apiTokenService.issue(
                 owner = loginUser,
@@ -737,7 +729,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
         model.addAttribute("authorizedApps", oAuthAuthorizedAppsService.listAuthorizedApps(loginUser.loginId))
@@ -770,7 +761,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
         model.addAttribute("ownedOAuthApps", oAuthAppRegistrationService.listByOwner(loginUser.id!!))
@@ -786,7 +776,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         fillOwnedOAuthAppNewFormModel(loginUser, model)
 
         return "user/edit_oauth_apps_owned_new"
@@ -805,7 +794,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         try {
             val registered = oAuthAppRegistrationService.register(
                 clientName = clientName,
@@ -888,7 +876,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
         model.addAttribute("sshKeys", sshKeyService.listByUser(loginUser))
@@ -904,7 +891,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
         model.addAttribute("submittedTitle", "")
@@ -924,7 +910,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         try {
             sshKeyService.create(loginUser, title, publicKey)
             // Post/Redirect/Get — 목록 화면으로 돌아가 성공 메시지를 플래시 속성으로 한 번만
@@ -967,7 +952,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
         model.addAttribute("gpgKeys", gpgKeyService.listByUser(loginUser))
@@ -983,7 +967,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         model.addAttribute("user", loginUser)
         model.addAttribute("currentUser", loginUser)
         model.addAttribute("submittedArmoredPublicKey", "")
@@ -1001,7 +984,6 @@ class UserViewController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
             ?: return "error/403"
 
-        fillAvatarId(loginUser)
         try {
             gpgKeyService.create(loginUser, armoredPublicKey)
             // Post/Redirect/Get — 목록 화면으로 돌아가 성공 메시지를 플래시 속성으로 한 번만
@@ -1089,12 +1071,6 @@ class UserViewController(
         }
     }
 
-    private fun fillAvatarId(user: User) {
-        val attachments = attachmentRepository.findByContainerTypeAndContainerId(ResourceType.USER_AVATAR, user.id.toString())
-        if (attachments.isNotEmpty()) {
-            user.avatarId = attachments.last().id
-        }
-    }
 
     @PostMapping("/user/edit")
     fun editUserInfo(

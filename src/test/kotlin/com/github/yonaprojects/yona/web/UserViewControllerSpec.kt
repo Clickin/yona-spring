@@ -1957,19 +1957,6 @@ class UserViewControllerSpec : DescribeSpec({
             ) shouldBe "error/403"
         }
 
-        // fillAvatarId()의 "첨부파일이 존재함" 분기 — beforeTest의 전역 mock이 항상 빈 목록을
-        // 반환해 attachments.isNotEmpty()가 한 번도 true였던 적이 없었다.
-        it("아바타 첨부파일이 있으면 마지막 첨부파일 id를 avatarId로 채워야 한다") {
-            val loginUser = User(id = 61L, loginId = "avataruser", name = "아바타유저")
-            val avatar1 = Attachment(id = 700L)
-            val avatar2 = Attachment(id = 701L)
-            every { userRepository.findByLoginId("avataruser") } returns Optional.of(loginUser)
-            every { attachmentRepository.findByContainerTypeAndContainerId(ResourceType.USER_AVATAR, "61") } returns listOf(avatar1, avatar2)
-
-            userViewController.editUserProfileForm(UsernamePasswordAuthenticationToken("avataruser", "password"), ExtendedModelMap())
-
-            loginUser.avatarId shouldBe 701L
-        }
     }
 
     // editUserInfo/addEmail/deleteEmail/setAsMainEmail/sendValidationEmail/resetToken의

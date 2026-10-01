@@ -1,7 +1,5 @@
 package com.github.yonaprojects.yona.config.oauth2server
 
-import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
-import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import org.springframework.beans.factory.annotation.Value
@@ -45,8 +43,7 @@ private const val INVALID_TARGET = "invalid_target"
 class ResourceIndicatorTokenCustomizer(
     @Value("\${yona.base-url:http://localhost:8080}")
     private val baseUrl: String,
-    private val userRepository: UserRepository,
-    private val attachmentRepository: AttachmentRepository
+    private val userRepository: UserRepository
 ) : OAuth2TokenCustomizer<JwtEncodingContext> {
 
     override fun customize(context: JwtEncodingContext) {
@@ -102,17 +99,6 @@ class ResourceIndicatorTokenCustomizer(
         }
     }
 
-    // User.avatarUrl은 컨트롤러가 미리 채워주는 @Transient avatarId(fillAvatarId() 패턴, 예:
-    // UserViewController)에 의존하는 상대경로 getter라, 여기서는 그 패턴을 직접 재현하되 값을
-    // 엔티티에 되써넣지 않고(트랜잭션 범위 밖의 조회 전용 엔티티라 불필요한 부작용을 피함) 절대
-    // URL로 반환한다 — OIDC picture 클레임은 제3자 클라이언트가 그대로 렌더링해야 하므로 이
-    // 애플리케이션 내부 화면 렌더링 전용 상대경로로는 안 된다.
-    private fun resolvePictureUrl(user: User): String {
-        val avatarId = user.id?.let { id ->
-            attachmentRepository.findByContainerTypeAndContainerId(ResourceType.USER_AVATAR, id.toString())
-                .lastOrNull()?.id
-        }
-        val path = avatarId?.let { "/files/$it" } ?: user.avatarUrl(64)
-        return "$baseUrl$path"
-    }
+    // OIDC picture is absolute; the loaded User resolves the same avatar used by the UI.
+    private fun resolvePictureUrl(user: User): String = "$baseUrl${user.avatarUrl}"
 }

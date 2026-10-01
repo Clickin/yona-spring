@@ -252,7 +252,7 @@ class ProjectMemberController(
                 "loginId" to loginId,
                 "name" to assignToMeText,
                 "pureNameOnly" to pureName,
-                "avatarUrl" to "",
+                "avatarUrl" to currentUser.avatarUrl,
                 "type" to "user"
             ))
         }

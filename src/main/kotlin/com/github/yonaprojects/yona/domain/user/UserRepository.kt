@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.Optional
 
+private const val USER_WITH_AVATAR_SELECT = "SELECT n4user.*, (SELECT MAX(avatar.id) FROM attachment avatar WHERE avatar.container_type='USER_AVATAR' AND avatar.container_id=CONCAT('',n4user.id)) AS avatarId FROM n4user"
+
 interface UserRepository : JpaRepository<User, Long> {
     fun findByLoginId(loginId: String): Optional<User>
     fun findByEmail(email: String): Optional<User>
@@ -73,7 +75,7 @@ interface UserRepository : JpaRepository<User, Long> {
     // Hibernate 7.2.x LIKE 2개 이상 버그 회피 — name/login_id(/english_name) 컬럼이 여러 개라
     // 1개로 인수분해 불가). enum(UserState)은 문자열 이름으로 바인딩한다.
     @Query(
-        value = "SELECT * FROM n4user WHERE state IN ('ACTIVE', 'SITE_ADMIN') AND (LOWER(name) LIKE LOWER(:keyword) OR LOWER(login_id) LIKE LOWER(:keyword) OR LOWER(english_name) LIKE LOWER(:keyword))",
+        value = "$USER_WITH_AVATAR_SELECT WHERE state IN ('ACTIVE', 'SITE_ADMIN') AND (LOWER(name) LIKE LOWER(:keyword) OR LOWER(login_id) LIKE LOWER(:keyword) OR LOWER(english_name) LIKE LOWER(:keyword))",
         countQuery = "SELECT COUNT(*) FROM n4user WHERE state IN ('ACTIVE', 'SITE_ADMIN') AND (LOWER(name) LIKE LOWER(:keyword) OR LOWER(login_id) LIKE LOWER(:keyword) OR LOWER(english_name) LIKE LOWER(:keyword))",
         nativeQuery = true
     )
@@ -89,7 +91,7 @@ interface UserRepository : JpaRepository<User, Long> {
     fun countSearchUsers(@Param("keyword") keyword: String): Int
 
     @Query(
-        value = "SELECT * FROM n4user WHERE state = :#{#state.name()} AND (LOWER(name) LIKE LOWER(:query) OR LOWER(login_id) LIKE LOWER(:query))",
+        value = "$USER_WITH_AVATAR_SELECT WHERE state = :#{#state.name()} AND (LOWER(name) LIKE LOWER(:query) OR LOWER(login_id) LIKE LOWER(:query))",
         countQuery = "SELECT COUNT(*) FROM n4user WHERE state = :#{#state.name()} AND (LOWER(name) LIKE LOWER(:query) OR LOWER(login_id) LIKE LOWER(:query))",
         nativeQuery = true
     )

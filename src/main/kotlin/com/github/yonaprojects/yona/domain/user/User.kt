@@ -182,7 +182,7 @@ class User(
         return departmentName
     }
 
-    @Transient
+    @org.hibernate.annotations.Formula("(select max(avatar.id) from attachment avatar where avatar.container_type = 'USER_AVATAR' and avatar.container_id = concat('', id))")
     var avatarId: Long? = null
 
     val avatarUrl: String

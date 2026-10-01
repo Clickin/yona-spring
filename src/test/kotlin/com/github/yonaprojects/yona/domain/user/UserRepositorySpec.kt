@@ -3,6 +3,9 @@ package com.github.yonaprojects.yona.domain.user
 import com.github.yonaprojects.yona.AbstractIntegrationTest
 import com.github.yonaprojects.yona.config.YonaAuthenticationProvider
 import com.github.yonaprojects.yona.domain.site.SiteService
+import com.github.yonaprojects.yona.domain.attachment.Attachment
+import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
+import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.mockk.every
@@ -15,13 +18,15 @@ import java.time.Instant
 
 class UserRepositorySpec @Autowired constructor(
     private val userRepository: UserRepository,
-    private val siteService: SiteService
+    private val siteService: SiteService,
+    private val attachmentRepository: AttachmentRepository
 ) : AbstractIntegrationTest() {
 
     init {
         describe("UserRepository") {
             beforeEach {
                 userRepository.deleteAll()
+                attachmentRepository.deleteAll()
             }
 
             it("사용자를 정상적으로 저장하고 조회할 수 있어야 한다") {
@@ -43,6 +48,27 @@ class UserRepositorySpec @Autowired constructor(
                 foundUser shouldNotBe null
                 foundUser.name shouldBe "홍길동"
                 foundUser.email shouldBe "gildong@example.com"
+            }
+
+            it("다시 조회한 사용자의 아바타는 최신 사용자 아바타를 사용하고 교체 삭제를 반영한다") {
+                val user = userRepository.save(User(loginId = "avatar-owner", name = "Synthetic avatar owner", email = "avatar@example.invalid"))
+                val other = userRepository.save(User(loginId = "avatar-other", name = "Other", email = "other-avatar@example.invalid"))
+                fun attachment(type: ResourceType, owner: User) = attachmentRepository.saveAndFlush(
+                    Attachment(name = "synthetic-avatar.png", hash = "synthetic-avatar", containerType = type,
+                        containerId = owner.id.toString(), mimeType = "image/png")
+                )
+                val first = attachment(ResourceType.USER_AVATAR, user)
+                userRepository.findById(user.id!!).orElseThrow().avatarUrl shouldBe "/files/${first.id}"
+                val latest = attachment(ResourceType.USER_AVATAR, user)
+                attachment(ResourceType.NOT_A_RESOURCE, user)
+                attachment(ResourceType.USER_AVATAR, other)
+                userRepository.findByLoginId(user.loginId).orElseThrow().avatarUrl shouldBe "/files/${latest.id}"
+                userRepository.searchUsers("avatar-owner", PageRequest.of(0, 10)).content.single().avatarUrl shouldBe "/files/${latest.id}"
+                userRepository.findUsersForAdmin(UserState.ACTIVE, "avatar-owner", PageRequest.of(0, 10)).content.single().avatarUrl shouldBe "/files/${latest.id}"
+                attachmentRepository.delete(latest)
+                userRepository.findById(user.id!!).orElseThrow().avatarUrl shouldBe "/files/${first.id}"
+                attachmentRepository.delete(first)
+                userRepository.findById(user.id!!).orElseThrow().avatarUrl shouldBe "/assets/images/default-avatar-128.png"
             }
 
             it("레거시 로그인 검증 후 재해싱 도중 비밀번호가 리셋되면 새 자격증명이 유지되어야 한다") {
