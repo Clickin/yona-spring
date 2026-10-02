@@ -67,6 +67,9 @@
                             </li>
                         </th:block>
                     </ul>
+                    <a th:if="${currentUser != null}" class="ybtn small"
+                       th:href="@{/{owner}/{projectName}/issues/saved-views(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, authorId=${authorId}, assigneeId=${assigneeId}, milestoneId=${milestoneId}, commenterId=${commenterId}, labelIds=${labelIds}, dueDate=${dueDate}, orderBy=${orderBy}, orderDir=${orderDir}, itemsPerPage=${itemsPerPage})}"
+                       th:text="#{issue.savedViews}">Saved issue views</a>
 
                     <!-- 검색 및 상세 필터 폼 -->
                     <form id="search" name="search" th:action="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name})}" method="get">

@@ -1,6 +1,11 @@
 package com.github.yonaprojects.yona.config.oauth2server
 
 import com.github.yonaprojects.yona.config.ApiTokenAuthenticationFilter
+import com.github.yonaprojects.yona.config.SpaCsrfTokenRequestHandler
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository
+import org.springframework.security.web.csrf.CsrfFilter
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -115,7 +120,22 @@ class ResourceServerConfig(
     ): SecurityFilterChain {
         http
             .securityMatcher("/api/v1/**")
-            .csrf { it.disable() }
+            .csrf { csrf ->
+                val savedViews = PathPatternRequestMatcher.pathPattern(
+                    "/api/v1/projects/{owner}/{project}/issues/saved-views/**"
+                )
+                csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    .csrfTokenRequestHandler(SpaCsrfTokenRequestHandler())
+                    .requireCsrfProtectionMatcher { request ->
+                        // Saved views accept browser sessions as well as stateless API tokens.
+                        // A token-shaped header must never exempt an existing session.
+                        CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request) &&
+                            savedViews.matches(request) &&
+                            request.getSession(false)?.getAttribute(
+                                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY
+                            ) != null
+                    }
+            }
             .authorizeHttpRequests { authorize ->
                 authorize
                     .requestMatchers(HttpMethod.GET, "/api/v1/projects/**").permitAll()

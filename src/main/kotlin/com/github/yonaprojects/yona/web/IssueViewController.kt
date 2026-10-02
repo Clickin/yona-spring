@@ -287,6 +287,7 @@ class IssueViewController(
         model.addAttribute("filter", filter)
         model.addAttribute("orderBy", orderBy)
         model.addAttribute("orderDir", orderDir)
+        model.addAttribute("itemsPerPage", minOf(itemsPerPage, ITEMS_PER_PAGE_MAX))
         model.addAttribute("openIssuesCount", openIssuesCount)
         model.addAttribute("closedIssuesCount", closedIssuesCount)
 
