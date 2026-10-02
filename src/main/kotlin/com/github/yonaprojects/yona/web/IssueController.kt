@@ -6,6 +6,7 @@ import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.issue.IssueService
+import com.github.yonaprojects.yona.domain.issue.IssueTemplateService
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectScope
@@ -50,7 +51,8 @@ class IssueController(
     private val accessControl: AccessControl,
     private val titleHeadService: TitleHeadService,
     private val watchService: WatchService,
-    private val commentService: CommentService
+    private val commentService: CommentService,
+    private val issueTemplateService: IssueTemplateService
 ) {
 
     private fun getLoginUser(authentication: Authentication?): User? {
@@ -206,6 +208,19 @@ class IssueController(
         return ResponseEntity.ok(issueEventRepository.findByIssueOrderByCreatedAsc(issue).map { it.toResponse() })
     }
 
+    @GetMapping("/templates")
+    fun getTemplates(
+        @PathVariable projectId: Long,
+        authentication: Authentication?
+    ): ResponseEntity<IssueTemplateService.Catalog> {
+        val project = projectRepository.findById(projectId).orElse(null)
+            ?: return ResponseEntity.notFound().build()
+        if (!checkWritePermission(project, getLoginUser(authentication))) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+        }
+        return ResponseEntity.ok(issueTemplateService.catalog(project))
+    }
+
     @PostMapping
     fun createIssue(
         @PathVariable projectId: Long,
@@ -224,7 +239,7 @@ class IssueController(
 
         val issue = Issue(
             title = request.title,
-            body = request.body ?: "",
+            body = issueTemplateService.submission(project, request.templateId, request.answers, request.body ?: ""),
             project = project
         )
 
@@ -539,7 +554,9 @@ class IssueController(
         val assigneeId: Long?,
         val labelIds: List<Long>?,
         // true면 초안(DRAFT)으로 생성한다.
-        val isDraft: Boolean = false
+        val isDraft: Boolean = false,
+        val templateId: String? = null,
+        val answers: Map<String, String> = emptyMap()
     )
 
     data class UpdateIssueRequest(

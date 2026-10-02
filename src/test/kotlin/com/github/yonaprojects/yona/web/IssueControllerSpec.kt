@@ -83,6 +83,7 @@ class IssueControllerSpec : DescribeSpec({
         milestoneRepositoryForAccessControl
     )
 
+    val templateRepositories = mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryService>()
     val issueController = IssueController(
         issueService,
         issueRepository,
@@ -95,7 +96,8 @@ class IssueControllerSpec : DescribeSpec({
         accessControl,
         titleHeadService,
         watchService,
-        commentService
+        commentService,
+        com.github.yonaprojects.yona.domain.issue.IssueTemplateService(templateRepositories, tools.jackson.databind.ObjectMapper())
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(issueController)
         .setCustomArgumentResolvers(PageableHandlerMethodArgumentResolver())
@@ -127,6 +129,46 @@ class IssueControllerSpec : DescribeSpec({
         val managerAuth = UsernamePasswordAuthenticationToken("manageruser", "password")
         val otherAuth = UsernamePasswordAuthenticationToken("otheruser", "password")
         val pageRequest = PageRequest.of(0, 25)
+
+        describe("repository issue forms API") {
+            beforeTest {
+                val repository = mockk<com.github.yonaprojects.yona.domain.vcs.PlayRepository>()
+                every { templateRepositories.getRepository(publicProject) } returns repository
+                every { repository.getRawFile("HEAD", "ISSUE_TEMPLATE.md") } returns "Legacy".toByteArray()
+                every { repository.getRawFile("HEAD", ".yona/issue-templates.json") } returns
+                    """[{"id":"bug","name":"Bug","fields":[{"id":"steps","label":"Steps","type":"text","required":true}]},
+                        {"id":"feature","name":"Feature","body":"Idea"}]""".toByteArray()
+                every { projectRepository.findById(2L) } returns Optional.of(publicProject)
+                every { userRepository.findByLoginId("otheruser") } returns Optional.of(otherUser)
+                every { projectUserRepository.existsByProjectIdAndUserId(2L, 30L) } returns false
+            }
+
+            it("offers both forms only to users with create permission") {
+                mockMvc.perform(get("/api/projects/2/issues/templates").principal(otherAuth))
+                    .andExpect(status().isOk)
+                    .andExpect(jsonPath("$.templates[0].id").value("bug"))
+                    .andExpect(jsonPath("$.templates[1].id").value("feature"))
+                    .andExpect(jsonPath("$.legacyBody").value("Legacy"))
+                mockMvc.perform(get("/api/projects/2/issues/templates"))
+                    .andExpect(status().isForbidden)
+            }
+
+            it("rejects missing answers before creating an issue, then saves the completed normal body") {
+                val base = """"title":"A bug","body":"Context","milestoneId":null,"assigneeId":null,"labelIds":null,"templateId":"bug""""
+                mockMvc.perform(post("/api/projects/2/issues").principal(otherAuth)
+                    .contentType(MediaType.APPLICATION_JSON).content("{$base}"))
+                    .andExpect(status().isBadRequest)
+                verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any(), any()) }
+
+                val captured = slot<Issue>()
+                every { issueService.createIssue(capture(captured), otherUser, null, null, null, false) } returns issue
+                mockMvc.perform(post("/api/projects/2/issues").principal(otherAuth)
+                    .contentType(MediaType.APPLICATION_JSON).content("""{$base,"answers":{"steps":"Open settings"}}"""))
+                    .andExpect(status().isCreated)
+                captured.captured.body shouldBe "Context\n\n### Steps\n\n    Open settings"
+                captured.captured.project shouldBe publicProject
+            }
+        }
 
         describe("GET /api/projects/{projectId}/issues") {
             it("공개 프로젝트의 경우 비로그인 상태여도 이슈 목록을 반환해야 한다") {

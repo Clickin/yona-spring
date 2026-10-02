@@ -13,14 +13,29 @@
     <div class="page-wrap-outer">
         <div class="project-page-wrap">
             <div class="content-wrap frm-wrap">
+                <p th:if="${invalidTemplateConfiguration == true}" role="alert" th:text="#{issue.template.invalid}"></p>
+                <form th:if="${issueTemplates != null and !issueTemplates.isEmpty()}" method="get"
+                      th:action="@{/{owner}/{projectName}/issueform(owner=${project.owner}, projectName=${project.name})}">
+                    <input th:if="${parentIssue != null}" type="hidden" name="parentIssueId" th:value="${parentIssue.id}">
+                    <input type="hidden" name="isFromGlobalMenuNew" th:value="${isFromGlobalMenuNew}">
+                    <label for="template-choice" th:text="#{issue.template.choose}"></label>
+                    <select id="template-choice" name="templateId">
+                        <option value="" th:text="#{issue.template.legacy}"></option>
+                        <option th:each="template : ${issueTemplates}" th:value="${template.id}" th:text="${template.name}"
+                                th:selected="${selectedTemplate != null and selectedTemplate.id == template.id}"></option>
+                    </select>
+                    <button type="submit" class="ybtn" th:text="#{issue.template.load}"></button>
+                </form>
                 <form th:action="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name})}" id="issue-form" method="post" enctype="multipart/form-data">
+                    <input th:if="${selectedTemplate != null}" type="hidden" name="templateId" th:value="${selectedTemplate.id}">
+                    <p th:if="${formError != null}" role="alert" th:text="${formError}"></p>
                     <div class="row-fluid">
                         <div class="span12">
                             <dl>
                                 <dd>
                                     <div class="span12">
                                         <div class="span11">
-                                            <input type="text" id="title" name="title" class="text title" maxlength="250" tabindex="1" th:placeholder="#{title}" autocomplete="off" th:title="#{title.help.key}">
+                                            <input type="text" id="title" name="title" class="text title" maxlength="250" tabindex="1" th:placeholder="#{title}" autocomplete="off" th:title="#{title.help.key}" th:value="${param.title}">
                                         </div>
                                         <div class="span1 subtask-message" th:classappend="${parentIssue != null} ? 'option-on' : ''" th:text="#{issue.option}">Option</div>
                                     </div>
@@ -46,6 +61,24 @@
 
                         <div class="row-fluid">
                             <div class="span9 span-left-pane">
+                                <fieldset th:if="${selectedTemplate != null and !selectedTemplate.fields.isEmpty()}">
+                                    <legend th:text="${selectedTemplate.name}"></legend>
+                                    <div th:each="field : ${selectedTemplate.fields}">
+                                        <label th:for="${'answer-' + field.id}">
+                                            <span th:text="${field.label}"></span>
+                                            <span th:if="${field.required}" th:text="#{issue.template.required}"></span>
+                                        </label>
+                                        <textarea th:if="${field.type == 'text'}" th:id="${'answer-' + field.id}"
+                                                  th:name="${'answer.' + field.id}" th:required="${field.required}"
+                                                  maxlength="10000" rows="5" class="full" th:text="${answers[field.id]}"></textarea>
+                                        <select th:if="${field.type == 'select'}" th:id="${'answer-' + field.id}"
+                                                th:name="${'answer.' + field.id}" th:required="${field.required}">
+                                            <option value="" th:text="#{issue.template.select}"></option>
+                                            <option th:each="option : ${field.options}" th:value="${option}" th:text="${option}"
+                                                    th:selected="${answers[field.id] == option}"></option>
+                                        </select>
+                                    </div>
+                                </fieldset>
                                 <dl>
                                     <dd style="position: relative;">
                                         <div th:replace="~{site/layout :: markdownEditor('body', ${issueTemplate}, 'content-body')}"></div>
@@ -178,13 +211,15 @@
 
         var btnSave = document.getElementById('button-save');
         if(btnSave){
-            btnSave.addEventListener('click', function(){
+            btnSave.addEventListener('click', function(event){
+                event.preventDefault();
+                var issueForm = document.getElementById('issue-form');
+                if (!issueForm || !issueForm.reportValidity()) return;
                 btnSave.disabled = true;
                 setTimeout(function (){
                     btnSave.disabled = false;
                 }, 3000);
 
-                var issueForm = document.getElementById('issue-form');
                 if(issueForm){
                     issueForm.submit();
                 }

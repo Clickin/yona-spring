@@ -54,13 +54,15 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-import com.github.yonaprojects.yona.domain.vcs.RepositoryService
 import com.github.yonaprojects.yona.domain.issue.IssueSpecification
 import com.github.yonaprojects.yona.domain.issue.IssueService
 import com.github.yonaprojects.yona.config.TemplateHelper
 import com.github.yonaprojects.yona.domain.issue.IssueExcelService
 import com.github.yonaprojects.yona.domain.issue.IssueComment
 import com.github.yonaprojects.yona.domain.issue.RecentIssueService
+import com.github.yonaprojects.yona.domain.issue.IssueTemplateService
+import org.springframework.web.server.ResponseStatusException
+import jakarta.servlet.http.HttpServletResponse
 import com.github.yonaprojects.yona.domain.role.RoleType
 import org.springframework.http.HttpStatus
 
@@ -82,12 +84,12 @@ class IssueViewController(
     private val issueService: IssueService,
     private val templateHelper: TemplateHelper,
     private val issueExcelService: IssueExcelService,
-    private val repositoryService: RepositoryService,
     private val recentIssueService: RecentIssueService,
     private val accessControl: AccessControl,
     private val titleHeadService: TitleHeadService,
     private val issueEventRepository: IssueEventRepository,
-    private val attachmentService: AttachmentService
+    private val attachmentService: AttachmentService,
+    private val issueTemplateService: IssueTemplateService
 ) {
 
     @GetMapping("/{owner}/{projectName}/issues")
@@ -493,7 +495,8 @@ class IssueViewController(
         @RequestParam(required = false, defaultValue = "false") isFromGlobalMenuNew: Boolean,
         @RequestParam(required = false) bodyText: String? = null,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        @RequestParam(required = false) templateId: String? = null
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: run {
@@ -535,8 +538,13 @@ class IssueViewController(
             issueRepository.findById(id).orElse(null)
         }
 
-        val issueTemplate = bodyText ?: getIssueTemplate(project)
-        model.addAttribute("issueTemplate", issueTemplate)
+        val catalog = issueTemplateService.catalog(project)
+        val selectedTemplate = issueTemplateService.select(catalog, templateId)
+        model.addAttribute("issueTemplates", catalog.templates)
+        model.addAttribute("invalidTemplateConfiguration", catalog.invalidConfiguration)
+        model.addAttribute("selectedTemplate", selectedTemplate)
+        model.addAttribute("answers", emptyMap<String, String>())
+        model.addAttribute("issueTemplate", bodyText ?: selectedTemplate?.body ?: catalog.legacyBody)
 
         model.addAttribute("project", project)
         model.addAttribute("milestones", milestones)
@@ -643,7 +651,10 @@ class IssueViewController(
         @RequestParam(required = false, defaultValue = "false") isDraft: Boolean,
         @RequestParam(required = false) temporaryUploadFiles: String?,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        @RequestParam(required = false) templateId: String? = null,
+        @RequestParam parameters: Map<String, String> = emptyMap(),
+        response: HttpServletResponse? = null
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: return "error/404"
@@ -657,9 +668,20 @@ class IssueViewController(
             return "error/forbidden"
         }
 
+        val answers = parameters.filterKeys { it.startsWith("answer.") }.mapKeys { it.key.removePrefix("answer.") }
+        val submittedBody = try {
+            issueTemplateService.submission(project, templateId, answers, body)
+        } catch (e: ResponseStatusException) {
+            val view = createIssueForm(owner, projectName, parentIssueId, false, body, authentication, model, templateId)
+            model.addAttribute("answers", answers)
+            model.addAttribute("formError", e.reason)
+            response?.status = HttpStatus.BAD_REQUEST.value()
+            return view
+        }
+
         val issue = Issue(
             title = title,
-            body = body,
+            body = submittedBody,
             project = project
         )
         issue.isDraft = isDraft
@@ -955,14 +977,6 @@ class IssueViewController(
         return "redirect:/${owner.encodePathSegment()}/${projectName.encodePathSegment()}/issues"
     }
 
-    private fun getIssueTemplate(project: Project): String {
-        return try {
-            val bytes = repositoryService.getRepository(project).getRawFile("HEAD", "ISSUE_TEMPLATE.md")
-            if (bytes != null) String(bytes, StandardCharsets.UTF_8) else ""
-        } catch (e: Exception) {
-            ""
-        }
-    }
 
     @PostMapping(value = ["/{owner}/{projectName}/issue/{number}/editform", "/{owner}/{projectName}/issue/{number}/edit"])
     fun editIssue(
