@@ -588,11 +588,8 @@ class CodeViewController(
         } else {
             commentThreadRepository.findByProjectAndCommitIdAndPullRequestIsNullOrderByCreatedDateDesc(project, commitId)
         }
-        val comments = if (isSvn) {
-            commitCommentRepository.findByProjectAndCommitIdOrderByCreatedDateAsc(project, commitId)
-        } else {
-            emptyList()
-        }
+        val comments = commitCommentRepository.findByProjectAndCommitIdOrderByCreatedDateAsc(project, commitId)
+        model.addAttribute("commitCommentAnchorPrefix", if (isSvn) "comment-" else "commit-comment-")
 
         model.addAttribute("commentThreads", commentThreads)
         model.addAttribute("commitB", commit)

@@ -22,6 +22,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.watch.WatchService
+import com.github.yonaprojects.yona.domain.webhook.CommentCreatedWebhookEvent
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -169,6 +170,7 @@ class CommentServiceImpl(
             parentComment = parentComment
         )
         val savedComment = issueCommentRepository.save(comment)
+        eventPublisher.publishEvent(CommentCreatedWebhookEvent(ResourceType.ISSUE_COMMENT, savedComment.id.toString(), author.id))
         attachUploadedFiles(contents, ResourceType.ISSUE_COMMENT, savedComment.id.toString(), author.loginId)
 
         val mentionedUsers = extractMentionedUsers(contents)
@@ -234,6 +236,7 @@ class CommentServiceImpl(
             parentComment = parentComment
         )
         val savedComment = postingCommentRepository.save(comment)
+        eventPublisher.publishEvent(CommentCreatedWebhookEvent(ResourceType.NONISSUE_COMMENT, savedComment.id.toString(), author.id))
         attachUploadedFiles(contents, ResourceType.NONISSUE_COMMENT, savedComment.id.toString(), author.loginId)
 
         // yona AbstractPosting.save()/update()의 numOfComments = computeNumOfComments() 대응.

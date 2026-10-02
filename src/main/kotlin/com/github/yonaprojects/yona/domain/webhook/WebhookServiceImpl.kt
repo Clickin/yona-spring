@@ -59,13 +59,21 @@ class WebhookServiceImpl(
         payloadUrl: String,
         secret: String?,
         gitPush: Boolean,
-        webhookType: WebhookType
+        webhookType: WebhookType,
+        issueComment: Boolean,
+        postingComment: Boolean,
+        reviewComment: Boolean,
+        commitComment: Boolean
     ): Webhook {
         val webhook = Webhook(
             project = project,
             payloadUrl = payloadUrl,
             secret = secret,
             gitPush = gitPush,
+            issueComment = issueComment,
+            postingComment = postingComment,
+            reviewComment = reviewComment,
+            commitComment = commitComment,
             webhookType = webhookType,
             createdAt = Instant.now()
         )
@@ -89,7 +97,7 @@ class WebhookServiceImpl(
         if (webhooks.isEmpty()) return
 
         for (webhook in webhooks) {
-            if (!shouldDeliverToWebhook(webhook, eventType)) {
+            if (!shouldDeliverToWebhook(webhook, eventType, resource)) {
                 continue
             }
 
@@ -98,15 +106,25 @@ class WebhookServiceImpl(
         }
     }
 
-    /**
-     * gitPush 플래그는 "push(NEW_COMMIT) 이벤트를 보낼지"만 결정한다.
-     * 이슈/게시글/댓글/PR 등 push가 아닌 이벤트는 이 플래그와 무관하게 항상 전송된다.
-     * 단, JSON 포맷 웹훅은 gitPush 설정과 무관하게 push 이벤트를 항상 받는다(yona 원본 동작).
-     */
+    /** Comment subscriptions only affect creation; other event routing is unchanged. */
     internal fun shouldDeliverToWebhook(
         webhook: Webhook,
-        eventType: EventType
+        eventType: EventType,
+        resource: Any? = null
     ): Boolean {
+        if (eventType == EventType.NEW_COMMENT || eventType == EventType.NEW_REVIEW_COMMENT) {
+            return when (resource) {
+                is IssueComment -> webhook.issueComment != false
+                is PostingComment -> webhook.postingComment != false
+                is ReviewComment -> if (resource.thread?.pullRequest != null) {
+                    webhook.reviewComment != false
+                } else {
+                    webhook.commitComment != false
+                }
+                is CommitComment -> webhook.commitComment != false
+                else -> false
+            }
+        }
         if (eventType != EventType.NEW_COMMIT) {
             return true
         }
@@ -171,6 +189,20 @@ class WebhookServiceImpl(
                     root.put("project", webhook.project?.name ?: "")
                     root.put("resourceId", getResourceId(resource))
                     root.put("resourceType", getResourceType(resource).name)
+                    if (eventType == EventType.NEW_COMMENT || eventType == EventType.NEW_REVIEW_COMMENT) {
+                        root.put("action", "created")
+                        val comment = objectMapper.createObjectNode()
+                        comment.put("id", getResourceId(resource))
+                        comment.put("body", commentBody(resource))
+                        comment.put("url", resourceUrl(resource))
+                        val author = objectMapper.createObjectNode()
+                        author.put("id", sender.id)
+                        author.put("login", sender.loginId)
+                        author.put("name", sender.name)
+                        comment.set("author", author)
+                        root.set("comment", comment)
+                        root.set("parent", commentParent(objectMapper, resource))
+                    }
                     objectMapper.writeValueAsString(root)
                 }
             }
@@ -224,20 +256,8 @@ class WebhookServiceImpl(
             }
             is IssueComment -> text = resource.contents
             is PostingComment -> text = resource.contents
-            // yona Webhook.java:476-478 — 리뷰 댓글(Pull Request Comment) 이벤트의 DETAIL_SLACK
-            // attachment는 댓글 자신이 아니라 buildJsonWithPullReqtuestDetails(eventPullRequest, ...)를
-            // 그대로 재사용해 부모 풀 리퀘스트의 본문+필드(보낸사람/보낸브랜치/받는브랜치)를 담는다.
-            is ReviewComment -> {
-                val pullRequest = resource.thread?.pullRequest
-                text = pullRequest?.body ?: ""
-                if (pullRequest != null) {
-                    fields.add(buildTitleValueJSON(objectMapper, "보낸 사람", pullRequest.contributor.name, false))
-                    fields.add(buildTitleValueJSON(objectMapper, "코드 보내는 곳", pullRequest.fromBranch, true))
-                    fields.add(buildTitleValueJSON(objectMapper, "코드 받을 곳", pullRequest.toBranch, true))
-                }
-            }
-            // CommitComment는 yona Webhook.java에 대응하는 오버로드 자체가 없는 yona 전용 리소스라
-            // else 분기(본문/필드 없음)로 떨어지도록 그대로 둔다(레거시에 없는 동작 추가 금지).
+            is ReviewComment -> text = resource.contents
+            is CommitComment -> text = resource.contents
             else -> text = ""
         }
 
@@ -246,6 +266,75 @@ class WebhookServiceImpl(
         attachmentNode.set("fields", fields)
         attachmentNode.put("color", "")
         return attachmentNode
+    }
+
+    private fun commentBody(resource: Any): String? = when (resource) {
+        is IssueComment -> resource.contents
+        is PostingComment -> resource.contents
+        is ReviewComment -> resource.contents
+        is CommitComment -> resource.contents
+        else -> null
+    }
+
+    private fun resourceUrl(resource: Any): String? {
+        if (resource is CommitComment) {
+            val project = resource.project ?: return null
+            val isSvn = project.vcs.equals("SVN", ignoreCase = true) || project.vcs.equals("SUBVERSION", ignoreCase = true)
+            val prefix = if (isSvn) "comment-" else "commit-comment-"
+            return "${projectUrl(project)}/commit/${resource.commitId}#$prefix${resource.id}"
+        }
+        if (resource is ReviewComment) {
+            val thread = resource.thread
+            val pr = thread?.pullRequest
+            if (pr != null) {
+                // Review anchors live on changes, not the PR overview page.
+                val commitPath = if (thread.prevCommitId.isEmpty() && !thread.commitId.isNullOrEmpty()) {
+                    "/${thread.commitId}"
+                } else ""
+                return "${projectUrl(pr.toProject)}/pull/${pr.number}/changes$commitPath#comment-${resource.id}"
+            }
+        }
+        return notificationUrlResolver.getUrl(getResourceType(resource), getResourceId(resource))
+    }
+
+    private fun commentParent(mapper: ObjectMapper, resource: Any): ObjectNode {
+        val parent = mapper.createObjectNode()
+        when (resource) {
+            is IssueComment -> {
+                parent.put("resourceType", ResourceType.ISSUE_POST.name)
+                parent.put("id", resource.issue.id)
+                parent.put("number", resource.issue.number)
+                parent.put("title", resource.issue.title)
+                parent.put("url", notificationUrlResolver.getUrl(ResourceType.ISSUE_POST, resource.issue.id.toString()))
+            }
+            is PostingComment -> {
+                parent.put("resourceType", ResourceType.BOARD_POST.name)
+                parent.put("id", resource.posting.id)
+                parent.put("number", resource.posting.number)
+                parent.put("title", resource.posting.title)
+                parent.put("url", notificationUrlResolver.getUrl(ResourceType.BOARD_POST, resource.posting.id.toString()))
+            }
+            is ReviewComment -> {
+                val pr = resource.thread?.pullRequest
+                if (pr != null) {
+                    parent.put("resourceType", ResourceType.PULL_REQUEST.name)
+                    parent.put("id", pr.id)
+                    parent.put("number", pr.number)
+                    parent.put("title", pr.title)
+                    parent.put("url", notificationUrlResolver.getUrl(ResourceType.PULL_REQUEST, pr.id.toString()))
+                } else {
+                    parent.put("resourceType", ResourceType.COMMIT.name)
+                    parent.put("id", resource.thread?.commitId)
+                    parent.put("url", "${projectUrl(resource.thread?.project)}/commit/${resource.thread?.commitId}")
+                }
+            }
+            is CommitComment -> {
+                parent.put("resourceType", ResourceType.COMMIT.name)
+                parent.put("id", resource.commitId)
+                parent.put("url", "${projectUrl(resource.project)}/commit/${resource.commitId}")
+            }
+        }
+        return parent
     }
 
     private fun buildTitleValueJSON(
@@ -431,7 +520,10 @@ class WebhookServiceImpl(
             return "[$projectName] ${sender.name}님이 $actionMessage. $resourceInfo"
         }
 
-        return "[$projectName] ${sender.name}님이 $actionMessage.${buildResourceLink(webhook, resource)}"
+        val body = if (eventType == EventType.NEW_COMMENT || eventType == EventType.NEW_REVIEW_COMMENT) {
+            commentBody(resource)?.let { "\n$it" } ?: ""
+        } else ""
+        return "[$projectName] ${sender.name}님이 $actionMessage.${buildResourceLink(webhook, resource)}$body"
     }
 
     private fun buildResourceLink(webhook: Webhook, resource: Any): String {
@@ -442,18 +534,15 @@ class WebhookServiceImpl(
                 "#${resource.issue.number}: ${resource.issue.title}"
             is PostingComment ->
                 "#${resource.posting.number}: ${resource.posting.title}"
-            // yona Webhook.java:493-499 buildRequestBody(PullRequest, ReviewComment) — 링크 텍스트는
-            // 리뷰 댓글 자신이 아니라 부모 풀 리퀘스트의 "#번호: 제목". 부모를 못 찾으면(비정상 상태)
-            // yona에 대응 분기가 없으므로 링크를 만들지 않는다.
             is ReviewComment ->
                 resource.thread?.pullRequest?.let { "#${it.number}: ${it.title}" }
-            // CommitComment는 yona Webhook.java에 대응하는 오버로드 자체가 없는 yona 전용 리소스라
-            // 링크를 만들지 않는다(레거시에 없는 동작 추가 금지).
+                    ?: resource.thread?.commitId
+            is CommitComment -> resource.commitId
             is PullRequest -> "#${resource.number}: ${resource.title}"
             else -> null
         } ?: return ""
 
-        val url = notificationUrlResolver.getUrl(getResourceType(resource), getResourceId(resource)) ?: return ""
+        val url = resourceUrl(resource) ?: return ""
 
         val escapedText = if (webhook.webhookType == WebhookType.DETAIL_SLACK) {
             linkText.replace(">", "&gt;")

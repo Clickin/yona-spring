@@ -53,8 +53,8 @@
              컴포넌트 구성으로 통일한다: 마크다운 렌더링, 아바타, 권한기반 삭제+확인모달,
              첨부파일, markdownEditor+uploadForm 폼. -->
         <div class="board-comment-wrap" style="margin-top: 30px;">
-          <ul class="comments" th:if="${comments != null && !comments.isEmpty()}">
-            <li th:each="comment : ${comments}" th:id="'comment-' + ${comment.id}" class="comment"
+          <ul th:fragment="commitComments" class="comments" th:if="${comments != null && !comments.isEmpty()}">
+            <li th:each="comment : ${comments}" th:id="${commitCommentAnchorPrefix ?: 'comment-'} + ${comment.id}" class="comment"
                 th:with="commentAuthorUser=${comment.author?.loginId != null} ? ${@userRepository.findByLoginId(comment.author.loginId).orElse(null)} : null">
               <div class="comment-avatar">
                 <a th:if="${comment.author?.loginId != null}" th:href="@{/user/{loginId}(loginId=${comment.author.loginId})}" class="avatar-wrap"

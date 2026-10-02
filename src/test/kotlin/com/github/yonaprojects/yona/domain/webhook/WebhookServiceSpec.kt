@@ -219,6 +219,35 @@ class WebhookServiceSpec : DescribeSpec({
             }
         }
 
+        it("Slack delivers the review itself and commit location rather than the parent PR body") {
+            val sender = User(id = 2L, loginId = "sender", name = "Comment author")
+            val pr = PullRequest(id = 10L, toProject = project, fromProject = project, contributor = sender,
+                number = 17, title = "Parent PR", body = "Parent body must not replace comment")
+            val review = ReviewComment(id = 20L, contents = "Actual review", thread = CodeCommentThread(project = project, pullRequest = pr))
+            val commit = CommitComment(id = 21L, project = project, commitId = "abc123", contents = "Actual commit comment")
+            every { notificationUrlResolver.getUrl(ResourceType.REVIEW_COMMENT, "20") } returns "https://yona.example.com/owner/test-project/pull/17#comment-20"
+            every { notificationUrlResolver.getUrl(ResourceType.COMMIT_COMMENT, "21") } returns "https://yona.example.com/owner/test-project/commit/abc123#comment-21"
+            for (resource in listOf(review, commit)) {
+                val (server, latch, captured) = startCapturingHttpServer(204, "")
+                try {
+                    every { webhookRepository.findByProjectId(project.id!!) } returns listOf(Webhook(
+                        project = project, payloadUrl = "http://127.0.0.1:${server.address.port}/hook", webhookType = WebhookType.DETAIL_SLACK
+                    ))
+                    val eventType = if (resource is ReviewComment) EventType.NEW_REVIEW_COMMENT else EventType.NEW_COMMENT
+                    webhookService.sendWebhook(project, eventType, sender, resource)
+                    latch.await(5, TimeUnit.SECONDS) shouldBe true
+                    val json = ObjectMapper().readTree(captured.single().body)
+                    val expectedBody = if (resource is ReviewComment) "Actual review" else "Actual commit comment"
+                    val expectedLocation = if (resource is ReviewComment) "pull/17/changes#comment-20" else "commit/abc123#commit-comment-21"
+                    json.path("attachments").get(0).path("text").asText() shouldBe expectedBody
+                    json.path("text").asText().contains(expectedLocation) shouldBe true
+                    json.path("text").asText().contains("Comment author") shouldBe true
+                } finally {
+                    server.stop(0)
+                }
+            }
+        }
+
         describe("shouldDeliverToWebhook (gitPush 필터 정책)") {
             fun webhookOf(gitPush: Boolean, type: WebhookType) = Webhook(
                 id = 20L, project = project, payloadUrl = "http://localhost:8080/hook",
@@ -229,7 +258,6 @@ class WebhookServiceSpec : DescribeSpec({
                 val gitPushOnlyWebhook = webhookOf(gitPush = true, type = WebhookType.SIMPLE)
 
                 webhookService.shouldDeliverToWebhook(gitPushOnlyWebhook, EventType.NEW_ISSUE) shouldBe true
-                webhookService.shouldDeliverToWebhook(gitPushOnlyWebhook, EventType.NEW_COMMENT) shouldBe true
                 webhookService.shouldDeliverToWebhook(gitPushOnlyWebhook, EventType.NEW_POSTING) shouldBe true
                 webhookService.shouldDeliverToWebhook(gitPushOnlyWebhook, EventType.NEW_PULL_REQUEST) shouldBe true
             }
@@ -433,28 +461,6 @@ class WebhookServiceSpec : DescribeSpec({
                     "[test-project] 송신자님이 새 이슈를 등록했습니다. <https://yona.example.com/owner/test-project/issue/11|#11: A &gt; B 비교>"
             }
 
-            it("이슈 댓글은 댓글 자신이 아니라 부모 이슈의 #번호: 제목을 링크 텍스트로 써야 한다") {
-                val simpleWebhook = Webhook(
-                    id = 42L, project = project, payloadUrl = "http://localhost:8080/hook",
-                    gitPush = true, webhookType = WebhookType.SIMPLE
-                )
-                val sender = User(id = 2L, loginId = "sender", name = "송신자")
-                val parentIssue = Issue(
-                    id = 200L, title = "부모 이슈", body = "내용", project = project, number = 20
-                )
-                val comment = IssueComment(
-                    id = 300L, contents = "댓글 내용입니다", issue = parentIssue
-                )
-                every {
-                    notificationUrlResolver.getUrl(ResourceType.ISSUE_COMMENT, "300")
-                } returns "https://yona.example.com/owner/test-project/issue/20#comment-300"
-
-                val payload = webhookService.buildPayload(simpleWebhook, EventType.NEW_COMMENT, sender, comment)
-                val json = ObjectMapper().readTree(payload)
-
-                json.get("text").asText() shouldBe
-                    "[test-project] 송신자님이 새 댓글을 등록했습니다. <https://yona.example.com/owner/test-project/issue/20#comment-300|#20: 부모 이슈>"
-            }
 
             it("리소스 URL을 찾지 못하면 링크 없이 본문 텍스트만 반환해야 한다") {
                 val simpleWebhook = Webhook(
@@ -552,25 +558,6 @@ class WebhookServiceSpec : DescribeSpec({
                 fields.get(2).get("value").asText() shouldBe "master"
             }
 
-            // CommitComment는 yona Webhook.java에 대응 오버로드 자체가 없는 yona 전용 리소스라, 링크나
-            // 필드를 새로 만들어 붙이지 않아야 한다(레거시에 없는 동작 추가 금지).
-            it("CommitComment는 링크나 attachment 필드를 새로 만들지 않아야 한다") {
-                val slackWebhook = Webhook(
-                    id = 53L, project = project, payloadUrl = "http://localhost:8080/hook",
-                    gitPush = true, webhookType = WebhookType.DETAIL_SLACK
-                )
-                val sender = User(id = 2L, loginId = "sender", name = "송신자")
-                val commitComment = CommitComment(
-                    id = 70L, project = project, contents = "커밋 댓글 내용"
-                )
-
-                val payload = webhookService.buildPayload(slackWebhook, EventType.NEW_COMMENT, sender, commitComment)
-                val json = ObjectMapper().readTree(payload)
-
-                json.get("text").asText() shouldBe "[test-project] 송신자님이 새 댓글을 등록했습니다."
-                json.get("attachments").get(0).get("text").asText() shouldBe ""
-                json.get("attachments").get(0).get("fields").size() shouldBe 0
-            }
 
             // yona Webhook.java:299-317 Posting 오버로드에는 DETAIL_SLACK 전용 분기가 없어(다른
             // 타입과 달리) SLACK 웹훅이어도 attachments 없이 텍스트만 보낸다 (P2-36).
@@ -915,72 +902,8 @@ class WebhookServiceSpec : DescribeSpec({
                 json.get("attachments").get(0).get("fields").size() shouldBe 0
             }
 
-            it("ReviewComment는 부모 풀 리퀘스트가 있으면 본문과 보낸사람/브랜치 필드를 포함해야 한다") {
-                val contributor = User(id = 9L, loginId = "contributor", name = "기여자")
-                val pullRequest = PullRequest(
-                    id = 61L, title = "PR", body = "PR 본문2",
-                    toProject = project, fromProject = project,
-                    toBranch = "master", fromBranch = "feature/y",
-                    contributor = contributor, number = 5
-                )
-                val thread = CodeCommentThread(id = 401L, pullRequest = pullRequest, project = project)
-                val reviewComment = ReviewComment(id = 501L, contents = "리뷰 댓글", thread = thread)
-
-                val payload = webhookService.buildPayload(slackWebhook, EventType.NEW_REVIEW_COMMENT, sender, reviewComment)
-                val json = ObjectMapper().readTree(payload)
-                val attachment = json.get("attachments").get(0)
-                val fields = attachment.get("fields")
-
-                attachment.get("text").asText() shouldBe "PR 본문2"
-                fields.get(0).get("title").asText() shouldBe "보낸 사람"
-                fields.get(0).get("value").asText() shouldBe "기여자"
-                fields.get(1).get("value").asText() shouldBe "feature/y"
-                fields.get(2).get("value").asText() shouldBe "master"
-            }
-
-            it("ReviewComment는 부모 스레드가 없으면(thread null) 본문/필드 없이 빈 텍스트여야 한다") {
-                val reviewComment = ReviewComment(id = 502L, contents = "리뷰 댓글", thread = null)
-
-                val payload = webhookService.buildPayload(slackWebhook, EventType.NEW_REVIEW_COMMENT, sender, reviewComment)
-                val json = ObjectMapper().readTree(payload)
-                val attachment = json.get("attachments").get(0)
-
-                attachment.get("text").asText() shouldBe ""
-                attachment.get("fields").size() shouldBe 0
-            }
         }
 
-        // 커버리지 보강: buildResourceLink()의 PostingComment/ReviewComment(부모 없음) 분기.
-        describe("buildResourceLink - PostingComment/ReviewComment 추가 분기") {
-            val simpleWebhook = Webhook(
-                id = 94L, project = project, payloadUrl = "http://localhost:8080/hook",
-                webhookType = WebhookType.SIMPLE
-            )
-            val sender = User(id = 2L, loginId = "sender", name = "송신자")
-
-            it("게시글 댓글은 댓글 자신이 아니라 부모 게시글의 #번호: 제목을 링크 텍스트로 써야 한다") {
-                val parentPosting = Posting(id = 230L, title = "부모 게시글", body = "내용", project = project, number = 28)
-                val comment = PostingComment(id = 330L, contents = "댓글", posting = parentPosting)
-                every {
-                    notificationUrlResolver.getUrl(ResourceType.NONISSUE_COMMENT, "330")
-                } returns "https://yona.example.com/owner/test-project/posting/28#comment-330"
-
-                val payload = webhookService.buildPayload(simpleWebhook, EventType.NEW_COMMENT, sender, comment)
-                val json = ObjectMapper().readTree(payload)
-
-                json.get("text").asText() shouldBe
-                    "[test-project] 송신자님이 새 댓글을 등록했습니다. <https://yona.example.com/owner/test-project/posting/28#comment-330|#28: 부모 게시글>"
-            }
-
-            it("리뷰 댓글의 부모 스레드가 없으면 링크 없이 본문 텍스트만 반환해야 한다") {
-                val reviewComment = ReviewComment(id = 503L, contents = "리뷰 댓글", thread = null)
-
-                val payload = webhookService.buildPayload(simpleWebhook, EventType.NEW_REVIEW_COMMENT, sender, reviewComment)
-                val json = ObjectMapper().readTree(payload)
-
-                json.get("text").asText() shouldBe "[test-project] 송신자님이 새 리뷰 댓글을 등록했습니다."
-            }
-        }
 
         // 커버리지 보강: buildTextMessage()의 EventType when절 나머지 분기들.
         describe("buildTextMessage - 나머지 EventType 분기") {
@@ -1532,21 +1455,6 @@ class WebhookServiceSpec : DescribeSpec({
             val threadWithoutPR = CodeCommentThread(id = 410L, pullRequest = null, project = project)
             val reviewCommentNoParent = ReviewComment(id = 510L, contents = "리뷰 댓글", thread = threadWithoutPR)
 
-            it("buildAttachmentJSON: 부모 스레드는 있지만 pullRequest가 없으면 본문/필드가 비어야 한다") {
-                val payload = webhookService.buildPayload(slackWebhook, EventType.NEW_REVIEW_COMMENT, sender, reviewCommentNoParent)
-                val json = ObjectMapper().readTree(payload)
-                val attachment = json.get("attachments").get(0)
-
-                attachment.get("text").asText() shouldBe ""
-                attachment.get("fields").size() shouldBe 0
-            }
-
-            it("buildResourceLink: 부모 스레드는 있지만 pullRequest가 없으면 링크 없이 본문 텍스트만 반환해야 한다") {
-                val payload = webhookService.buildPayload(simpleWebhook, EventType.NEW_REVIEW_COMMENT, sender, reviewCommentNoParent)
-                val json = ObjectMapper().readTree(payload)
-
-                json.get("text").asText() shouldBe "[test-project] 송신자님이 새 리뷰 댓글을 등록했습니다."
-            }
 
             it("threadKeyOf: 부모 스레드는 있지만 pullRequest가 없으면 자기 자신의 키(REVIEW_COMMENT)를 사용해야 한다") {
                 every {
@@ -1591,22 +1499,6 @@ class WebhookServiceSpec : DescribeSpec({
                 }
             }
 
-            it("ReviewComment의 부모 PR.body가 null이면 attachment text가 빈 문자열이어야 한다") {
-                val contributor = User(id = 9L, loginId = "contributor", name = "기여자")
-                val pullRequestNoBody = PullRequest(
-                    id = 64L, title = "PR", body = null,
-                    toProject = project, fromProject = project,
-                    toBranch = "master", fromBranch = "feature/pr-no-body",
-                    contributor = contributor, number = 12
-                )
-                val threadWithBodylessPR = CodeCommentThread(id = 413L, pullRequest = pullRequestNoBody, project = project)
-                val reviewComment = ReviewComment(id = 513L, contents = "리뷰 댓글", thread = threadWithBodylessPR)
-
-                val payload = webhookService.buildPayload(slackWebhook, EventType.NEW_REVIEW_COMMENT, sender, reviewComment)
-                val json = ObjectMapper().readTree(payload)
-
-                json.get("attachments").get(0).get("text").asText() shouldBe ""
-            }
         }
 
         // 커버리지 최종 보강: getResourceId()의 각 리소스 타입별 id=null 분기. Posting/IssueComment/
@@ -1635,48 +1527,6 @@ class WebhookServiceSpec : DescribeSpec({
                     "[test-project] 송신자님이 새 게시글을 작성했습니다. <https://yona.example.com/posting|#70: ID없는 게시글>"
             }
 
-            it("IssueComment 자신의 id가 null이면 resourceId로 빈 문자열을 사용해야 한다") {
-                val parentIssue = Issue(id = 150L, title = "부모 이슈", body = "내용", project = project, number = 71)
-                val commentWithoutId = IssueComment(id = null, contents = "댓글", issue = parentIssue)
-                every { notificationUrlResolver.getUrl(ResourceType.ISSUE_COMMENT, "") } returns "https://yona.example.com/comment"
-
-                val payload = webhookService.buildPayload(simpleWebhook, EventType.NEW_COMMENT, sender, commentWithoutId)
-                val json = ObjectMapper().readTree(payload)
-
-                json.get("text").asText() shouldBe
-                    "[test-project] 송신자님이 새 댓글을 등록했습니다. <https://yona.example.com/comment|#71: 부모 이슈>"
-            }
-
-            it("PostingComment 자신의 id가 null이면 resourceId로 빈 문자열을 사용해야 한다") {
-                val parentPosting = Posting(id = 160L, title = "부모 게시글", body = "내용", project = project, number = 72)
-                val commentWithoutId = PostingComment(id = null, contents = "댓글", posting = parentPosting)
-                every { notificationUrlResolver.getUrl(ResourceType.NONISSUE_COMMENT, "") } returns "https://yona.example.com/pcomment"
-
-                val payload = webhookService.buildPayload(simpleWebhook, EventType.NEW_COMMENT, sender, commentWithoutId)
-                val json = ObjectMapper().readTree(payload)
-
-                json.get("text").asText() shouldBe
-                    "[test-project] 송신자님이 새 댓글을 등록했습니다. <https://yona.example.com/pcomment|#72: 부모 게시글>"
-            }
-
-            it("ReviewComment 자신의 id가 null이면 resourceId로 빈 문자열을 사용해야 한다") {
-                val contributor = User(id = 9L, loginId = "contributor", name = "기여자")
-                val pullRequest = PullRequest(
-                    id = 62L, title = "PR", body = "본문",
-                    toProject = project, fromProject = project,
-                    toBranch = "master", fromBranch = "feature/id-null",
-                    contributor = contributor, number = 9
-                )
-                val thread = CodeCommentThread(id = 412L, pullRequest = pullRequest, project = project)
-                val reviewCommentWithoutId = ReviewComment(id = null, contents = "리뷰", thread = thread)
-                every { notificationUrlResolver.getUrl(ResourceType.REVIEW_COMMENT, "") } returns "https://yona.example.com/review"
-
-                val payload = webhookService.buildPayload(simpleWebhook, EventType.NEW_REVIEW_COMMENT, sender, reviewCommentWithoutId)
-                val json = ObjectMapper().readTree(payload)
-
-                json.get("text").asText() shouldBe
-                    "[test-project] 송신자님이 새 리뷰 댓글을 등록했습니다. <https://yona.example.com/review|#9: PR>"
-            }
 
             it("PullRequest의 id가 null이면 resourceId로 빈 문자열을 사용해야 한다") {
                 val contributor = User(id = 9L, loginId = "contributor", name = "기여자")

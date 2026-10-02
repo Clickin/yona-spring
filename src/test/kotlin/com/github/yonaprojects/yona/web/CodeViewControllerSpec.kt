@@ -99,6 +99,7 @@ class CodeViewControllerSpec : DescribeSpec({
             commitCommentRepository,
             watchService
         )
+        every { commitCommentRepository.findByProjectAndCommitIdOrderByCreatedDateAsc(any(), any()) } returns emptyList()
     }
 
     describe("CodeViewController 단위 테스트") {

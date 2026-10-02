@@ -17,6 +17,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.attachment.AttachmentService
 import com.github.yonaprojects.yona.domain.comment.CommentService
 import com.github.yonaprojects.yona.domain.watch.WatchService
+import com.github.yonaprojects.yona.domain.webhook.CommentCreatedWebhookEvent
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
@@ -117,6 +118,7 @@ class CodeReviewServiceImpl(
         targetThread.reviewComments.add(comment)
 
         val savedComment = reviewCommentRepository.save(comment)
+        eventPublisher.publishEvent(CommentCreatedWebhookEvent(ResourceType.REVIEW_COMMENT, savedComment.id.toString(), currentUser.id))
 
         if (pullRequest != null) {
             pullRequestRepository.save(pullRequest)
@@ -261,6 +263,7 @@ class CodeReviewServiceImpl(
             author = userIdent
         )
         val saved = commitCommentRepository.save(commitComment)
+        eventPublisher.publishEvent(CommentCreatedWebhookEvent(ResourceType.COMMIT_COMMENT, saved.id.toString(), currentUser.id))
         attachmentService.moveAll(
             ResourceType.USER,
             currentUser.id.toString(),

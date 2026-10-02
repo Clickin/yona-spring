@@ -9,6 +9,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectUser
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.pullrequest.CommitComment
 import com.github.yonaprojects.yona.domain.pullrequest.CommitCommentRepository
+import com.github.yonaprojects.yona.domain.pullrequest.CodeReviewService
 import com.github.yonaprojects.yona.domain.role.Role
 import com.github.yonaprojects.yona.domain.role.RoleType
 import com.github.yonaprojects.yona.domain.user.User
@@ -42,6 +43,7 @@ class CodeHistoryControllerSpec : DescribeSpec({
     val projectRepository = mockk<ProjectRepository>()
     val repositoryService = mockk<RepositoryService>()
     val commitCommentRepository = mockk<CommitCommentRepository>()
+    val codeReviewService = mockk<CodeReviewService>()
     val userRepository = mockk<UserRepository>()
     val projectUserRepository = mockk<ProjectUserRepository>()
     val organizationUserRepository = mockk<OrganizationUserRepository>()
@@ -67,12 +69,14 @@ class CodeHistoryControllerSpec : DescribeSpec({
         commitCommentRepository,
         userRepository,
         projectUserRepository,
-        accessControl
+        accessControl,
+        codeReviewService
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(codeHistoryController).build()
 
     beforeTest {
         clearMocks(projectRepository, repositoryService, commitCommentRepository, userRepository, projectUserRepository)
+        clearMocks(codeReviewService)
     }
 
     describe("CodeHistoryController 커밋 댓글 API") {
@@ -89,7 +93,8 @@ class CodeHistoryControllerSpec : DescribeSpec({
                 val playRepo = mockk<PlayRepository>(relaxed = true)
                 every { repositoryService.getRepository(project) } returns playRepo
                 every { playRepo.getCommit(commitId) } returns commit
-                every { commitCommentRepository.save(any()) } answers { firstArg() }
+                every { codeReviewService.createCommitComment(project, commitId, any(), any(), any(), any(), user) } returns
+                    CommitComment(id = 500L, project = project, commitId = commitId, contents = "좋은 커밋이네요", author = UserIdent(user))
 
                 mockMvc.perform(
                     post("/api/vcs/owner/TestProj/commit/$commitId/comments")
@@ -99,7 +104,6 @@ class CodeHistoryControllerSpec : DescribeSpec({
                 )
                     .andExpect(status().isCreated)
 
-                verify(exactly = 1) { commitCommentRepository.save(any()) }
             }
 
             it("존재하지 않는 커밋이면 404 Not Found를 반환해야 한다") {
@@ -134,7 +138,8 @@ class CodeHistoryControllerSpec : DescribeSpec({
                 val playRepo = mockk<PlayRepository>(relaxed = true)
                 every { repositoryService.getRepository(projectWithMember) } returns playRepo
                 every { playRepo.getCommit(commitId) } returns commit
-                every { commitCommentRepository.save(any()) } answers { firstArg() }
+                every { codeReviewService.createCommitComment(projectWithMember, commitId, any(), any(), any(), any(), user) } returns
+                    CommitComment(id = 500L, project = projectWithMember, commitId = commitId, contents = "좋은 커밋이네요", author = UserIdent(user))
 
                 val result = mockMvc.perform(
                     post("/api/vcs/owner/TestProj/commit/$commitId/comments")

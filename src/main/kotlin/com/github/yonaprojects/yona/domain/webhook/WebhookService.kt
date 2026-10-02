@@ -12,7 +12,11 @@ interface WebhookService {
         payloadUrl: String,
         secret: String?,
         gitPush: Boolean,
-        webhookType: WebhookType
+        webhookType: WebhookType,
+        issueComment: Boolean = true,
+        postingComment: Boolean = true,
+        reviewComment: Boolean = true,
+        commitComment: Boolean = true
     ): Webhook
     fun deleteWebhook(id: Long)
     fun sendWebhook(

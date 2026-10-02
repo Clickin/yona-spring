@@ -6,6 +6,9 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.http.HttpStatus
 
 // `yona admin webhook list`용 JSON REST API(`/api/v1/projects/{owner}/{project}/webhooks`). 기존
 // `web/WebhookController.kt`는 세션/폼 기반 레거시 MVC 컨트롤러라 목록 조회(GET)가 Thymeleaf HTML
@@ -28,5 +31,30 @@ class WebhookRestApiController(
         authentication: Authentication?
     ): ResponseEntity<Any> {
         return webhookController.listWebhooksJson(owner, project, authentication)
+    }
+
+    data class CreateWebhookRequest(
+        val payloadUrl: String,
+        val secret: String? = null,
+        val gitPush: Boolean = false,
+        val webhookType: String = "SIMPLE",
+        val issueComment: Boolean = true,
+        val postingComment: Boolean = true,
+        val reviewComment: Boolean = true,
+        val commitComment: Boolean = true
+    )
+
+    @PostMapping
+    fun create(
+        @PathVariable owner: String,
+        @PathVariable project: String,
+        @RequestBody request: CreateWebhookRequest,
+        authentication: Authentication?
+    ): ResponseEntity<Void> {
+        webhookController.newWebhook(
+            owner, project, request.payloadUrl, request.secret, request.gitPush, request.webhookType,
+            authentication, request.issueComment, request.postingComment, request.reviewComment, request.commitComment
+        )
+        return ResponseEntity.status(HttpStatus.CREATED).build()
     }
 }

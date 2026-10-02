@@ -3,6 +3,7 @@ package com.github.yonaprojects.yona.domain.webhook
 import com.github.yonaprojects.yona.domain.board.PostingCommentRepository
 import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
+import com.github.yonaprojects.yona.domain.enumeration.EventType
 import com.github.yonaprojects.yona.domain.issue.IssueCommentRepository
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.notification.NotificationEvent
@@ -16,6 +17,8 @@ import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.annotation.Propagation
+import org.springframework.transaction.event.TransactionalEventListener
 
 /**
  * yona의 NotificationEvent.webhookRequest(...)에 대응.
@@ -46,6 +49,8 @@ class WebhookNotificationEventListener(
     @EventListener
     @Transactional(readOnly = true)
     fun handleNotificationEvent(event: NotificationEvent) {
+        // New comments have an independent after-commit event, even with no personal receivers.
+        if (event.eventType == EventType.NEW_COMMENT || event.eventType == EventType.NEW_REVIEW_COMMENT) return
         val sender = event.senderId?.let { userRepository.findById(it).orElse(null) } ?: return
         val (project, resource) = resolveResource(event.resourceType, event.resourceId) ?: run {
             logger.debug("웹훅 대상 리소스를 찾지 못해 스킵: resourceType=${event.resourceType}, resourceId=${event.resourceId}")
@@ -53,6 +58,20 @@ class WebhookNotificationEventListener(
         }
 
         webhookService.sendWebhook(project, event.eventType, sender, resource)
+    }
+
+    @Async("taskExecutor")
+    @TransactionalEventListener
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    fun handleCommentCreated(event: CommentCreatedWebhookEvent) {
+        val sender = event.senderId?.let { userRepository.findById(it).orElse(null) } ?: return
+        val (project, resource) = resolveResource(event.resourceType, event.resourceId) ?: return
+        val eventType = if (event.resourceType == ResourceType.REVIEW_COMMENT) {
+            EventType.NEW_REVIEW_COMMENT
+        } else {
+            EventType.NEW_COMMENT
+        }
+        webhookService.sendWebhook(project, eventType, sender, resource)
     }
 
     private fun resolveResource(resourceType: ResourceType, resourceId: String): Pair<Project, Any>? {

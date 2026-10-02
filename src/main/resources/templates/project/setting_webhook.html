@@ -46,7 +46,7 @@
                   <input type="radio" name="webhookType" value="DETAIL_HANGOUT_CHAT"> Google Chat (스레드 연동)
                 </label>
                 <label class="radio-inline">
-                  <input type="radio" name="webhookType" value="JSON"> JSON (CI 도구/푸시 전용)
+                  <input type="radio" name="webhookType" value="JSON"> JSON
                 </label>
               </div>
             </div>
@@ -60,6 +60,15 @@
                 </div>
               </div>
             </div>
+
+            <fieldset class="form-group">
+              <legend>새 댓글 이벤트</legend>
+              <p>개인 알림 수신자가 없어도 전송합니다. 기존 웹훅의 선택을 바꾸려면 삭제 후 다시 등록하세요.</p>
+              <label>이슈 댓글 <select name="issueComment"><option value="true">전송</option><option value="false">전송 안 함</option></select></label>
+              <label>게시글 댓글 <select name="postingComment"><option value="true">전송</option><option value="false">전송 안 함</option></select></label>
+              <label>PR 리뷰 댓글 <select name="reviewComment"><option value="true">전송</option><option value="false">전송 안 함</option></select></label>
+              <label>커밋 댓글·리뷰 <select name="commitComment"><option value="true">전송</option><option value="false">전송 안 함</option></select></label>
+            </fieldset>
 
             <div class="form-group" style="margin-bottom: 0;">
               <div class="col-sm-offset-2 col-sm-10">
@@ -93,6 +102,13 @@
             <div class="row-fluid list-item vertical-align" th:each="webhook : ${webhooks}" th:data-webhook-id="${webhook.id}">
               <div class="span5">
                 <h6 class="mr20 truncate" th:text="${webhook.payloadUrl}">https://example.com/webhook</h6>
+                <p>
+                  새 댓글:
+                  <span th:if="${webhook.issueComment != false}">이슈</span>
+                  <span th:if="${webhook.postingComment != false}">게시글</span>
+                  <span th:if="${webhook.reviewComment != false}">PR 리뷰</span>
+                  <span th:if="${webhook.commitComment != false}">커밋</span>
+                </p>
               </div>
               <div class="span2 text-center">
                 <h6 th:text="${#strings.isEmpty(webhook.secret) ? 'NONE' : webhook.secret}">NONE</h6>

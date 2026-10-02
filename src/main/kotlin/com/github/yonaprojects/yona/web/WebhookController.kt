@@ -67,7 +67,11 @@ class WebhookController(
         @RequestParam(value = "secret", required = false) secret: String?,
         @RequestParam(value = "gitPush", defaultValue = "false") gitPush: Boolean,
         @RequestParam("webhookType") webhookTypeStr: String,
-        authentication: Authentication?
+        authentication: Authentication?,
+        @RequestParam(value = "issueComment", defaultValue = "true") issueComment: Boolean = true,
+        @RequestParam(value = "postingComment", defaultValue = "true") postingComment: Boolean = true,
+        @RequestParam(value = "reviewComment", defaultValue = "true") reviewComment: Boolean = true,
+        @RequestParam(value = "commitComment", defaultValue = "true") commitComment: Boolean = true
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found")
@@ -100,7 +104,11 @@ class WebhookController(
             payloadUrl = payloadUrl,
             secret = secret,
             gitPush = gitPush,
-            webhookType = webhookType
+            webhookType = webhookType,
+            issueComment = issueComment,
+            postingComment = postingComment,
+            reviewComment = reviewComment,
+            commitComment = commitComment
         )
 
         return "redirect:/projects/$owner/$projectName/webhooks"
@@ -154,6 +162,10 @@ class WebhookController(
             "payloadUrl" to webhook.payloadUrl,
             "secret" to webhook.secret,
             "gitPush" to webhook.gitPush,
+            "issueComment" to (webhook.issueComment != false),
+            "postingComment" to (webhook.postingComment != false),
+            "reviewComment" to (webhook.reviewComment != false),
+            "commitComment" to (webhook.commitComment != false),
             "webhookType" to webhook.webhookType.name,
             "createdAt" to webhook.createdAt.toString()
         )

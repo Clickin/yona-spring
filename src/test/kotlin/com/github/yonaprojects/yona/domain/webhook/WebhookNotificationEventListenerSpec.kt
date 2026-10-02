@@ -80,6 +80,7 @@ class WebhookNotificationEventListenerSpec : DescribeSpec({
             )
 
             listener.handleNotificationEvent(event)
+            listener.handleCommentCreated(CommentCreatedWebhookEvent(event.resourceType, event.resourceId, event.senderId))
 
             verify(exactly = 1) { webhookService.sendWebhook(project, EventType.NEW_COMMENT, sender, comment) }
         }
@@ -109,6 +110,7 @@ class WebhookNotificationEventListenerSpec : DescribeSpec({
             )
 
             listener.handleNotificationEvent(event)
+            listener.handleCommentCreated(CommentCreatedWebhookEvent(event.resourceType, event.resourceId, event.senderId))
 
             verify(exactly = 1) { webhookService.sendWebhook(project, EventType.NEW_COMMENT, sender, comment) }
         }
@@ -148,6 +150,7 @@ class WebhookNotificationEventListenerSpec : DescribeSpec({
             )
 
             listener.handleNotificationEvent(event)
+            listener.handleCommentCreated(CommentCreatedWebhookEvent(event.resourceType, event.resourceId, event.senderId))
 
             verify(exactly = 0) { webhookService.sendWebhook(any(), any(), any(), any()) }
         }
@@ -161,6 +164,7 @@ class WebhookNotificationEventListenerSpec : DescribeSpec({
             )
 
             listener.handleNotificationEvent(event)
+            listener.handleCommentCreated(CommentCreatedWebhookEvent(event.resourceType, event.resourceId, event.senderId))
 
             verify(exactly = 0) { webhookService.sendWebhook(any(), any(), any(), any()) }
         }
@@ -234,6 +238,7 @@ class WebhookNotificationEventListenerSpec : DescribeSpec({
             )
 
             listener.handleNotificationEvent(event)
+            listener.handleCommentCreated(CommentCreatedWebhookEvent(event.resourceType, event.resourceId, event.senderId))
 
             verify(exactly = 1) { webhookService.sendWebhook(project, EventType.NEW_REVIEW_COMMENT, sender, comment) }
         }
@@ -247,6 +252,7 @@ class WebhookNotificationEventListenerSpec : DescribeSpec({
             )
 
             listener.handleNotificationEvent(event)
+            listener.handleCommentCreated(CommentCreatedWebhookEvent(event.resourceType, event.resourceId, event.senderId))
 
             verify(exactly = 0) { webhookService.sendWebhook(any(), any(), any(), any()) }
         }
@@ -262,6 +268,7 @@ class WebhookNotificationEventListenerSpec : DescribeSpec({
             )
 
             listener.handleNotificationEvent(event)
+            listener.handleCommentCreated(CommentCreatedWebhookEvent(event.resourceType, event.resourceId, event.senderId))
 
             verify(exactly = 1) { webhookService.sendWebhook(project, EventType.NEW_COMMENT, sender, comment) }
         }
@@ -275,6 +282,7 @@ class WebhookNotificationEventListenerSpec : DescribeSpec({
             )
 
             listener.handleNotificationEvent(event)
+            listener.handleCommentCreated(CommentCreatedWebhookEvent(event.resourceType, event.resourceId, event.senderId))
 
             verify(exactly = 0) { webhookService.sendWebhook(any(), any(), any(), any()) }
         }

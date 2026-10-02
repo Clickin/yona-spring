@@ -25,6 +25,13 @@ class Webhook(
     @Column(nullable = false)
     var gitPush: Boolean = false,
 
+    // Nullable columns let ddl-auto update existing installations without a dialect-specific
+    // backfill. NULL preserves their previous subscription to all new comments.
+    var issueComment: Boolean? = true,
+    var postingComment: Boolean? = true,
+    var reviewComment: Boolean? = true,
+    var commitComment: Boolean? = true,
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var webhookType: WebhookType = WebhookType.SIMPLE,

@@ -173,6 +173,7 @@
 
           <!-- 범위 없는(commit 전체 대상) 코드리뷰 댓글 스레드 (yona code/diff.scala.html:94-107, #166) -->
           <div class="board-comment-wrap">
+            <ul th:replace="~{code/svnDiff :: commitComments}"></ul>
             <div class="non-ranged-threads-wrap">
               <th:block th:each="thread : ${commentThreads}" th:if="${thread.class.simpleName == 'NonRangedCodeCommentThread'}">
                 <div th:replace="~{code/partial_nonrange_codecomment_thread :: partial_nonrange_codecomment_thread(${thread}, ${project}, ${currentUser})}"></div>

@@ -6,18 +6,16 @@ import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
-import com.github.yonaprojects.yona.domain.pullrequest.CommitComment
+import com.github.yonaprojects.yona.domain.pullrequest.CodeReviewService
 import com.github.yonaprojects.yona.domain.pullrequest.CommitCommentRepository
 import com.github.yonaprojects.yona.domain.support.CodeRange
 import com.github.yonaprojects.yona.domain.user.User
-import com.github.yonaprojects.yona.domain.user.UserIdent
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import java.time.Instant
 
 @RestController
 @RequestMapping("/api/vcs/{owner}/{projectName}")
@@ -27,7 +25,8 @@ class CodeHistoryController(
     private val commitCommentRepository: CommitCommentRepository,
     private val userRepository: UserRepository,
     private val projectUserRepository: ProjectUserRepository,
-    private val accessControl: AccessControl
+    private val accessControl: AccessControl,
+    private val codeReviewService: CodeReviewService
 ) {
 
     private fun getLoginUser(authentication: Authentication?): User? {
@@ -118,17 +117,15 @@ class CodeHistoryController(
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build()
         }
 
-        val comment = CommitComment(
+        val saved = codeReviewService.createCommitComment(
             project = project,
             commitId = commitId,
             contents = request.contents,
             path = request.path,
             line = request.line,
             side = request.side,
-            author = UserIdent(user),
-            createdDate = Instant.now()
+            currentUser = user
         )
-        val saved = commitCommentRepository.save(comment)
 
         // raw CommitComment 엔티티를 그대로 반환하면 comment->project->projectUsers->user
         // 순환 참조로 User.password까지 직렬화되어 노출되므로 .toResponse()로 변환한다.
