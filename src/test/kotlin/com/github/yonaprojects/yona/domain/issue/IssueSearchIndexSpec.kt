@@ -175,11 +175,32 @@ class IssueSearchIndexSpec : DescribeSpec({
                     val searcher = IndexSearcher(reader)
                     val before = searcher.search(previous, 20).scoreDocs.map { it.doc to it.score }
                     val after = searcher.search(index.query("오류 timeout"), 20).scoreDocs.map { it.doc to it.score }
-                    after.take(before.size) shouldBe before
-                    after.drop(before.size).map { it.second } shouldBe listOf(0f, 0f)
+                    after shouldBe before
+                    index.search("오류 timeout").take(before.size).map { it.id } shouldBe
+                        before.map { reader.storedFields().document(it.first).get("id").toLong() }
                 }
             }
             index.search("오류 timeout").takeLast(2).map { it.id }.toSet() shouldBe setOf(3L, 4L)
+        } finally {
+            index.close()
+            path.toFile().deleteRecursively()
+        }
+    }
+
+    it("보조 결과는 Nori 결과 뒤에서 문서 길이를 반영한 BM25 순서로 정렬한다") {
+        val path = Files.createTempDirectory("yona-lucene-")
+        val documents = listOf(
+            IssueSearchDocument(1, "SocketTimeoutException " + "unrelated ".repeat(100), "", emptyList()),
+            IssueSearchDocument(2, "SocketTimeoutException", "", emptyList()),
+            IssueSearchDocument(3, "timeout " + "unrelated ".repeat(200), "", emptyList())
+        )
+        val index = IssueSearchIndex(path.toString())
+        try {
+            index.synchronize({ after -> documents.filter { it.id > after } })
+            index.search("timeout").map { it.id to it.auxiliaryOnly } shouldBe
+                listOf(3L to false, 2L to true, 1L to true)
+            index.search("exception").map { it.id to it.auxiliaryOnly } shouldBe
+                listOf(2L to true, 1L to true)
         } finally {
             index.close()
             path.toFile().deleteRecursively()

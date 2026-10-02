@@ -82,8 +82,10 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
      * Unquoted text is analyzed as one string, like indexed text: Nori splits a word differently without its
      * neighbours (`길이 제한` indexes `길`, but `길이` alone yields `길이`), so per-word analysis misses exact text.
      */
-    fun query(text: String): Query {
-        if (text.isBlank()) return MatchAllDocsQuery()
+    fun query(text: String): Query = queries(text).first
+
+    private fun queries(text: String): Pair<Query, Query?> {
+        if (text.isBlank()) return MatchAllDocsQuery() to null
         val builder = QueryBuilder(analyzer)
         val required = BooleanQuery.Builder()
         val fallback = BooleanQuery.Builder()
@@ -122,7 +124,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
         }
         terms.forEach { value -> anyField(required) { TermQuery(Term(it, value)) } }
         val primary = required.build().let { if (it.clauses().isEmpty()) MatchNoDocsQuery("No searchable terms") else it }
-        if (words.isEmpty()) return primary
+        if (words.isEmpty()) return primary to null
         contextualTerms.forEach { value -> anyField(fallback) { TermQuery(Term(it, value)) } }
         val identifierBuilder = QueryBuilder(identifiers)
         words.forEach { word ->
@@ -130,22 +132,22 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             anyField(fallback) { identifierBuilder.createPhraseQuery("${it}_ident", word.value) }
         }
         fallback.add(primary, BooleanClause.Occur.MUST_NOT)
-        // ponytail: zero-score fallback preserves every Nori score/order, even arbitrarily small BM25 scores.
-        return BooleanQuery.Builder()
-            .add(primary, BooleanClause.Occur.SHOULD)
-            .add(BoostQuery(ConstantScoreQuery(fallback.build()), 0f), BooleanClause.Occur.SHOULD).build()
+        return primary to fallback.build()
     }
 
     fun search(text: String, titleHead: String? = null): List<IssueIndexHit> = readers.read {
         check(status.ready) { "Search index is not ready" }
-        val query = query(text)
-        val filtered = if (titleHead == null) query else BooleanQuery.Builder()
+        val (primary, fallback) = queries(text)
+        fun filtered(query: Query) = if (titleHead == null) query else BooleanQuery.Builder()
             .add(query, BooleanClause.Occur.MUST)
             .add(TermQuery(Term("titleHead", titleHead)), BooleanClause.Occur.FILTER).build()
-        hits(checkNotNull(reader), filtered)
+        val current = checkNotNull(reader)
+        val result = hits(current, filtered(primary))
+        if (fallback != null) result.addAll(hits(current, filtered(fallback), auxiliaryOnly = true))
+        result
     }
 
-    private fun hits(reader: DirectoryReader, query: Query): List<IssueIndexHit> {
+    private fun hits(reader: DirectoryReader, query: Query, auxiliaryOnly: Boolean = false): MutableList<IssueIndexHit> {
         val searcher = IndexSearcher(reader)
         val result = mutableListOf<IssueIndexHit>()
         var after: ScoreDoc? = null
@@ -153,7 +155,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             val page = searcher.searchAfter(after, query, 500).scoreDocs
             page.forEach {
                 val document = searcher.storedFields().document(it.doc)
-                result.add(IssueIndexHit(document.get("id").toLong(), document.get("digest"), it.score == 0f))
+                result.add(IssueIndexHit(document.get("id").toLong(), document.get("digest"), auxiliaryOnly))
             }
             after = page.lastOrNull()
         } while (after != null)
