@@ -1,0 +1,14 @@
+// Uses Yona's existing build and runtime; no separate application or dependency versions.
+allprojects {
+    afterEvaluate {
+        tasks.register('searchResourceProbe', JavaExec) {
+            dependsOn testClasses
+            classpath = sourceSets.test.runtimeClasspath
+            mainClass = 'com.github.yonaprojects.yona.domain.issue.IssueSearchResourceProbe'
+            javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+            minHeapSize = '256m'
+            maxHeapSize = '512m'
+            jvmArgs '-XX:+UseG1GC'
+        }
+    }
+}
