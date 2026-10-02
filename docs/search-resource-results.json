@@ -1,6 +1,6 @@
 {
   "date": "2026-10-02",
-  "dataset": "Existing golden fixture migration archive; unexpanded",
+  "dataset": "Evaluation dataset; unexpanded",
   "baseCommit": "8c6675e64",
   "jvm": [
     "-Xms256m",

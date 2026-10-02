@@ -10,5 +10,14 @@ allprojects {
             maxHeapSize = '512m'
             jvmArgs '-XX:+UseG1GC'
         }
+        tasks.register('searchQualityProbe', JavaExec) {
+            dependsOn testClasses
+            classpath = sourceSets.test.runtimeClasspath
+            mainClass = 'com.github.yonaprojects.yona.domain.issue.IssueSearchQualityProbe'
+            javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+            minHeapSize = '256m'
+            maxHeapSize = '1g'
+            jvmArgs '-XX:+UseG1GC'
+        }
     }
 }

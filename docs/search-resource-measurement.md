@@ -8,7 +8,7 @@
 
 H2 회귀 **499개 통과**. 53건 이슈는 DB/Lucene 및 DB 정렬/관련도순에서 페이지별 20·20·13·0건, 게시글·PR 33건은 웹 경로에서 15·15·3·0건을 검증했다. Hibernate entity 통계의 본문 엔티티 로딩도 각각 같은 건수였다. 특수문자·제목 중간 머리말 제외, 정렬 tie, 머리말 변경·삭제, 라벨·검색어 조건을 함께 확인했다.
 
-이번 추가 변경은 **조회량을 검증한 결과**다. 머리말 필터의 golden fixture p50/p95를 새로 측정했다고 주장하지 않는다. 아래 시간·메모리 수치는 머리말 경로 추가 변경 이전 일반 전문 검색의 측정 기록이다. 정확한 후보 제목 검사는 여전히 전체 후보 ID·제목을 읽으며, 본문 전체 로딩을 제거한 것이다. 다음 페이지 동작과 요청 간 변경 시 한계는 [PoC 문서](search-poc.md#다음-페이지와-머리말-필터)에 기록했다.
+이번 추가 변경은 **조회량을 검증한 결과**다. 머리말 필터의 p50/p95를 새로 측정했다고 주장하지 않는다. 아래 시간·메모리 수치는 머리말 경로 추가 변경 이전 일반 전문 검색의 측정 기록이다. 정확한 후보 제목 검사는 여전히 전체 후보 ID·제목을 읽으며, 본문 전체 로딩을 제거한 것이다. 다음 페이지 동작과 요청 간 변경 시 한계는 [PoC 문서](search-poc.md#다음-페이지와-머리말-필터)에 기록했다.
 
 ## 일반 전문 검색 실측 — DB 권한 조건과 페이지 단위 이슈 조회
 
@@ -16,7 +16,7 @@ H2 회귀 **499개 통과**. 53건 이슈는 DB/Lucene 및 DB 정렬/관련도�
 
 **2,105개 hit 중 20건 페이지에서 실제 이슈 엔티티 로딩이 20건**임을 Hibernate entity 통계로 검증했다. DB 정렬과 관련도순 모두 해당하며 댓글 조회도 페이지 기준 1회다. H2 회귀 **497개 통과**. SQL 권한 조건은 익명·게스트·관리자·작성자·담당자·공유자·부모 공유·프로젝트 멤버·조직 관리자/멤버를 공개·보호·비공개 프로젝트와 조합해 기존 판정과 대조했다. 실제 검색의 권한별 count와 두 정렬의 page, 공유 철회, 익명 접근 차단도 검증했다.
 
-같은 golden fixture(이슈 4,882건, 댓글 6,335건), 동일 JVM·20건 관련도 페이지·5회 예열/20회 관측으로 Lucene → DB → Lucene을 새 JVM/빈 DB에서 순차 실행했다. 원시 결과는 [JSON의 `pagedRuns`](search-resource-results.json)에 추가했다. 이전 결과는 보존했다.
+같은 평가 데이터(이슈 4,882건, 댓글 6,335건), 동일 JVM·20건 관련도 페이지·5회 예열/20회 관측으로 Lucene → DB → Lucene을 새 JVM/빈 DB에서 순차 실행했다. 원시 결과는 [JSON의 `pagedRuns`](search-resource-results.json)에 추가했다. 이전 결과는 보존했다.
 
 | 검색어 | hit 수(DB / Lucene) | 직전 Lucene p50 | 이번 Lucene p50 / p95 | 이번 DB p50 / p95 |
 | --- | ---: | ---: | ---: | ---: |
@@ -35,13 +35,13 @@ H2 회귀 **499개 통과**. 53건 이슈는 DB/Lucene 및 DB 정렬/관련도�
 - 실측은 관리자 권한·관련도순이다. 일반 사용자의 복잡한 권한 SQL, 날짜순의 성능, 동시 부하는 별도 측정이 필요하다. 두 정렬의 결과와 엔티티 로딩 제한은 H2 회귀로 확인했다.
 - 관련도순은 허용된 전체 ID를 읽고 Lucene도 전체 hit를 반환한다. 본문 전체 로딩은 제거했지만 대규모 ID 목록 비용은 남는다.
 - 이 측정 당시 leading-title-head와 DB 대체 경로에는 전체 후보 엔티티 조회가 남아 있었다. 후속 변경에서 제목 projection 및 DB 페이징으로 개선했다(문서 상단). unpaged 내보내기는 전체 내용을 읽는다.
-- H2와 golden MariaDB를 검증했다. 나머지 지원 DB의 회귀는 별도다. 권한 정책이 바뀌면 기존 판정과 SQL 조건 및 대조 테스트를 함께 갱신해야 한다.
+- H2와 평가 데이터를 복원한 MariaDB를 검증했다. 나머지 지원 DB의 회귀는 별도다. 권한 정책이 바뀌면 기존 판정과 SQL 조건 및 대조 테스트를 함께 갱신해야 한다.
 
 ## 2차 후속 결과 — stale 정책 분리, 이슈 전체 로딩 당시
 
 [사례 조사](search-stale-document-research.md) 후 전체 hit의 본문·댓글 지문 비교를 제거했다. **텍스트 일치·관련도는 마지막 게시된 색인**, 존재 여부·권한·기존 메타 조건은 현재 DB를 따른다. 따라서 수정 직후 이전 단어의 hit가 잠시 남거나 새 단어의 hit가 늦을 수 있다. total은 DB 조건·권한을 통과한 index hit 수다. 표시할 페이지에만 댓글을 읽고 digest를 비교해, 내용이 바뀌었으면 snippet·댓글 링크를 생략한다. 결과 자체를 페이지 분할 후 제거하지 않으므로 페이지 길이와 total의 기준은 같다.
 
-같은 평가 입력의 이슈 **4,882건·댓글 6,335건**으로 Lucene → DB → Lucene의 새 JVM/빈 DB 3회 측정을 수행했다. 조건은 아래 방법과 동일하다. 색인 완료 후에는 이전 측정과 hit 수가 같았다. 원시 결과는 [JSON의 `stalePolicyRuns`](search-resource-results.json)에 보관했다. 두 Lucene 실행의 최소–최대이며 신뢰구간이 아니다.
+같은 평가 데이터의 이슈 **4,882건·댓글 6,335건**으로 Lucene → DB → Lucene의 새 JVM/빈 DB 3회 측정을 수행했다. 조건은 아래 방법과 동일하다. 색인 완료 후에는 이전 측정과 hit 수가 같았다. 원시 결과는 [JSON의 `stalePolicyRuns`](search-resource-results.json)에 보관했다. 두 Lucene 실행의 최소–최대이며 신뢰구간이 아니다.
 
 | 검색어 | hit 수(DB / Lucene) | 직전 구현 Lucene p50 | 이번 Lucene p50 / p95 | 이번 DB p50 / p95 |
 | --- | ---: | ---: | ---: | ---: |
@@ -61,7 +61,7 @@ H2 검색·큐·백업·웹/API 회귀 **496개 통과**. 2,105개 hit의 20건 
 
 2026-10-02 후속 변경은 [IssueSearchService](https://github.com/Clickin/yona-spring/blob/4e7fb579504c39907bdf70f7a71cb4beb0abb5f3/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchService.kt)의 DB 후보 조회를 Lucene hit ID로 제한하고, [댓글 조회](https://github.com/Clickin/yona-spring/blob/4e7fb579504c39907bdf70f7a71cb4beb0abb5f3/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueCommentRepository.kt)를 200개 이슈씩 묶으며, snippet을 최종 페이지에만 생성하도록 바꿨다. 0 hit이면 후보·댓글 DB 조회를 하지 않는다. 명시적 DB 정렬을 전체 hit에 적용하고 권한·현재 내용을 페이지 분할 전에 검증하므로 페이지별 순서와 정확한 전체 건수를 유지한다. 숫자 ID는 Criteria literal로 전달하고 IN 목록을 500개씩 나누어 hit 수가 SQL Server의 바인딩 매개변수 제한을 소진하지 않게 했다. H2와 MariaDB에서 실행했으며 나머지 DB의 실행 검증은 별도다.
 
-같은 평가 입력·JDK·heap·검색어·20건 페이지·예열/관측 횟수로 **Lucene → DB → Lucene** 순서의 새 JVM/DB 3회 측정을 수행했다. 원시 결과는 [JSON의 `optimizedRuns`](search-resource-results.json)에 추가했고 최적화 전 수치는 그대로 보존했다. 아래 시간은 네트워크·렌더링을 제외한 실제 서비스 호출이다.
+같은 평가 데이터·JDK·heap·검색어·20건 페이지·예열/관측 횟수로 **Lucene → DB → Lucene** 순서의 새 JVM/DB 3회 측정을 수행했다. 원시 결과는 [JSON의 `optimizedRuns`](search-resource-results.json)에 추가했고 최적화 전 수치는 그대로 보존했다. 아래 시간은 네트워크·렌더링을 제외한 실제 서비스 호출이다.
 
 | 검색어 | hit 수(DB / Lucene) | 최적화 전 Lucene p50 | 최적화 후 Lucene p50 / p95 | 재측정 DB p50 / p95 |
 | --- | ---: | ---: | ---: | ---: |
@@ -124,7 +124,7 @@ H2 검색·큐·백업·웹/API 회귀 **496개 통과**. 2,105개 hit의 20건 
 
 - 변경 없는 시간에는 새 검색 job·Lucene 갱신·commit을 요청하지 않는다. 그러나 DB window 한 행 조회는 약 2회/초 남고 기존 queue worker도 활동하므로 전체 CPU/DB 작업이 0은 아니다. 프로세스 시작과 수동 요청의 전체 복구 색인은 별도다.
 - 변경마다 dirty ID·generation을 원본 트랜잭션에서 기록하는 DB 비용은 남는다. 작업 실행 수를 줄이는 것과 변경 기록 자체를 없애는 것은 다르다.
-- 이 fixture에서 색인 파일은 원문 UTF-8 크기의 약 32%였다. 어휘·문서 길이·댓글 수와 segment 병합 상태에 따라 달라지므로 문서 수나 5 GiB 백업 크기만으로 디스크를 산정하지 않는다. 복구·재색인·merge 중 임시 디스크 여유는 이 표에 포함하지 않았다.
+- 이 데이터에서 색인 파일은 원문 UTF-8 크기의 약 32%였다. 어휘·문서 길이·댓글 수와 segment 병합 상태에 따라 달라지므로 문서 수나 5 GiB 백업 크기만으로 디스크를 산정하지 않는다. 복구·재색인·merge 중 임시 디스크 여유는 이 표에 포함하지 않았다.
 - 단일 검색 클라이언트, 전체 프로젝트를 볼 수 있는 관리자, 첫 페이지 20건 기준이다. 동시 읽기 부하·권한 복잡도·다중 노드·재시작 재색인·검색 품질의 운영 검증을 대체하지 않는다.
 
 ## 데이터와 복원
@@ -134,7 +134,7 @@ H2 검색·큐·백업·웹/API 회귀 **496개 통과**. 2,105개 hit의 20건 
 - archive 기준: 이슈 4,882건, 댓글 6,335건, 프로젝트 4개.
 - 첨부파일·저장소는 Lucene 이슈 색인 대상이 아니다. 제목·본문·댓글의 UTF-8 바이트를 별도로 측정한다.
 - H2 복원은 알림 이력의 `new_value`가 100만 자 제한을 초과하여 실패했다. 해당 실행은 결과에서 제외한다. 데이터를 잘라내거나 측정용으로 importer 검증을 완화하지 않고 MariaDB 10.11의 별도 컨테이너를 사용한다.
-- 예비 측정은 기존 `yona2-migrator`의 `behaviorCheck`로 생성한 1건 fixture 및 명시적 1,000건 합성 확장으로 진행했다. 이것을 golden fixture 또는 운영 규모 결과로 간주하지 않는다.
+- 예비 측정은 기존 `yona2-migrator`의 `behaviorCheck`로 생성한 1건 fixture 및 명시적 1,000건 합성 확장으로 진행했다. 이것을 본 측정 또는 운영 규모 결과로 간주하지 않는다.
 
 ## 방법
 
@@ -175,12 +175,12 @@ YONA_PROBE_QUERIES=오류,수정,missingneedle92817 \
 ./gradlew searchResourceProbe --init-script support-script/search-poc/resource-probe.gradle
 ```
 
-최초 고정 창·큐·검색·백업 관련 H2 회귀 테스트는 494개가 통과했다. 후처리 최적화에서 대량 hit 회귀 테스트를 추가했다. golden MariaDB 측정에서는 복원 후 이슈/댓글 수 동일, Lucene 실제 backend 사용, 유휴 신규 job 0, 증분 10건/1개 job 및 갱신 내용의 색인 hit를 검증했다.
+최초 고정 창·큐·검색·백업 관련 H2 회귀 테스트는 494개가 통과했다. 후처리 최적화에서 대량 hit 회귀 테스트를 추가했다. MariaDB 측정에서는 복원 후 이슈/댓글 수 동일, Lucene 실제 backend 사용, 유휴 신규 job 0, 증분 10건/1개 job 및 갱신 내용의 색인 hit를 검증했다.
 
-측정 전용 MariaDB 컨테이너와 4회 복원한 임시 파일 복사본은 측정 후 정리했다. 집계 JSON과 각 실행의 `/tmp/yona-search-golden-maria-{db|lucene}-r{1|2}/metrics.json`은 보관했고, 엔진 진단용 색인 사본은 `<private-index-path>`에 0700 권한으로 보관했다. 평가 입력은 변경하지 않았다.
+측정 전용 MariaDB 컨테이너와 4회 복원한 임시 파일 복사본은 측정 후 정리했다. 집계 JSON과 각 실행의 측정 결과는 보관했고, 엔진 진단용 색인 사본은 접근 권한을 제한해 별도로 보관했다. 평가 입력은 변경하지 않았다.
 
 후속 최적화 측정의 전용 DB 컨테이너와 복원 파일 사본도 정리했다. 각 실행의 `/tmp/yona-search-optimized-{lucene-r1|db-r1|lucene-r2}/metrics.json`과 저장소 집계 JSON은 보관한다.
 
-이번 stale 정책 측정의 전용 컨테이너와 복원 파일 사본도 정리했다. 측정 결과와 저장소 집계 JSON은 보관하며, 평가 입력은 변경하지 않았다.
+이번 stale 정책 측정의 전용 컨테이너와 복원 파일 사본도 정리했다. `/tmp/yona-search-stale-{lucene-r1|db-r1|lucene-r2}/metrics.json`과 저장소 집계 JSON은 보관하며, 평가 입력은 변경하지 않았다.
 
 페이지 조회 최적화 측정의 전용 컨테이너·복원 파일 사본도 정리했다. `/tmp/yona-search-page-{lucene-r1|db-r1|lucene-r2}/metrics.json`과 저장소 집계 JSON은 보관한다. 평가 입력은 변경하지 않았다.
