@@ -74,7 +74,9 @@ class IssueSearchService(
                 val source = IssueSearchDocument(issue.id!!, issue.title, issue.body.orEmpty(),
                     byIssue[issue.id].orEmpty().map { it.id!! to it.contents })
                 // A stale match may remain until sync; never attach its old snippet or comment link.
-                if (source.digest() != hitMap!!.getValue(issue.id!!).digest) null
+                // Auxiliary fragments have no Nori offsets: omit rather than highlight unrelated terms or raw HTML.
+                val hit = hitMap!!.getValue(issue.id!!)
+                if (source.digest() != hit.digest || hit.auxiliaryOnly) null
                 else snippet(source, text)?.let { issue.id!! to it }
             }
         }.toMap()

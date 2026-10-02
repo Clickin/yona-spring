@@ -3,6 +3,11 @@ package com.github.yonaprojects.yona.domain.issue
 import jakarta.annotation.PreDestroy
 import org.apache.lucene.analysis.Analyzer
 import org.apache.lucene.analysis.AnalyzerWrapper
+import org.apache.lucene.analysis.core.FlattenGraphFilter
+import org.apache.lucene.analysis.core.LowerCaseFilter
+import org.apache.lucene.analysis.core.WhitespaceTokenizer
+import org.apache.lucene.analysis.miscellaneous.WordDelimiterGraphFilter
+import org.apache.lucene.analysis.tokenattributes.OffsetAttribute
 import org.apache.lucene.analysis.ko.KoreanAnalyzer
 import org.apache.lucene.document.*
 import org.apache.lucene.index.*
@@ -31,7 +36,7 @@ data class IssueSearchDocument(val id: Long, val title: String, val body: String
     }
 }
 
-data class IssueIndexHit(val id: Long, val digest: String)
+data class IssueIndexHit(val id: Long, val digest: String, val auxiliaryOnly: Boolean = false)
 data class IssueIndexStatus(val ready: Boolean = false, val indexed: Long = 0, val scanned: Long = 0,
     val running: Boolean = false, val lastSuccess: Instant? = null, val error: String? = null)
 
@@ -45,12 +50,30 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
     private var writer: IndexWriter? = null
     private var reader: DirectoryReader? = null
     private val nori = KoreanAnalyzer()
+    private val identifiers = object : Analyzer() {
+        override fun createComponents(fieldName: String): TokenStreamComponents {
+            val tokenizer = WhitespaceTokenizer()
+            val parts = WordDelimiterGraphFilter(tokenizer,
+                WordDelimiterGraphFilter.GENERATE_WORD_PARTS or WordDelimiterGraphFilter.GENERATE_NUMBER_PARTS or
+                    WordDelimiterGraphFilter.SPLIT_ON_CASE_CHANGE or WordDelimiterGraphFilter.SPLIT_ON_NUMERICS or
+                    WordDelimiterGraphFilter.PRESERVE_ORIGINAL, null)
+            return TokenStreamComponents(tokenizer, LowerCaseFilter(parts))
+        }
+    }
     val analyzer = object : AnalyzerWrapper(Analyzer.PER_FIELD_REUSE_STRATEGY) {
-        override fun getWrappedAnalyzer(fieldName: String): Analyzer = nori
-        override fun wrapComponents(fieldName: String, components: Analyzer.TokenStreamComponents) = components
+        override fun getWrappedAnalyzer(fieldName: String): Analyzer =
+            if (fieldName.endsWith("_ident")) identifiers else nori
+        override fun wrapComponents(fieldName: String, components: Analyzer.TokenStreamComponents) =
+            if (fieldName.endsWith("_ident")) TokenStreamComponents(components.source, FlattenGraphFilter(components.tokenStream))
+            else components
         override fun getPositionIncrementGap(fieldName: String) = 100
     }
-    private companion object { val FIELDS = listOf("title" to 3f, "body" to 1f, "comments" to 1f) }
+    private companion object {
+        val FIELDS = listOf("title" to 3f, "body" to 1f, "comments" to 1f)
+        const val VERSION_KEY = "yona.issue-search.version"
+        const val VERSION = "2"
+        val IDENTIFIER = Regex("""(?<![\p{L}\p{N}_])[A-Za-z0-9]+(?:[._/-][A-Za-z0-9]+)*(?![\p{L}\p{N}_])""")
+    }
     @Volatile final var status = IssueIndexStatus()
         private set
 
@@ -63,25 +86,54 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
         if (text.isBlank()) return MatchAllDocsQuery()
         val builder = QueryBuilder(analyzer)
         val required = BooleanQuery.Builder()
-        var clauses = 0
-        fun anyField(field: (String) -> Query?) {
+        val fallback = BooleanQuery.Builder()
+        fun anyField(target: BooleanQuery.Builder, field: (String) -> Query?) {
             val fields = FIELDS.mapNotNull { (name, boost) -> field(name)?.let { BoostQuery(it, boost) } }
             if (fields.isEmpty()) return
-            required.add(BooleanQuery.Builder().apply { fields.forEach { add(it, BooleanClause.Occur.SHOULD) } }.build(),
+            target.add(BooleanQuery.Builder().apply { fields.forEach { add(it, BooleanClause.Occur.SHOULD) } }.build(),
                 BooleanClause.Occur.MUST)
-            clauses++
         }
         val phrase = Regex("\"([^\"]*)\"")
-        phrase.findAll(text).forEach { match -> anyField { builder.createPhraseQuery(it, match.groupValues[1]) } }
+        phrase.findAll(text).forEach { match ->
+            // Quoted phrases retain Nori semantics; never expand them into identifier fragments.
+            anyField(required) { builder.createPhraseQuery(it, match.groupValues[1]) }
+            anyField(fallback) { builder.createPhraseQuery(it, match.groupValues[1]) }
+        }
+        val unquoted = phrase.replace(text, " ").replace('"', ' ')
+        val words = IDENTIFIER.findAll(unquoted).toList()
         val terms = linkedSetOf<String>()
-        analyzer.tokenStream("body", phrase.replace(text, " ").replace('"', ' ')).use { stream ->
+        val contextualTerms = linkedSetOf<String>()
+        var wordIndex = 0
+        analyzer.tokenStream("body", unquoted).use { stream ->
             val term = stream.addAttribute(org.apache.lucene.analysis.tokenattributes.CharTermAttribute::class.java)
+            val offset = stream.addAttribute(OffsetAttribute::class.java)
             stream.reset()
-            while (stream.incrementToken()) terms.add(term.toString())
+            while (stream.incrementToken()) {
+                val value = term.toString()
+                terms.add(value)
+                // Keep Korean analysis from the entire original string, even in a mixed query.
+                while (wordIndex < words.size && words[wordIndex].range.last < offset.startOffset()) wordIndex++
+                val word = words.getOrNull(wordIndex)
+                if (word == null || offset.startOffset() < word.range.first || offset.endOffset() > word.range.last + 1) {
+                    contextualTerms.add(value)
+                }
+            }
             stream.end()
         }
-        terms.forEach { value -> anyField { TermQuery(Term(it, value)) } }
-        return if (clauses == 0) MatchNoDocsQuery("No searchable terms") else required.build()
+        terms.forEach { value -> anyField(required) { TermQuery(Term(it, value)) } }
+        val primary = required.build().let { if (it.clauses().isEmpty()) MatchNoDocsQuery("No searchable terms") else it }
+        if (words.isEmpty()) return primary
+        contextualTerms.forEach { value -> anyField(fallback) { TermQuery(Term(it, value)) } }
+        val identifierBuilder = QueryBuilder(identifiers)
+        words.forEach { word ->
+            // A multi-part word must stay adjacent and ordered in one field, not match scattered fragments.
+            anyField(fallback) { identifierBuilder.createPhraseQuery("${it}_ident", word.value) }
+        }
+        fallback.add(primary, BooleanClause.Occur.MUST_NOT)
+        // ponytail: zero-score fallback preserves every Nori score/order, even arbitrarily small BM25 scores.
+        return BooleanQuery.Builder()
+            .add(primary, BooleanClause.Occur.SHOULD)
+            .add(BoostQuery(ConstantScoreQuery(fallback.build()), 0f), BooleanClause.Occur.SHOULD).build()
     }
 
     fun search(text: String, titleHead: String? = null): List<IssueIndexHit> = readers.read {
@@ -101,7 +153,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             val page = searcher.searchAfter(after, query, 500).scoreDocs
             page.forEach {
                 val document = searcher.storedFields().document(it.doc)
-                result.add(IssueIndexHit(document.get("id").toLong(), document.get("digest")))
+                result.add(IssueIndexHit(document.get("id").toLong(), document.get("digest"), it.score == 0f))
             }
             after = page.lastOrNull()
         } while (after != null)
@@ -116,7 +168,13 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             val dir = directory ?: FSDirectory.open(path).also { directory = it }
             val output = writer ?: IndexWriter(dir, IndexWriterConfig(analyzer)).also { writer = it }
             val previous = if (DirectoryReader.indexExists(dir)) DirectoryReader.open(dir).use {
-                hits(it, MatchAllDocsQuery()).associate { hit -> hit.id to hit.digest }.toMutableMap()
+                if (it.indexCommit.userData[VERSION_KEY] == VERSION) {
+                    hits(it, MatchAllDocsQuery()).associate { hit -> hit.id to hit.digest }.toMutableMap()
+                } else {
+                    // Content digests cannot detect analyzer/schema changes.
+                    output.deleteAll()
+                    mutableMapOf()
+                }
             } else mutableMapOf()
             var cursor = 0L
             var scanned = 0L
@@ -136,6 +194,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             }
             previous.keys.forEach { output.deleteDocuments(Term("id", it.toString())) }
             checkpoint(scanned)
+            output.setLiveCommitData(mapOf(VERSION_KEY to VERSION).entries)
             output.commit()
             readers.write {
                 val next = DirectoryReader.open(dir)
@@ -158,6 +217,9 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
         add(TextField("title", source.title, Field.Store.NO))
         add(TextField("body", source.body, Field.Store.NO))
         source.comments.forEach { add(TextField("comments", it.second, Field.Store.NO)) }
+        add(TextField("title_ident", source.title, Field.Store.NO))
+        add(TextField("body_ident", source.body, Field.Store.NO))
+        source.comments.forEach { add(TextField("comments_ident", it.second, Field.Store.NO)) }
         TitleHeads.extract(source.title).forEach { add(StringField("titleHead", it, Field.Store.NO)) }
     }
 
@@ -208,6 +270,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
         directory = null
         analyzer.close()
         nori.close()
+        identifiers.close()
     }
 }
 

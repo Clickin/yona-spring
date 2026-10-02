@@ -149,6 +149,32 @@ class IssueSearchServiceSpec @Autowired constructor(
             lucene.search(conditions(), "로그인 오류", null, page).totalElements shouldBe 0
         }
 
+        it("보조 식별자 일치에는 안전하게 스니펫을 생략하고 기존 Nori 일치는 이스케이프한다") {
+            val project = Project(name = "identifier-snippet", owner = "poc", projectScope = ProjectScope.PUBLIC)
+            em.persist(project)
+            val issue = issues.save(Issue(title = "진단 기록", project = project, number = 1))
+            val comment = comments.save(IssueComment(issue = issue,
+                contents = "<script>alert('unsafe')</script> 오류 SocketTimeoutException"))
+            em.flush()
+            index.synchronize(tasks::batch)
+            val service = IssueSearchService(issues, comments, accessControl, "lucene", index)
+            val conditions = IssueSpecification.filterIssues(project, State.OPEN, null, null, null, null, null, null, null)
+            fun search(text: String) = service.search(conditions, text, null, PageRequest.of(0, 20)) as IssueSearchPage
+            for (text in listOf("timeout", "오류 timeout")) {
+                val result = search(text)
+                result.content.map { it.id } shouldBe listOf(issue.id)
+                result.snippets shouldBe emptyMap()
+            }
+            val original = search("SocketTimeoutException").snippets.getValue(issue.id!!)
+            original.commentId shouldBe comment.id
+            original.html.contains("<script>") shouldBe false
+            original.html.contains("<mark>") shouldBe true
+            comment.contents = "삭제된 식별자"
+            em.flush()
+            search("timeout").snippets shouldBe emptyMap()
+            search("SocketTimeoutException").snippets shouldBe emptyMap()
+        }
+
         it("대량 hit의 DB 정렬과 건수를 유지하며 댓글은 표시할 페이지만 조회한다") {
             val project = Project(name = "bulk-search", owner = "poc", projectScope = ProjectScope.PUBLIC)
             em.persist(project)
