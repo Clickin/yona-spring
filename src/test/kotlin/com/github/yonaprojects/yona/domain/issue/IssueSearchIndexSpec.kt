@@ -12,12 +12,7 @@ import org.apache.lucene.document.TextField
 import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.index.IndexWriter
 import org.apache.lucene.index.IndexWriterConfig
-import org.apache.lucene.index.Term
-import org.apache.lucene.search.BooleanClause
-import org.apache.lucene.search.BooleanQuery
-import org.apache.lucene.search.BoostQuery
 import org.apache.lucene.search.IndexSearcher
-import org.apache.lucene.search.TermQuery
 import org.apache.lucene.store.FSDirectory
 import java.nio.file.Files
 
@@ -140,7 +135,7 @@ class IssueSearchIndexSpec : DescribeSpec({
         }
     }
 
-    it("한국어 문맥과 기존 Nori 점수 순서를 보존하고 보조 일치는 뒤에만 추가한다") {
+    it("한국어 문맥을 보존하고 보조 일치는 Nori 결과 뒤에만 추가한다") {
         val path = Files.createTempDirectory("yona-lucene-")
         val documents = listOf(
             IssueSearchDocument(1, "오류 timeout", "", emptyList()),
@@ -160,24 +155,14 @@ class IssueSearchIndexSpec : DescribeSpec({
             index.search("\"길이 제한\" timeout").map { it.id } shouldBe listOf(6L)
             index.search("그리고").map { it.id } shouldBe emptyList()
             index.search("\"그리고\"").map { it.id } shouldBe emptyList()
-            // The previous public query for these known Nori terms: AND terms, OR weighted fields.
-            val previous = BooleanQuery.Builder().apply {
-                for (term in listOf("오류", "timeout")) {
-                    add(BooleanQuery.Builder().apply {
-                        for ((field, boost) in listOf("title" to 3f, "body" to 1f, "comments" to 1f)) {
-                            add(BoostQuery(TermQuery(Term(field, term)), boost), BooleanClause.Occur.SHOULD)
-                        }
-                    }.build(), BooleanClause.Occur.MUST)
-                }
-            }.build()
             FSDirectory.open(path).use { dir ->
                 DirectoryReader.open(dir).use { reader ->
                     val searcher = IndexSearcher(reader)
-                    val before = searcher.search(previous, 20).scoreDocs.map { it.doc to it.score }
-                    val after = searcher.search(index.query("오류 timeout"), 20).scoreDocs.map { it.doc to it.score }
-                    after shouldBe before
-                    index.search("오류 timeout").take(before.size).map { it.id } shouldBe
-                        before.map { reader.storedFields().document(it.first).get("id").toLong() }
+                    val primary = searcher.search(index.query("오류 timeout"), 20).scoreDocs.map {
+                        reader.storedFields().document(it.doc).get("id").toLong()
+                    }
+                    primary.toSet() shouldBe setOf(1L, 2L, 5L)
+                    index.search("오류 timeout").take(primary.size).map { it.id } shouldBe primary
                 }
             }
             index.search("오류 timeout").takeLast(2).map { it.id }.toSet() shouldBe setOf(3L, 4L)
@@ -201,6 +186,29 @@ class IssueSearchIndexSpec : DescribeSpec({
                 listOf(3L to false, 2L to true, 1L to true)
             index.search("exception").map { it.id to it.auxiliaryOnly } shouldBe
                 listOf(2L to true, 1L to true)
+        } finally {
+            index.close()
+            path.toFile().deleteRecursively()
+        }
+    }
+
+    it("인접한 구문을 우선하되 떨어진 단어와 다른 필드의 일치를 제외하지 않는다") {
+        val path = Files.createTempDirectory("yona-lucene-")
+        val documents = listOf(
+            IssueSearchDocument(1, "로그인 처리 오류 기록", "", emptyList()),
+            IssueSearchDocument(2, "로그인 오류 처리 기록", "", emptyList()),
+            IssueSearchDocument(3, "로그인", "오류", emptyList()),
+            IssueSearchDocument(4, "기록", "", listOf(10L to "로그인", 11L to "오류")),
+            IssueSearchDocument(5, "로그인 처리 기록", "", emptyList())
+        )
+        val index = IssueSearchIndex(path.toString())
+        try {
+            index.synchronize({ after -> documents.filter { it.id > after } })
+            val hits = index.search("로그인 오류").map { it.id }
+            hits.toSet() shouldBe setOf(1L, 2L, 3L, 4L)
+            hits.first() shouldBe 2L
+            index.search("\"로그인 오류\"").map { it.id } shouldBe listOf(2L)
+            index.search("로그인").map { it.id }.toSet() shouldBe setOf(1L, 2L, 3L, 4L, 5L)
         } finally {
             index.close()
             path.toFile().deleteRecursively()

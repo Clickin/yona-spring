@@ -106,11 +106,13 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
         val terms = linkedSetOf<String>()
         val contextualTerms = linkedSetOf<String>()
         var wordIndex = 0
+        var tokenCount = 0
         analyzer.tokenStream("body", unquoted).use { stream ->
             val term = stream.addAttribute(org.apache.lucene.analysis.tokenattributes.CharTermAttribute::class.java)
             val offset = stream.addAttribute(OffsetAttribute::class.java)
             stream.reset()
             while (stream.incrementToken()) {
+                tokenCount++
                 val value = term.toString()
                 terms.add(value)
                 // Keep Korean analysis from the entire original string, even in a mixed query.
@@ -123,7 +125,18 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             stream.end()
         }
         terms.forEach { value -> anyField(required) { TermQuery(Term(it, value)) } }
-        val primary = required.build().let { if (it.clauses().isEmpty()) MatchNoDocsQuery("No searchable terms") else it }
+        val requiredQuery = required.build().let { if (it.clauses().isEmpty()) MatchNoDocsQuery("No searchable terms") else it }
+        val primary = if (tokenCount < 2) requiredQuery else BooleanQuery.Builder().apply {
+            add(requiredQuery, BooleanClause.Occur.MUST)
+            for ((field, boost) in FIELDS) {
+                builder.createPhraseQuery(field, unquoted, 0)?.let {
+                    add(BoostQuery(it, boost * 3f), BooleanClause.Occur.SHOULD)
+                }
+                builder.createPhraseQuery(field, unquoted, 4)?.let {
+                    add(BoostQuery(it, boost), BooleanClause.Occur.SHOULD)
+                }
+            }
+        }.build()
         if (words.isEmpty()) return primary to null
         contextualTerms.forEach { value -> anyField(fallback) { TermQuery(Term(it, value)) } }
         val identifierBuilder = QueryBuilder(identifiers)
