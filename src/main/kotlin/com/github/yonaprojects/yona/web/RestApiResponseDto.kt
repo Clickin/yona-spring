@@ -119,7 +119,8 @@ data class IssueResponse(
     // /api/v1/projects/{owner}/{project}/... 엔드포인트(코멘트 작성 등)를 호출할 수 있다.
     // projectId(숫자 PK)만으로는 owner/name을 조회할 API가 따로 없어 추가했다.
     val projectOwner: String?,
-    val projectName: String?
+    val projectName: String?,
+    val pinnedAt: Instant? = null
 )
 
 fun Issue.toResponse() = IssueResponse(
@@ -128,6 +129,7 @@ fun Issue.toResponse() = IssueResponse(
     title = title,
     body = body,
     state = state,
+    pinnedAt = pinnedAt,
     createdDate = createdDate,
     updatedDate = updatedDate,
     authorId = authorId,

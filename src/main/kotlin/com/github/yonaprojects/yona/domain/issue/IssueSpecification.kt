@@ -11,6 +11,14 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 object IssueSpecification {
+    fun pinned(pinned: Boolean): Specification<Issue> = Specification { root, _, cb ->
+        if (pinned) cb.isNotNull(root.get<Instant>("pinnedAt")) else cb.isNull(root.get<Instant>("pinnedAt"))
+    }
+
+    fun published(): Specification<Issue> = Specification { root, _, cb ->
+        cb.and(cb.isFalse(root.get("isDraft")), cb.notEqual(root.get<State>("state"), State.DRAFT))
+    }
+
     fun filterIssues(
         project: Project,
         state: State,

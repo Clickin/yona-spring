@@ -4,6 +4,7 @@ import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.enumeration.EventType
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
+import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.enumeration.State
 import com.github.yonaprojects.yona.domain.support.sha1Hex
 import com.github.yonaprojects.yona.domain.issue.Issue
@@ -193,7 +194,7 @@ class IssueViewController(
             commenterId = commenterId,
             labelIds = labelIds,
             dueDate = dueDate
-        )
+        ).and(IssueSpecification.published())
 
         if (format == "xls") {
             val allIssues = issueRepository.findAll(spec)
@@ -212,7 +213,10 @@ class IssueViewController(
                 .body(excelData)
         }
 
-        val issuePage = issueRepository.findAll(spec, pageable)
+        val pinnedIssues = issueRepository.findAll(spec.and(IssueSpecification.pinned(true)), sort)
+            .filter { accessControl.isAllowed(loginUser, project, it, Operation.READ) }
+        val issuePage = issueRepository.findAll(spec.and(IssueSpecification.pinned(false)), pageable)
+        model.addAttribute("pinnedIssues", pinnedIssues)
 
         val openIssuesCount = issueRepository.countByProjectAndState(project, State.OPEN)
         val closedIssuesCount = issueRepository.countByProjectAndState(project, State.CLOSED)
@@ -397,6 +401,8 @@ class IssueViewController(
         model.addAttribute("isWatchingProject", isWatchingProject)
         model.addAttribute("isFavoriteIssue", isFavoriteIssue)
         model.addAttribute("isAllowedUpdate", isAllowedUpdate)
+        model.addAttribute("canPinIssue", loginUser?.isGuest == false && loginUser.isManagerOf(project) &&
+            !issue.isDraft && issue.state != State.DRAFT)
         model.addAttribute("attachmentsJson", attachmentsJson)
         model.addAttribute("openMilestones", openMilestones)
         model.addAttribute("closedMilestones", closedMilestonesForIssue)

@@ -2,10 +2,16 @@ package com.github.yonaprojects.yona.config
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.security.authentication.AnonymousAuthenticationToken
+import org.springframework.security.core.context.SecurityContext
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository
+import org.springframework.security.web.csrf.CsrfFilter
 import org.springframework.security.web.csrf.CsrfToken
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler
 import org.springframework.security.web.csrf.CsrfTokenRequestHandler
 import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher
+import org.springframework.security.web.util.matcher.OrRequestMatcher
 import org.springframework.security.web.util.matcher.RequestMatcher
 import org.springframework.util.StringUtils
 import java.util.function.Supplier
@@ -22,6 +28,21 @@ import java.util.function.Supplier
 // 체인을 타기 때문이다.
 val tokenAuthenticatedRequestMatcher = RequestMatcher { request ->
     ApiTokenAuthenticationFilter.extractToken(request) != null
+}
+
+private val pinnedIssueMutationPath = OrRequestMatcher(
+    PathPatternRequestMatcher.pathPattern("/api/v1/projects/{owner}/{project}/issues/{number}/pin"),
+    PathPatternRequestMatcher.pathPattern("/{owner}/{project}/issue/{number}/pin")
+)
+
+// Only the new pin routes change policy. A token-looking header must not exempt an ambient session.
+val pinnedIssueSessionMutationMatcher = RequestMatcher { request ->
+    val context = request.getSession(false)
+        ?.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY) as? SecurityContext
+    val authentication = context?.authentication
+    CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request) &&
+        pinnedIssueMutationPath.matches(request) &&
+        authentication?.isAuthenticated == true && authentication !is AnonymousAuthenticationToken
 }
 
 /**

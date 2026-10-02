@@ -544,6 +544,7 @@ class IssueServiceImpl(
     // yona updateIssueToOtherProject() 대응.
     private fun updateIssueToOtherProject(issue: Issue, targetProject: Project, mover: User) {
         issue.project = targetProject
+        issue.pinnedAt = null
         issue.number = nextIssueNumber(targetProject)
         issue.createdDate = Instant.now()
         issue.updatedDate = Instant.now()
