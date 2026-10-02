@@ -43,7 +43,6 @@ dependencies {
 	// #843 PoC: 선택한 이슈 검색에만 사용. 기본 DB 검색은 색인을 만들지 않는다.
 	implementation("org.apache.lucene:lucene-core:9.12.3")
 	implementation("org.apache.lucene:lucene-analysis-nori:9.12.3")
-	implementation("org.apache.lucene:lucene-queryparser:9.12.3")
 	implementation("org.apache.lucene:lucene-highlighter:9.12.3")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("io.micrometer:micrometer-registry-prometheus")

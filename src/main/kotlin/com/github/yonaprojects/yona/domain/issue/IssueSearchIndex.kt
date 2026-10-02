@@ -6,7 +6,7 @@ import org.apache.lucene.analysis.AnalyzerWrapper
 import org.apache.lucene.analysis.ko.KoreanAnalyzer
 import org.apache.lucene.document.*
 import org.apache.lucene.index.*
-import org.apache.lucene.queryparser.simple.SimpleQueryParser
+import org.apache.lucene.util.QueryBuilder
 import org.apache.lucene.search.*
 import org.apache.lucene.store.FSDirectory
 import org.springframework.beans.factory.annotation.Value
@@ -50,13 +50,39 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
         override fun wrapComponents(fieldName: String, components: Analyzer.TokenStreamComponents) = components
         override fun getPositionIncrementGap(fieldName: String) = 100
     }
+    private companion object { val FIELDS = listOf("title" to 3f, "body" to 1f, "comments" to 1f) }
     @Volatile final var status = IssueIndexStatus()
         private set
 
-    fun query(text: String): Query = if (text.isBlank()) MatchAllDocsQuery() else SimpleQueryParser(analyzer,
-        mapOf("title" to 3f, "body" to 1f, "comments" to 1f),
-        SimpleQueryParser.PHRASE_OPERATOR or SimpleQueryParser.WHITESPACE_OPERATOR
-    ).apply { defaultOperator = BooleanClause.Occur.MUST }.parse(text)
+    /**
+     * Every term and quoted phrase is required; each may match title, body or comments.
+     * Unquoted text is analyzed as one string, like indexed text: Nori splits a word differently without its
+     * neighbours (`길이 제한` indexes `길`, but `길이` alone yields `길이`), so per-word analysis misses exact text.
+     */
+    fun query(text: String): Query {
+        if (text.isBlank()) return MatchAllDocsQuery()
+        val builder = QueryBuilder(analyzer)
+        val required = BooleanQuery.Builder()
+        var clauses = 0
+        fun anyField(field: (String) -> Query?) {
+            val fields = FIELDS.mapNotNull { (name, boost) -> field(name)?.let { BoostQuery(it, boost) } }
+            if (fields.isEmpty()) return
+            required.add(BooleanQuery.Builder().apply { fields.forEach { add(it, BooleanClause.Occur.SHOULD) } }.build(),
+                BooleanClause.Occur.MUST)
+            clauses++
+        }
+        val phrase = Regex("\"([^\"]*)\"")
+        phrase.findAll(text).forEach { match -> anyField { builder.createPhraseQuery(it, match.groupValues[1]) } }
+        val terms = linkedSetOf<String>()
+        analyzer.tokenStream("body", phrase.replace(text, " ").replace('"', ' ')).use { stream ->
+            val term = stream.addAttribute(org.apache.lucene.analysis.tokenattributes.CharTermAttribute::class.java)
+            stream.reset()
+            while (stream.incrementToken()) terms.add(term.toString())
+            stream.end()
+        }
+        terms.forEach { value -> anyField { TermQuery(Term(it, value)) } }
+        return if (clauses == 0) MatchNoDocsQuery("No searchable terms") else required.build()
+    }
 
     fun search(text: String, titleHead: String? = null): List<IssueIndexHit> = readers.read {
         check(status.ready) { "Search index is not ready" }

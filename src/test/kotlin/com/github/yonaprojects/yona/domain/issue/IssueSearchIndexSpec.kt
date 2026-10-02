@@ -46,6 +46,27 @@ class IssueSearchIndexSpec : DescribeSpec({
         }
     }
 
+    it("검색어를 본문과 같은 문맥으로 분석해 원문 그대로의 단어를 찾는다") {
+        val path = Files.createTempDirectory("yona-lucene-")
+        val documents = listOf(
+            IssueSearchDocument(1, "입력 검증", "필드 길이 제한을 확인합니다", emptyList()),
+            IssueSearchDocument(2, "화면 변경", "", listOf(10L to "교수님의 요청으로 변경합니다"))
+        )
+        val index = IssueSearchIndex(path.toString())
+        try {
+            index.synchronize({ after -> documents.filter { it.id > after } })
+            // Word-by-word analysis turned these into `길이` and `교수 님의`, which the indexed text never contains.
+            index.search("길이 제한").map { it.id } shouldBe listOf(1L)
+            index.search("교수님의 요청으로").map { it.id } shouldBe listOf(2L)
+            index.search("\"길이 제한\" 확인").map { it.id } shouldBe listOf(1L)
+            index.search("요청으로 길이").map { it.id } shouldBe emptyList()
+            index.search("의").map { it.id } shouldBe emptyList() // Only stop tags: no terms, no match.
+        } finally {
+            index.close()
+            path.toFile().deleteRecursively()
+        }
+    }
+
     it("첫 변경에서 시작한 전역 창은 후속 변경으로 연장되지 않고 유휴 시 실행하지 않는다") {
         SearchChangeWindow(1000, 1000).due(2999, 2000) shouldBe false
         SearchChangeWindow(1000, 1000).due(3000, 2000) shouldBe true
