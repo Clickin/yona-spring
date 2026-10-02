@@ -82,7 +82,7 @@ class PullRequest(
     // 레거시 Play `yona`의 PullRequest.java(app/models/PullRequest.java)에도 label/assignee
     // 필드가 전혀 없음을 확인했다(전수 grep 0건) — 이 두 필드는 포팅 누락 버그가 아니라 신규 기능
     // 확장이다. `Assignee`(domain/issue/Assignee.kt)는 (user, project)만 갖는 범용 엔티티라
-    // Issue와 동일한 패턴(@ManyToOne cascade=ALL, FK 컬럼 assignee_id)으로 그대로 재사용한다.
+    // PR은 단일 담당자(@ManyToOne cascade=ALL, FK 컬럼 assignee_id)를 유지한다.
     @ManyToOne(fetch = FetchType.LAZY, cascade = [CascadeType.ALL])
     @JoinColumn(name = "assignee_id")
     var assignee: Assignee? = null,

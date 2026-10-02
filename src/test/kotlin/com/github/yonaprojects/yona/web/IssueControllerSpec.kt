@@ -2,7 +2,6 @@ package com.github.yonaprojects.yona.web
 
 import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.enumeration.State
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.organization.OrganizationUserRepository
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
@@ -97,7 +96,9 @@ class IssueControllerSpec : DescribeSpec({
         watchService,
         commentService
     )
-    val mockMvc = MockMvcBuilders.standaloneSetup(issueController)
+    val mockMvc = MockMvcBuilders.standaloneSetup(
+        issueController, IssueRestApiController(projectRepository, issueController, mockk<CommentController>())
+    )
         .setCustomArgumentResolvers(PageableHandlerMethodArgumentResolver())
         .build()
 
@@ -127,6 +128,75 @@ class IssueControllerSpec : DescribeSpec({
         val managerAuth = UsernamePasswordAuthenticationToken("manageruser", "password")
         val otherAuth = UsernamePasswordAuthenticationToken("otheruser", "password")
         val pageRequest = PageRequest.of(0, 25)
+
+        listOf("/api/projects/1/issues/5", "/api/v1/projects/owner/TestProject/issues/5").forEach { path ->
+            describe("Assignment mutations at $path") {
+                beforeTest {
+                    every { projectRepository.findById(1L) } returns Optional.of(project)
+                    every { projectRepository.findByOwnerAndName("owner", "TestProject") } returns Optional.of(project)
+                    every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+                    every { userRepository.findByLoginId("otheruser") } returns Optional.of(otherUser)
+                    every { projectUserRepository.findByProjectIdAndUserId(1L, 30L) } returns Optional.empty()
+                    every { userRepository.findById(20L) } returns Optional.of(managerUser)
+                    every { userRepository.findById(30L) } returns Optional.of(otherUser)
+                    every { userRepository.findById(999L) } returns Optional.empty()
+                    val assigned = Issue(id = 5L, number = 5L, title = "Assigned", project = project,
+                        authorId = user.id, assignees = mutableSetOf(managerUser))
+                    every { issueRepository.findByProjectAndNumber(project, 5L) } returns assigned
+                    every { issueService.changeAssignees(5L, any(), "testuser") } answers {
+                        assigned.assignees.clear()
+                        assigned.assignees.addAll(secondArg<List<User>>())
+                        assigned
+                    }
+                }
+
+                it("adds idempotently, removes one user, and clears all") {
+                    repeat(2) {
+                        mockMvc.perform(post("$path/assignees/30").principal(userAuth))
+                            .andExpect(status().isOk)
+                            .andExpect(jsonPath("$.assignees[*].id", Matchers.containsInAnyOrder(20, 30)))
+                            .andExpect(jsonPath("$.assignee").doesNotExist())
+                    }
+                    mockMvc.perform(delete("$path/assignees/20").principal(userAuth))
+                        .andExpect(status().isOk)
+                        .andExpect(jsonPath("$.assignees[*].id", Matchers.contains(30)))
+                    mockMvc.perform(delete("$path/assignees").principal(userAuth))
+                        .andExpect(status().isOk)
+                        .andExpect(jsonPath("$.assignees").isEmpty)
+                }
+
+                it("rejects unknown users without changing assignments") {
+                    mockMvc.perform(post("$path/assignees/999").principal(userAuth))
+                        .andExpect(status().isBadRequest)
+                    mockMvc.perform(delete("$path/assignees/999").principal(userAuth))
+                        .andExpect(status().isBadRequest)
+                    verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
+                }
+
+                it("rejects an unknown user in create and replacement lists before saving") {
+                    every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
+                    val body = """{"title":"Title","body":"Body","assigneeIds":[30,999]}"""
+                    mockMvc.perform(post(path.substringBeforeLast("/"))
+                        .principal(userAuth).contentType(MediaType.APPLICATION_JSON).content(body))
+                        .andExpect(status().isBadRequest)
+                    val update = if (path.startsWith("/api/v1/")) patch(path) else put(path)
+                    mockMvc.perform(update.principal(userAuth).contentType(MediaType.APPLICATION_JSON).content(body))
+                        .andExpect(status().isBadRequest)
+                    verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any(), any()) }
+                    verify(exactly = 0) { issueService.updateIssue(any(), any(), any(), any(), any(), any(), any()) }
+                }
+
+                it("requires authentication and issue write permission for every mutation") {
+                    listOf(post("$path/assignees/30"), delete("$path/assignees/20"), delete("$path/assignees")).forEach {
+                        mockMvc.perform(it).andExpect(status().isUnauthorized)
+                    }
+                    listOf(post("$path/assignees/30"), delete("$path/assignees/20"), delete("$path/assignees")).forEach {
+                        mockMvc.perform(it.principal(otherAuth)).andExpect(status().isForbidden)
+                    }
+                    verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
+                }
+            }
+        }
 
         describe("GET /api/projects/{projectId}/issues") {
             it("공개 프로젝트의 경우 비로그인 상태여도 이슈 목록을 반환해야 한다") {
@@ -385,14 +455,14 @@ class IssueControllerSpec : DescribeSpec({
                 every { projectRepository.findById(1L) } returns Optional.of(project)
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
-                every { issueService.createIssue(any(), user, null, null, null, false) } returns issue
+                every { issueService.createIssue(any(), user, emptyList(), null, null, false) } returns issue
 
                 val jsonContent = """
                     {
                         "title": "이슈 제목",
                         "body": "이슈 내용",
                         "milestoneId": null,
-                        "assigneeId": null,
+                        "assigneeIds": [],
                         "labelIds": null
                     }
                 """.trimIndent()
@@ -413,14 +483,14 @@ class IssueControllerSpec : DescribeSpec({
                 every { projectRepository.findById(1L) } returns Optional.of(project)
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
-                every { issueService.createIssue(any(), user, null, null, null, true) } returns draftIssue
+                every { issueService.createIssue(any(), user, emptyList(), null, null, true) } returns draftIssue
 
                 val jsonContent = """
                     {
                         "title": "초안 제목",
                         "body": "초안 내용",
                         "milestoneId": null,
-                        "assigneeId": null,
+                        "assigneeIds": [],
                         "labelIds": null,
                         "isDraft": true
                     }
@@ -435,13 +505,13 @@ class IssueControllerSpec : DescribeSpec({
                     .andExpect(status().isCreated)
                     .andExpect(jsonPath("$.state").value("DRAFT"))
 
-                verify(exactly = 1) { issueService.createIssue(any(), user, null, null, null, true) }
+                verify(exactly = 1) { issueService.createIssue(any(), user, emptyList(), null, null, true) }
             }
 
             it("존재하지 않는 프로젝트면 404를 반환해야 한다") {
                 every { projectRepository.findById(999L) } returns Optional.empty()
 
-                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [], "labelIds": null }"""
 
                 mockMvc.perform(
                     post("/api/projects/999/issues")
@@ -454,7 +524,7 @@ class IssueControllerSpec : DescribeSpec({
             it("익명 사용자면 401 Unauthorized를 반환해야 한다") {
                 every { projectRepository.findById(1L) } returns Optional.of(project)
 
-                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [], "labelIds": null }"""
 
                 mockMvc.perform(
                     post("/api/projects/1/issues")
@@ -470,7 +540,7 @@ class IssueControllerSpec : DescribeSpec({
                 every { userRepository.findByLoginId("otheruser") } returns Optional.of(otherUser)
                 every { projectUserRepository.existsByProjectIdAndUserId(1L, 30L) } returns false
 
-                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [], "labelIds": null }"""
 
                 mockMvc.perform(
                     post("/api/projects/1/issues")
@@ -493,9 +563,9 @@ class IssueControllerSpec : DescribeSpec({
                 every { projectRepository.findById(2L) } returns Optional.of(publicProject)
                 every { userRepository.findByLoginId("otheruser") } returns Optional.of(otherUser)
                 every { projectUserRepository.existsByProjectIdAndUserId(2L, 30L) } returns false
-                every { issueService.createIssue(any(), otherUser, null, null, null, false) } returns issue
+                every { issueService.createIssue(any(), otherUser, emptyList(), null, null, false) } returns issue
 
-                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [], "labelIds": null }"""
 
                 mockMvc.perform(
                     post("/api/projects/2/issues")
@@ -505,7 +575,7 @@ class IssueControllerSpec : DescribeSpec({
                 )
                     .andExpect(status().isCreated)
 
-                verify(exactly = 1) { issueService.createIssue(any(), otherUser, null, null, null, false) }
+                verify(exactly = 1) { issueService.createIssue(any(), otherUser, emptyList(), null, null, false) }
             }
 
             // checkWritePermission()의 existsByProjectIdAndUserId=false && isAllowedIfGroupMember=true 분기 대응 (P1-57).
@@ -519,9 +589,9 @@ class IssueControllerSpec : DescribeSpec({
                 every { projectRepository.findById(7L) } returns Optional.of(orgProject)
                 every { userRepository.findByLoginId("otheruser") } returns Optional.of(otherUser)
                 every { projectUserRepository.existsByProjectIdAndUserId(7L, 30L) } returns false
-                every { issueService.createIssue(any(), otherUser, null, null, null, false) } returns issue
+                every { issueService.createIssue(any(), otherUser, emptyList(), null, null, false) } returns issue
 
-                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [], "labelIds": null }"""
 
                 mockMvc.perform(
                     post("/api/projects/7/issues")
@@ -532,14 +602,14 @@ class IssueControllerSpec : DescribeSpec({
                     .andExpect(status().isCreated)
             }
 
-            it("assigneeId를 지정하면 담당자를 조회해서 서비스에 전달해야 한다") {
+            it("assigneeIds를 지정하면 담당자를 조회해서 서비스에 전달해야 한다") {
                 every { projectRepository.findById(1L) } returns Optional.of(project)
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
                 every { userRepository.findById(30L) } returns Optional.of(otherUser)
-                every { issueService.createIssue(any(), user, otherUser, null, null, false) } returns issue
+                every { issueService.createIssue(any(), user, listOf(otherUser), null, null, false) } returns issue
 
-                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeId": 30, "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [30], "labelIds": null }"""
 
                 mockMvc.perform(
                     post("/api/projects/1/issues")
@@ -549,7 +619,7 @@ class IssueControllerSpec : DescribeSpec({
                 )
                     .andExpect(status().isCreated)
 
-                verify(exactly = 1) { issueService.createIssue(any(), user, otherUser, null, null, false) }
+                verify(exactly = 1) { issueService.createIssue(any(), user, listOf(otherUser), null, null, false) }
             }
 
             it("body를 생략하면 빈 문자열로 이슈를 생성해야 한다") {
@@ -557,9 +627,9 @@ class IssueControllerSpec : DescribeSpec({
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
                 val issueSlot = slot<Issue>()
-                every { issueService.createIssue(capture(issueSlot), user, null, null, null, false) } returns issue
+                every { issueService.createIssue(capture(issueSlot), user, emptyList(), null, null, false) } returns issue
 
-                val jsonContent = """{ "title": "제목", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "milestoneId": null, "assigneeIds": [], "labelIds": null }"""
 
                 mockMvc.perform(
                     post("/api/projects/1/issues")
@@ -586,7 +656,6 @@ class IssueControllerSpec : DescribeSpec({
                         "title": "수정된 제목",
                         "body": "수정된 내용",
                         "milestoneId": null,
-                        "assigneeId": null,
                         "labelIds": null
                     }
                 """.trimIndent()
@@ -605,7 +674,7 @@ class IssueControllerSpec : DescribeSpec({
             it("작성자도 관리자도 아니지만 담당자면 이슈를 수정할 수 있어야 한다") {
                 val assigneeIssue = Issue(
                     id = 6L, number = 6L, title = "담당 이슈", body = "본문", project = project,
-                    authorId = user.id, state = State.OPEN, assignee = Assignee(user = otherUser, project = project)
+                    authorId = user.id, state = State.OPEN, assignees = mutableSetOf(otherUser)
                 )
 
                 every { projectRepository.findById(1L) } returns Optional.of(project)
@@ -619,7 +688,6 @@ class IssueControllerSpec : DescribeSpec({
                         "title": "담당자가 수정",
                         "body": "수정 내용",
                         "milestoneId": null,
-                        "assigneeId": null,
                         "labelIds": null
                     }
                 """.trimIndent()
@@ -636,7 +704,7 @@ class IssueControllerSpec : DescribeSpec({
             it("존재하지 않는 프로젝트면 404를 반환해야 한다") {
                 every { projectRepository.findById(999L) } returns Optional.empty()
 
-                val jsonContent = """{ "title": "t", "body": "b", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "t", "body": "b", "milestoneId": null, "labelIds": null }"""
 
                 mockMvc.perform(
                     put("/api/projects/999/issues/5")
@@ -651,7 +719,7 @@ class IssueControllerSpec : DescribeSpec({
                 every { projectRepository.findById(1L) } returns Optional.of(project)
                 every { issueRepository.findByProjectAndNumber(project, 999L) } returns null
 
-                val jsonContent = """{ "title": "t", "body": "b", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "t", "body": "b", "milestoneId": null, "labelIds": null }"""
 
                 mockMvc.perform(
                     put("/api/projects/1/issues/999")
@@ -666,7 +734,7 @@ class IssueControllerSpec : DescribeSpec({
                 every { projectRepository.findById(1L) } returns Optional.of(project)
                 every { issueRepository.findByProjectAndNumber(project, 5L) } returns issue
 
-                val jsonContent = """{ "title": "t", "body": "b", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "t", "body": "b", "milestoneId": null, "labelIds": null }"""
 
                 mockMvc.perform(
                     put("/api/projects/1/issues/5")
@@ -682,7 +750,7 @@ class IssueControllerSpec : DescribeSpec({
                 every { userRepository.findByLoginId("otheruser") } returns Optional.of(otherUser)
                 every { projectUserRepository.findByProjectIdAndUserId(1L, 30L) } returns Optional.empty()
 
-                val jsonContent = """{ "title": "t", "body": "b", "milestoneId": null, "assigneeId": null, "labelIds": null }"""
+                val jsonContent = """{ "title": "t", "body": "b", "milestoneId": null, "labelIds": null }"""
 
                 mockMvc.perform(
                     put("/api/projects/1/issues/5")
@@ -695,15 +763,15 @@ class IssueControllerSpec : DescribeSpec({
                 verify(exactly = 0) { issueService.updateIssue(any(), any(), any(), any(), any(), any(), any()) }
             }
 
-            it("assigneeId를 지정하면 담당자를 조회해서 서비스에 전달해야 한다") {
+            it("assigneeIds를 지정하면 담당자를 조회해서 서비스에 전달해야 한다") {
                 every { projectRepository.findById(1L) } returns Optional.of(project)
                 every { issueRepository.findByProjectAndNumber(project, 5L) } returns issue
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 every { projectUserRepository.findByProjectIdAndUserId(1L, 10L) } returns Optional.of(projectUser)
                 every { userRepository.findById(30L) } returns Optional.of(otherUser)
-                every { issueService.updateIssue(5L, "제목", "내용", user, otherUser, null, null) } returns issue
+                every { issueService.updateIssue(5L, "제목", "내용", user, listOf(otherUser), null, null) } returns issue
 
-                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeId": 30, "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [30], "labelIds": null }"""
 
                 mockMvc.perform(
                     put("/api/projects/1/issues/5")
@@ -713,7 +781,7 @@ class IssueControllerSpec : DescribeSpec({
                 )
                     .andExpect(status().isOk)
 
-                verify(exactly = 1) { issueService.updateIssue(5L, "제목", "내용", user, otherUser, null, null) }
+                verify(exactly = 1) { issueService.updateIssue(5L, "제목", "내용", user, listOf(otherUser), null, null) }
             }
         }
 
@@ -811,7 +879,7 @@ class IssueControllerSpec : DescribeSpec({
                 val targetProject = Project(id = 3L, name = "TargetProject", projectScope = ProjectScope.PUBLIC)
                 val assigneeIssue = Issue(
                     id = 6L, number = 6L, title = "담당 이슈", body = "본문", project = project,
-                    authorId = user.id, state = State.OPEN, assignee = Assignee(user = otherUser, project = project)
+                    authorId = user.id, state = State.OPEN, assignees = mutableSetOf(otherUser)
                 )
                 val movedIssue = Issue(id = 6L, number = 1L, title = "담당 이슈", body = "본문", project = targetProject, authorId = user.id, state = State.OPEN)
 
@@ -923,7 +991,7 @@ class IssueControllerSpec : DescribeSpec({
             it("작성자도 관리자도 아니지만 담당자면 초안을 발행할 수 있어야 한다") {
                 val draftIssue = Issue(
                     id = 6L, number = 6L, title = "담당 초안", body = "본문", project = project,
-                    authorId = user.id, state = State.DRAFT, assignee = Assignee(user = otherUser, project = project)
+                    authorId = user.id, state = State.DRAFT, assignees = mutableSetOf(otherUser)
                 )
                 val publishedIssue = Issue(id = 6L, number = 9L, title = "담당 초안", body = "본문", project = project, authorId = user.id, state = State.OPEN)
 
@@ -972,7 +1040,7 @@ class IssueControllerSpec : DescribeSpec({
             it("작성자도 관리자도 아니지만 담당자면 이슈를 삭제할 수 있어야 한다") {
                 val assigneeIssue = Issue(
                     id = 6L, number = 6L, title = "담당 이슈", body = "본문", project = project,
-                    authorId = user.id, state = State.OPEN, assignee = Assignee(user = otherUser, project = project)
+                    authorId = user.id, state = State.OPEN, assignees = mutableSetOf(otherUser)
                 )
 
                 every { projectRepository.findById(1L) } returns Optional.of(project)

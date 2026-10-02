@@ -1141,8 +1141,7 @@ class PullRequestServiceImpl(
         recordPullRequestEvent(pullRequest, EventType.PULL_REQUEST_REVIEWED, reviewer.loginId, null, state.name)
     }
 
-    // IssueServiceImpl.updateIssue()의 assigneeId 처리와 동일하게, 기존 Assignee 로우를 재사용하지
-    // 않고 매번 새로 만든다(Assignee는 (user, project) 값 객체에 가까움).
+    // 기존 Assignee 로우를 재사용하지 않고 새 PR 담당자 레코드를 만든다.
     @Transactional
     override fun setAssignee(pullRequestId: Long, assigneeUser: User?): PullRequest {
         val pr = pullRequestRepository.findById(pullRequestId)

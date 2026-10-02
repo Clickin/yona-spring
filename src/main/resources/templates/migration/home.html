@@ -148,7 +148,7 @@
               기존 이슈 담당자<span ng-if="vm.source.assignees"> ({{vm.source.assignees.length}})</span>
           </div>
           <div class="caution" ng-if="vm.destination.projectName">
-              대응되는 새 프로젝트 소속의 담당자 id를 입력해 주세요. 만약 지정하지 않으면 기존 담당자의 이슈는 담당자가 해제된 상태로 이전됩니다.</div>
+              대응되는 새 프로젝트 소속의 담당자 id를 모두 입력하고 확인해 주세요. 확인되지 않은 담당자가 있으면 이슈 이전을 시작하지 않습니다.</div>
           <div>
             <table class="table table-bordered" ng-if="vm.source.assignees.length > 0" ng-show="vm.destination.projectName" ng-cloak>
               <tr ng-repeat="assignee in vm.source.assignees" class="assignee">

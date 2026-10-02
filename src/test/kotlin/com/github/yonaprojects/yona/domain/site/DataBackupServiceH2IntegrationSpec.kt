@@ -14,6 +14,10 @@ import tools.jackson.databind.ObjectMapper
 import javax.sql.DataSource
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
+import com.github.yonaprojects.yona.domain.issue.Issue
+import com.github.yonaprojects.yona.domain.issue.IssueRepository
+import com.github.yonaprojects.yona.domain.project.Project
+import com.github.yonaprojects.yona.domain.project.ProjectRepository
 
 /**
  * H2(신규 지원 DB) 방언 복원 경로 검증 — DataBackupServicePostgresIntegrationSpec(P1-33/34)과
@@ -27,6 +31,8 @@ import com.github.yonaprojects.yona.domain.user.UserRepository
 class DataBackupServiceH2IntegrationSpec @Autowired constructor(
     private val dataBackupService: DataBackupService,
     private val userRepository: UserRepository,
+    private val issueRepository: IssueRepository,
+    private val projectRepository: ProjectRepository,
     private val dataSource: DataSource,
     private val objectMapper: ObjectMapper
 ) : DescribeSpec() {
@@ -84,6 +90,27 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
 
                 newUser.id shouldNotBe null
                 newUser.id shouldNotBe 1L
+            }
+
+            it("backs up and restores every issue assignee without duplicating issue rows") {
+                val first = userRepository.save(User(loginId = "backup-first", name = "First", email = "first@backup.test"))
+                val second = userRepository.save(User(loginId = "backup-second", name = "Second", email = "second@backup.test"))
+                val project = projectRepository.save(Project(name = "backup-assignments", owner = "backup-owner"))
+                val issue = issueRepository.saveAndFlush(
+                    Issue(project = project, number = 1L, title = "Both assignees", assignees = mutableSetOf(first, second))
+                )
+                val backup = dataBackupService.exportAll()
+                val tables = objectMapper.readTree(backup).get("tables")
+                val assignments = tables.get("ISSUE_ASSIGNEE")
+                assignments.filter { it.get("ISSUE_ID").asLong() == issue.id }.map { it.get("USER_ID").asLong() }.toSet() shouldBe
+                    setOf(first.id, second.id)
+
+                jdbc.update("DELETE FROM issue_assignee WHERE issue_id = ?", issue.id)
+                dataBackupService.importAll(backup)
+
+                jdbc.queryForList("SELECT user_id FROM issue_assignee WHERE issue_id = ?", Long::class.java, issue.id).toSet() shouldBe
+                    setOf(first.id, second.id)
+                jdbc.queryForObject("SELECT COUNT(*) FROM issue WHERE id = ?", Int::class.java, issue.id) shouldBe 1
             }
         }
     }

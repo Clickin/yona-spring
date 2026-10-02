@@ -5,8 +5,6 @@ import com.github.yonaprojects.yona.domain.attachment.Attachment
 import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
-import com.github.yonaprojects.yona.domain.issue.Assignee
-import com.github.yonaprojects.yona.domain.issue.AssigneeRepository
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueComment
 import com.github.yonaprojects.yona.domain.issue.IssueCommentRepository
@@ -67,7 +65,6 @@ class ProjectApiController(
     private val postingCommentRepository: PostingCommentRepository,
     private val milestoneRepository: MilestoneRepository,
     private val issueLabelRepository: IssueLabelRepository,
-    private val assigneeRepository: AssigneeRepository,
     private val attachmentRepository: AttachmentRepository,
     private val pullRequestRepository: PullRequestRepository,
     private val notificationUrlResolver: NotificationUrlResolver
@@ -241,7 +238,7 @@ class ProjectApiController(
         val milestones = milestoneRepository.findByProject(project)
         val labels = issueLabelRepository.findByProject(project)
         val members = projectUserRepository.findByProjectId(project.id!!)
-        val assignees = assigneeRepository.findByProjectId(project.id!!)
+        val assignees = issues.flatMap { it.assignees }.distinctBy { it.id }
 
         val result = linkedMapOf<String, Any?>(
             "owner" to project.owner,
@@ -250,7 +247,7 @@ class ProjectApiController(
             "projectCreatedDate" to formatProjectApiDate(project.createdDate),
             "projectVcs" to project.vcs,
             "projectScope" to project.projectScope.name,
-            "assignees" to assignees.map { composeUserJson(it.user) },
+            "assignees" to assignees.map { composeUserJson(it) },
             "authors" to findAuthors(project, issues, postings).map { composeUserJson(it) },
             "memberCount" to members.size,
             "members" to members.map { composeMemberJson(it) },
@@ -334,7 +331,7 @@ class ProjectApiController(
             "projectName" to issue.project.name
         )
 
-        issue.assignee?.let { result["assignees"] = listOf(composeUserJson(it.user)) }
+        result["assignees"] = issue.assignees.map { composeUserJson(it) }
         result["state"] = issue.state.name
         if (issue.labels.isNotEmpty()) {
             result["labels"] = issue.labels.map { composeLabelJson(it) }

@@ -68,7 +68,9 @@
                                 <dl class="issue-option">
                                     <dt th:text="#{issue.assignee}">담당자</dt>
                                     <dd>
-                                        <input type="hidden" class="bigdrop" id="assignee" name="assigneeLoginId" th:placeholder="#{issue.noAssignee}" style="width: 100%" title="">
+                                        <input type="hidden" name="_assigneeLoginIds" value="on">
+                                        <select multiple class="bigdrop" id="assignee" name="assigneeLoginIds" th:aria-label="#{issue.assignee}" th:data-placeholder="#{issue.noAssignee}" style="width: 100%"></select>
+                                        <button type="button" data-clear-assignees th:text="#{issue.noAssignee}">Clear assignees</button>
                                     </dd>
                                 </dl>
 

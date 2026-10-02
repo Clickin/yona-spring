@@ -80,8 +80,8 @@ class IssueExcelService(
             // 제목
             sheet.addCell(Label(columnPos++, lineNumber, issue.title ?: "", bodyCellFormat))
             // 담당자
-            val assigneeName = issue.assignee?.user?.name ?: "미지정"
-            sheet.addCell(Label(columnPos++, lineNumber, assigneeName, bodyCellFormat))
+            val assigneeNames = issue.assignees.joinToString(", ") { it.getDisplayName() }.ifEmpty { "미지정" }
+            sheet.addCell(Label(columnPos++, lineNumber, assigneeNames, bodyCellFormat))
             // 내용
             sheet.addCell(Label(columnPos++, lineNumber, issue.body ?: "", bodyCellFormat))
             // 라벨

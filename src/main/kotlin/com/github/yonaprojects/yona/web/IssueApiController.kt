@@ -78,7 +78,7 @@ class IssueApiController(
     private fun isManagerOrAuthorOrAssignee(project: Project, issue: Issue, user: User?): Boolean {
         if (user == null) return false
         if (issue.authorId == user.id) return true
-        if (issue.assignee?.user?.id == user.id) return true
+        if (issue.hasAssignee(user.id)) return true
         return projectUserRepository.findByProjectIdAndUserId(project.id!!, user.id!!)
             .map { it.role.id == RoleType.MANAGER.roleType }
             .orElse(false)
@@ -235,7 +235,7 @@ class IssueApiController(
 
     // yona IssueApi.updateIssue()/updateIssueNode() 대응. legacy 필드명은
     // title/body/milestoneTitle(제목으로 마일스톤 조회)/state/
-    // assignees[0].loginId — IssueController.updateIssue()/changeState()와 동일한 서비스 재사용.
+    // assignees[].loginId — IssueController.updateIssue()/changeState()와 동일한 서비스 재사용.
     @PutMapping("/-_-api/v1/owners/{owner}/projects/{projectName}/issues/{number}")
     fun updateIssueLegacyPath(
         @PathVariable owner: String,
@@ -255,7 +255,10 @@ class IssueApiController(
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
 
-        val assigneeUser = request.assignees?.firstOrNull()?.loginId?.let { userRepository.findByLoginId(it).orElse(null) }
+        val assigneeUsers = request.assignees?.map { ref ->
+            val loginId = ref.loginId ?: return ResponseEntity.badRequest().build()
+            userRepository.findByLoginId(loginId).orElse(null) ?: return ResponseEntity.badRequest().build()
+        }
         val milestoneId = request.milestoneTitle?.let { milestoneRepository.findByProjectAndTitle(project, it)?.id }
 
         var updated = issueService.updateIssue(
@@ -263,7 +266,7 @@ class IssueApiController(
             title = request.title,
             body = request.body,
             updater = user,
-            assigneeUser = assigneeUser,
+            assigneeUsers = assigneeUsers,
             milestoneId = milestoneId,
             labelIds = null
         )
@@ -306,7 +309,7 @@ class IssueApiController(
     }
 
     // yona IssueApi.newIssues()/createIssuesNode() 대응. legacy는 `{issues:[...], sendNotification}`
-    // 배열 배치 생성 — 각 항목은 title/body/state/milestoneTitle(제목 조회)/assignees[0].loginId/
+    // 배열 배치 생성 — 각 항목은 title/body/state/milestoneTitle(제목 조회)/assignees[].loginId/
     // labels[](labelName+category 조회)/number(명시적 이슈번호, migration 전용)로 구성된다.
     // `IssueService.createIssue()`에 `explicitNumber`/`sendNotification` 파라미터를 추가해
     // legacy `saveWithNumber()`(카운터 미증가, 번호 그대로 사용)와 "sendNotification=false면 알림
@@ -322,10 +325,15 @@ class IssueApiController(
             ?: return ResponseEntity.badRequest().build()
 
         val currentUser = getLoginUser(authentication) ?: return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()
+        val assignments = request.issues.map { item ->
+            item.assignees.orEmpty().map { ref ->
+                val loginId = ref.loginId ?: return ResponseEntity.badRequest().build()
+                userRepository.findByLoginId(loginId).orElse(null) ?: return ResponseEntity.badRequest().build()
+            }
+        }
 
-        val created = request.issues.map { item ->
+        val created = request.issues.mapIndexed { index, item ->
             val author = item.author?.loginId?.let { userRepository.findByLoginId(it).orElse(null) } ?: currentUser
-            val assigneeUser = item.assignees?.firstOrNull()?.loginId?.let { userRepository.findByLoginId(it).orElse(null) }
             val milestoneId = item.milestoneTitle?.let { milestoneRepository.findByProjectAndTitle(project, it)?.id }
             val labelIds = item.labels?.mapNotNull { labelRef ->
                 val category = labelRef.category?.let { issueLabelCategoryRepository.findByProjectAndName(project, it) }
@@ -336,7 +344,7 @@ class IssueApiController(
             var savedIssue = issueService.createIssue(
                 issue = Issue(title = item.title, body = item.body, project = project),
                 author = author,
-                assigneeUser = assigneeUser,
+                assigneeUsers = assignments[index],
                 milestoneId = milestoneId,
                 labelIds = labelIds,
                 isDraft = false,

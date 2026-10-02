@@ -74,7 +74,11 @@
                                 <dl class="issue-option">
                                     <dt th:text="#{issue.assignee}">담당자</dt>
                                     <dd>
-                                        <input type="hidden" class="bigdrop" id="assignee" name="assigneeLoginId" th:value="${issue.assignee != null ? issue.assignee.user.loginId : ''}" th:placeholder="#{issue.noAssignee}" style="width: 100%" title="">
+                                        <input type="hidden" name="_assigneeLoginIds" value="on">
+                                        <select multiple class="bigdrop" id="assignee" name="assigneeLoginIds" th:aria-label="#{issue.assignee}" th:data-placeholder="#{issue.noAssignee}" style="width: 100%">
+                                            <option th:each="assignee : ${issue.assignees}" th:value="${assignee.loginId}" th:text="${assignee.name + ' (@' + assignee.loginId + ')'}" selected></option>
+                                        </select>
+                                        <button type="button" data-clear-assignees th:text="#{issue.noAssignee}">Clear assignees</button>
                                     </dd>
                                 </dl>
 
@@ -155,7 +159,7 @@
 
         yonaAssgineeModule(
             "/api/projects/[[${project.id}]]/assignableUsers",
-            "[[${issue.assignee != null ? issue.assignee.user.id : ''}]]",
+            "",
             "[[#{issue.assignee}]]"
         );
 

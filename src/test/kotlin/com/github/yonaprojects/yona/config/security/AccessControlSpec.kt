@@ -5,7 +5,6 @@ import com.github.yonaprojects.yona.domain.board.PostingComment
 import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueComment
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
@@ -173,8 +172,7 @@ class AccessControlSpec : DescribeSpec({
             accessControl.isAllowed(stranger, privateProject, issue, Operation.DELETE) shouldBe true
         }
         it("담당자로 지정된 사용자는 항상 허용") {
-            val assignee = Assignee(user = member, project = privateProject)
-            val assignedIssue = Issue(id = 31L, project = privateProject, authorId = stranger.id, assignee = assignee)
+            val assignedIssue = Issue(id = 31L, project = privateProject, authorId = stranger.id, assignees = mutableSetOf(stranger, member))
             accessControl.isAllowed(member, privateProject, assignedIssue, Operation.UPDATE) shouldBe true
         }
         it("작성자/담당자가 아니어도 프로젝트 멤버라면 UPDATE 허용(legacy 일반 연산 규칙, 매니저 전용 아님)") {
@@ -455,7 +453,7 @@ class AccessControlSpec : DescribeSpec({
 
         val issueOnPrivate = Issue(
             id = 300L, title = "비공개 이슈", project = privateProject, number = 1L,
-            authorId = issueAuthor.id, assignee = Assignee(id = 1L, user = issueAssignee, project = privateProject)
+            authorId = issueAuthor.id, assignees = mutableSetOf(issueAuthor, issueAssignee)
         )
         issueOnPrivate.sharers.add(
             IssueSharer(id = 1L, loginId = issueSharerUser.loginId, user = issueSharerUser, issue = issueOnPrivate)

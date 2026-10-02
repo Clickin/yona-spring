@@ -211,7 +211,7 @@ class WebhookServiceImpl(
                 resource.milestone?.let {
                     fields.add(buildTitleValueJSON(objectMapper, "마일 스톤 변경", it.title, true))
                 }
-                fields.add(buildTitleValueJSON(objectMapper, "", resource.assignee?.user?.name ?: "", true))
+                fields.add(buildTitleValueJSON(objectMapper, "", resource.assignees.joinToString(", ") { it.getDisplayName() }, true))
                 fields.add(buildTitleValueJSON(objectMapper, "상태", resource.state.toString(), true))
             }
             // Posting은 위 buildPayload()의 DETAIL_SLACK 분기에서 이 함수 자체를 호출하지 않으므로

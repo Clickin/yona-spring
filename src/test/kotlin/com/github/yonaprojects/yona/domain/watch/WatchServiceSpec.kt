@@ -147,7 +147,6 @@ class WatchServiceSpec @Autowired constructor(
                         project = project
                     ),
                     author = user1,
-                    assigneeUser = null,
                     milestoneId = null,
                     labelIds = null
                 )
@@ -178,6 +177,43 @@ class WatchServiceSpec @Autowired constructor(
             }
 
             describe("allowedWatchersOnly 권한 필터링 (P1-21, yona Watch.findActualWatchers 대응)") {
+                it("keeps every private issue assignee and author but excludes a removed nonmember") {
+                    val privateProject = projectRepository.save(
+                        Project(name = "private-multi-assignees", owner = "user1", projectScope = ProjectScope.PRIVATE)
+                    )
+                    val assignedIssue = issueRepository.saveAndFlush(
+                        Issue(project = privateProject, title = "Private", authorId = user1.id,
+                            assignees = mutableSetOf(user2, user3))
+                    )
+                    val candidates = setOf(user1, user2, user3)
+                    fun actualWatchers() = watchService.findActualWatchers(
+                        candidates, ResourceType.ISSUE_POST, assignedIssue.id.toString(), privateProject.id, true
+                    ).map { it.id }.toSet()
+
+                    actualWatchers() shouldBe candidates.map { it.id }.toSet()
+                    assignedIssue.assignees.remove(user2)
+                    issueRepository.saveAndFlush(assignedIssue)
+                    actualWatchers() shouldBe setOf(user1.id, user3.id)
+                }
+
+                it("notifies both private issue assignees of comments while honoring explicit unwatch") {
+                    val privateProject = projectRepository.save(
+                        Project(name = "private-comment-assignees", owner = "user1", projectScope = ProjectScope.PRIVATE)
+                    )
+                    val assignedIssue = issueRepository.saveAndFlush(
+                        Issue(project = privateProject, title = "Private comments", authorId = user1.id,
+                            assignees = mutableSetOf(user2, user3))
+                    )
+                    commentService.createIssueComment(assignedIssue.id!!, "First comment", user1, null)
+                    notificationEventRepository.findAll().single { it.eventType == EventType.NEW_COMMENT }
+                        .receivers.map { it.id }.toSet() shouldBe setOf(user2.id, user3.id)
+
+                    watchService.unwatch(user2, ResourceType.ISSUE_POST, assignedIssue.id.toString())
+                    commentService.createIssueComment(assignedIssue.id!!, "Second comment", user1, null)
+                    notificationEventRepository.findAll().single { it.eventType == EventType.NEW_COMMENT && it.newValue == "Second comment" }
+                        .receivers.map { it.id }.toSet() shouldBe setOf(user3.id)
+                }
+
                 it("allowedWatchersOnly=true이면 비공개 프로젝트에 접근 권한이 없는 감시자는 실제 감시자에서 제외되어야 한다") {
                     val managerRole = roleRepository.findById(RoleType.MANAGER.roleType)
                         .orElseGet { roleRepository.save(Role(id = RoleType.MANAGER.roleType, name = "MANAGER")) }

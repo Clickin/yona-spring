@@ -276,27 +276,12 @@
                                         </ul>
                                     </yona-dropdown>
                                     <!-- 담당자 변경 -->
-                                    <div id="list-assignee" class="btn-group" data-name="assignee.id">
-                                        <button class="btn dropdown-toggle medium" data-toggle="dropdown" disabled="disabled">
-                                            <span class="d-label" th:text="#{issue.update.assignee.id}">담당자 지정</span>
-                                            <span class="d-caret"><span class="caret"></span></span>
-                                        </button>
-                                        <ul class="dropdown-menu mass-update-list">
-                                            <li data-value="-1"><a th:text="#{issue.noAssignee}">담당자 없음</a></li>
-                                            <li th:data-value="${currentUser.id}"><a th:text="#{issue.assignToMe}">나에게 할당</a></li>
-                                            <li class="divider"></li>
-                                            <th:block th:each="member : ${members}">
-                                                <li th:data-value="${member.id}">
-                                                    <a class="usf-group">
-                                                        <span class="avatar-wrap smaller">
-                                                            <img th:src="${member.avatarUrl}" width="20" height="20">
-                                                        </span>
-                                                        <strong class="name" th:text="${member.name}">이름</strong>
-                                                        <span class="loginid"> @[[${member.loginId}]]</span>
-                                                    </a>
-                                                </li>
-                                            </th:block>
-                                        </ul>
+                                    <div id="list-assignee" class="btn-group">
+                                        <select multiple data-mass-assignees th:aria-label="#{issue.assignee}" data-toggle="tomselect">
+                                            <option th:each="member : ${members}" th:value="${member.id}" th:text="${member.name + ' (@' + member.loginId + ')'}"></option>
+                                        </select>
+                                        <button type="button" data-apply-assignees class="btn medium" disabled th:text="#{issue.update.assignee.id}">Assign</button>
+                                        <button type="button" data-clear-mass-assignees class="btn medium" disabled th:text="#{issue.noAssignee}">Clear assignees</button>
                                     </div>
                                     <!-- 마일스톤 변경 -->
                                     <div id="list-milestone" class="btn-group" data-name="milestone.id" th:if="${project.isMilestoneEnabled && !milestones.isEmpty()}">
@@ -428,7 +413,6 @@
             "welMassUpdateButtons": document.querySelectorAll('#mass-update-form button'),
             "welState": document.getElementById("state"),
             "welMilestone": document.getElementById("list-milestone"),
-            "welAssignee": document.getElementById("list-assignee"),
             "welAttachingLabel": document.getElementById("attaching-label"),
             "welDetachingLabel": document.getElementById("detaching-label"),
             "welDeleteButton": document.getElementById("delete"),

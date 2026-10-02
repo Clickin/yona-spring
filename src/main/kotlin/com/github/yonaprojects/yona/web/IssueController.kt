@@ -2,7 +2,6 @@ package com.github.yonaprojects.yona.web
 
 import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.enumeration.State
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.issue.IssueService
@@ -80,7 +79,7 @@ class IssueController(
     private fun isManagerOrAuthorOrAssignee(project: Project, issue: Issue, user: User?): Boolean {
         if (user == null) return false
         if (issue.authorId == user.id) return true
-        if (issue.assignee?.user?.id == user.id) return true
+        if (issue.hasAssignee(user.id)) return true
         return projectUserRepository.findByProjectIdAndUserId(project.id!!, user.id!!)
             .map { it.role.id == RoleType.MANAGER.roleType }
             .orElse(false)
@@ -128,7 +127,7 @@ class IssueController(
     }
 
     // getIssues()의 assignee/label/author 필터 조합을 위한 동적 Specification. author는
-    // Issue.authorLoginId(비정규화 필드) 등가비교, assignee는 Assignee.user.loginId 등가비교,
+    // Issue.authorLoginId(비정규화 필드) 등가비교, assignee는 User.loginId 등가비교,
     // label은 IssueLabel.name 등가비교(ManyToMany라 distinct 필요).
     private fun buildIssueFilterSpecification(
         project: Project,
@@ -142,9 +141,9 @@ class IssueController(
             state?.let { predicates.add(cb.equal(root.get<State>("state"), it)) }
             author?.let { predicates.add(cb.equal(root.get<String>("authorLoginId"), it)) }
             assignee?.let {
-                val assigneeJoin = root.join<Issue, Assignee>("assignee")
-                val userJoin = assigneeJoin.join<Assignee, User>("user")
+                val userJoin = root.join<Issue, User>("assignees")
                 predicates.add(cb.equal(userJoin.get<String>("loginId"), it))
+                query?.distinct(true)
             }
             label?.let {
                 val labelJoin = root.join<Issue, IssueLabel>("labels")
@@ -220,7 +219,9 @@ class IssueController(
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
 
-        val assigneeUser = request.assigneeId?.let { userRepository.findById(it).orElse(null) }
+        val assigneeUsers = request.assigneeIds.distinct().map {
+            userRepository.findById(it).orElse(null) ?: return ResponseEntity.badRequest().build()
+        }
 
         val issue = Issue(
             title = request.title,
@@ -231,7 +232,7 @@ class IssueController(
         val saved = issueService.createIssue(
             issue = issue,
             author = user,
-            assigneeUser = assigneeUser,
+            assigneeUsers = assigneeUsers,
             milestoneId = request.milestoneId,
             labelIds = request.labelIds,
             isDraft = request.isDraft
@@ -258,20 +259,71 @@ class IssueController(
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
 
-        val assigneeUser = request.assigneeId?.let { userRepository.findById(it).orElse(null) }
+        val assigneeUsers = request.assigneeIds?.distinct()?.map {
+            userRepository.findById(it).orElse(null) ?: return ResponseEntity.badRequest().build()
+        }
 
         val updated = issueService.updateIssue(
             issueId = issue.id!!,
             title = request.title,
             body = request.body,
             updater = user,
-            assigneeUser = assigneeUser,
+            assigneeUsers = assigneeUsers,
             milestoneId = request.milestoneId,
             labelIds = request.labelIds
         )
 
         // raw 엔티티 반환 시의 순환 직렬화/비밀번호 노출 방지(getIssue() 참고).
         return ResponseEntity.ok(updated.toResponse())
+    }
+
+    @PostMapping("/{number}/assignees/{userId}")
+    fun addAssignee(
+        @PathVariable projectId: Long,
+        @PathVariable number: Long,
+        @PathVariable userId: Long,
+        authentication: Authentication?
+    ): ResponseEntity<Any> = changeAssignment(projectId, number, userId, true, authentication)
+
+    @DeleteMapping("/{number}/assignees/{userId}")
+    fun removeAssignee(
+        @PathVariable projectId: Long,
+        @PathVariable number: Long,
+        @PathVariable userId: Long,
+        authentication: Authentication?
+    ): ResponseEntity<Any> = changeAssignment(projectId, number, userId, false, authentication)
+
+    @DeleteMapping("/{number}/assignees")
+    fun clearAssignees(
+        @PathVariable projectId: Long,
+        @PathVariable number: Long,
+        authentication: Authentication?
+    ): ResponseEntity<Any> = changeAssignment(projectId, number, null, false, authentication)
+
+    private fun changeAssignment(
+        projectId: Long,
+        number: Long,
+        userId: Long?,
+        add: Boolean,
+        authentication: Authentication?
+    ): ResponseEntity<Any> {
+        val project = projectRepository.findById(projectId).orElse(null)
+            ?: return ResponseEntity.notFound().build()
+        val issue = issueRepository.findByProjectAndNumber(project, number)
+            ?: return ResponseEntity.notFound().build()
+        val user = getLoginUser(authentication) ?: return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()
+        if (!isManagerOrAuthorOrAssignee(project, issue, user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+        }
+        val target = userId?.let {
+            userRepository.findById(it).orElse(null) ?: return ResponseEntity.badRequest().build()
+        }
+        val assignees = when {
+            target == null -> emptyList()
+            add -> (issue.assignees.toList() + target).distinctBy { it.id }
+            else -> issue.assignees.filter { it.id != target.id }
+        }
+        return ResponseEntity.ok(issueService.changeAssignees(issue.id!!, assignees, user.loginId).toResponse())
     }
 
     // 실제 이동을 호출하기 전에 원본 이슈 수정권한 + 대상 프로젝트 생성권한을 모두 먼저 확인한다
@@ -536,7 +588,7 @@ class IssueController(
         val title: String,
         val body: String?,
         val milestoneId: Long?,
-        val assigneeId: Long?,
+        val assigneeIds: List<Long> = emptyList(),
         val labelIds: List<Long>?,
         // true면 초안(DRAFT)으로 생성한다.
         val isDraft: Boolean = false
@@ -546,7 +598,7 @@ class IssueController(
         val title: String,
         val body: String,
         val milestoneId: Long?,
-        val assigneeId: Long?,
+        val assigneeIds: List<Long>? = null,
         val labelIds: List<Long>?
     )
 

@@ -279,7 +279,7 @@ class IssueApiControllerSpec : DescribeSpec({
         it("이슈 배열을 벌크 생성한다") {
             val created = Issue(id = 60L, title = "새이슈", project = project, number = 8L)
             every {
-                issueService.createIssue(any(), user, null, null, null, false, null, false)
+                issueService.createIssue(any(), user, emptyList(), null, null, false, null, false)
             } returns created
 
             mockMvc.perform(
@@ -292,20 +292,15 @@ class IssueApiControllerSpec : DescribeSpec({
                 .andExpect(jsonPath("$[0].status").value(201))
         }
 
-        it("number/sendNotification 필드를 issueService.createIssue()에 그대로 전달한다") {
-            val created = Issue(id = 61L, title = "임포트이슈", project = project, number = 42L)
-            every {
-                issueService.createIssue(any(), user, null, null, null, false, 42L, true)
-            } returns created
-
-            mockMvc.perform(
-                post("/-_-api/v1/owners/alice/projects/myproject/issues")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"issues":[{"title":"임포트이슈","body":"내용","number":42}],"sendNotification":true}""")
-                    .principal(auth)
-            ).andExpect(status().isCreated)
-
-            verify { issueService.createIssue(any(), user, null, null, null, false, 42L, true) }
+        it("벌크 요청의 알 수 없는 담당자는 어떤 이슈도 생성하기 전에 거부한다") {
+            io.mockk.clearMocks(issueService)
+            every { userRepository.findByLoginId("ghost") } returns Optional.empty()
+            mockMvc.perform(post("/-_-api/v1/owners/alice/projects/myproject/issues")
+                .contentType(MediaType.APPLICATION_JSON).principal(auth)
+                .content("""{"issues":[{"title":"valid"},{"title":"invalid","assignees":[{"loginId":"ghost"}]}]}"""))
+                .andExpect(status().isBadRequest)
+            verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any(), any(), any(), any()) }
         }
+
     }
 })

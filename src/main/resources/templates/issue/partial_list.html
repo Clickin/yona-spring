@@ -96,7 +96,7 @@
                                     <span class="item-name">
                                         <span class="subtask-number" th:text="'#' + ${child.number}">#1</span>
                                         <span th:text="${child.title}">하위이슈 제목</span>
-                                        <span th:if="${child.assignee != null}" th:text="' - ' + ${child.assignee.user.getPureNameOnly()}"> - 담당자</span>
+                                        <span th:each="assignee : ${child.assignees}" th:text="' - ' + ${assignee.getPureNameOnly()}"> - 담당자</span>
                                     </span>
                                 </a>
                                 <span class="font12 no-border-at-child">
@@ -127,7 +127,7 @@
                                     <span class="item-name">
                                         <span class="subtask-number" th:text="'#' + ${child.number}">#1</span>
                                         <span th:text="${child.title}">하위이슈 제목</span>
-                                        <span th:if="${child.assignee != null}" th:text="' - ' + ${child.assignee.user.getPureNameOnly()}"> - 담당자</span>
+                                        <span th:each="assignee : ${child.assignees}" th:text="' - ' + ${assignee.getPureNameOnly()}"> - 담당자</span>
                                     </span>
                                 </a>
                                 <span class="font12 no-border-at-child">
@@ -157,8 +157,8 @@
         </div>
         <div class="span3 hide-in-mobile">
             <div class="mt5 pull-right">
-                <a th:if="${issue.assignee != null}" th:href="@{/{loginId}(loginId=${issue.assignee.user.loginId})}" class="avatar-wrap assignee" data-toggle="tooltip" data-placement="top" th:title="#{issue.assignee} + ': ' + ${issue.assignee.user.name}">
-                    <img th:src="${issue.assignee.user.avatarUrl}" width="32" height="32" />
+                <a th:each="assignee : ${issue.assignees}" th:href="@{/{loginId}(loginId=${assignee.loginId})}" class="avatar-wrap assignee" data-toggle="tooltip" data-placement="top" th:title="#{issue.assignee} + ': ' + ${assignee.name}">
+                    <img th:src="${assignee.avatarUrl}" width="32" height="32" th:alt="${assignee.name}" />
                 </a>
             </div>
             <!-- 마감일 표시 영역 -->

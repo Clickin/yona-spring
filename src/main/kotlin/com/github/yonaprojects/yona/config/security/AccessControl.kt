@@ -182,7 +182,7 @@ class AccessControl(
         if (isAnonymousNotAllowed() && user == null) return false
         if (user != null) {
             val isAuthor = issue.authorId != null && issue.authorId == user.id
-            val isAssignee = issue.assignee?.user?.id == user.id
+            val isAssignee = issue.hasAssignee(user.id)
             if (isAuthor || isAssignee || isAllowedIfSharer(issue, user)) return true
         }
         return isProjectResourceCreatable(user, project, ResourceType.ISSUE_COMMENT)
@@ -324,7 +324,7 @@ class AccessControl(
         if (isOrganizationAdmin(project.organization, user)) return true
 
         val isAuthor = user?.id != null && issue.authorId != null && issue.authorId == user.id
-        val isAssignee = user?.id != null && issue.assignee?.user?.id == user.id
+        val isAssignee = issue.hasAssignee(user?.id)
         if (user?.isManagerOf(project) == true || isAuthor || isAssignee) return true
 
         return when (operation) {

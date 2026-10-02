@@ -2,6 +2,7 @@ package com.github.yonaprojects.yona.domain.watch
 
 import com.github.yonaprojects.yona.domain.enumeration.EventType
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
+import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.notification.UserProjectNotificationRepository
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectScope
@@ -17,7 +18,8 @@ class WatchServiceImpl(
     private val unwatchRepository: UnwatchRepository,
     private val projectRepository: ProjectRepository,
     private val projectUserRepository: ProjectUserRepository,
-    private val userProjectNotificationRepository: UserProjectNotificationRepository
+    private val userProjectNotificationRepository: UserProjectNotificationRepository,
+    private val issueRepository: IssueRepository
 ) : WatchService {
 
     override fun watch(user: User, resourceType: ResourceType, resourceId: String) {
@@ -91,7 +93,13 @@ class WatchServiceImpl(
         // 4. legacy Watch.findActualWatchers()의 allowedWatchersOnly 필터 대응:
         // 이 리소스를 읽을 권한이 없는 감시자는 실제 감시자 목록에서 제외한다.
         if (allowedWatchersOnly) {
-            actualWatchers.retainAll { hasReadPermission(it, projectId) }
+            val issue = if (resourceType == ResourceType.ISSUE_POST) {
+                resourceId.toLongOrNull()?.let { issueRepository.findById(it).orElse(null) }
+            } else null
+            actualWatchers.retainAll {
+                issue?.hasAssignee(it.id) == true ||
+                    (it.id != null && issue?.authorId == it.id) || hasReadPermission(it, projectId)
+            }
         }
 
         // 5. legacy NotificationEvent.filterReceivers()의 UserProjectNotification 뮤트 필터 대응:

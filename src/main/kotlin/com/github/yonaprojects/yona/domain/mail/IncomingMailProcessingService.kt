@@ -440,7 +440,7 @@ class IncomingMailProcessingService(
         }
 
         val issue = Issue(title = message.subject, body = message.textBody, project = project)
-        val saved = issueService.createIssue(issue, sender, null, null, null)
+        val saved = issueService.createIssue(issue, sender)
         return IncomingMailOutcome.IssueCreated(saved.id!!, owner, projectName)
     }
 

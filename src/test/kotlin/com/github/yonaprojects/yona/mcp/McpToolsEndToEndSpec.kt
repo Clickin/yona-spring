@@ -66,6 +66,7 @@ class McpToolsEndToEndSpec @Autowired constructor(
 
     private lateinit var mockMvc: MockMvc
     private lateinit var owner: User
+    private lateinit var assignee: User
     private lateinit var project: Project
     private lateinit var issue: Issue
     private val objectMapper = ObjectMapper()
@@ -80,11 +81,16 @@ class McpToolsEndToEndSpec @Autowired constructor(
             owner = userRepository.save(
                 User(loginId = "mcp-e2e-owner", name = "MCP E2E", email = "mcp-e2e-owner@example.com")
             )
+            assignee = userRepository.save(
+                User(loginId = "mcp-e2e-assignee", name = "MCP Assignee", email = "mcp-e2e-assignee@example.com")
+            )
             project = projectRepository.save(
                 Project(owner = owner.loginId, name = "mcp-e2e-repo", projectScope = ProjectScope.PUBLIC)
             )
             issue = issueRepository.save(
-                Issue(number = 1L, title = "E2E 테스트 이슈", project = project)
+                Issue(number = 1L, title = "E2E 테스트 이슈", project = project).apply {
+                    assignees.addAll(listOf(owner, assignee))
+                }
             )
         }
 
@@ -95,6 +101,7 @@ class McpToolsEndToEndSpec @Autowired constructor(
             clientRepository.deleteAll()
             projectRepository.delete(project)
             userRepository.delete(owner)
+            userRepository.delete(assignee)
         }
 
         fun userDetails() = YonaUserDetails(
@@ -246,6 +253,10 @@ class McpToolsEndToEndSpec @Autowired constructor(
                     (listResult.isError() == true) shouldBe false
                     val text = (listResult.content().first() as McpSchema.TextContent).text()
                     text.stringShouldContain("E2E 테스트 이슈")
+                    val listedIssue = objectMapper.readTree(text).first { it["number"].asLong() == issue.number }
+                    listedIssue["assignees"].asSequence().map { it["id"].asLong() }.toSet() shouldBe
+                        setOf(owner.id!!, assignee.id!!)
+                    listedIssue.has("assignee") shouldBe false
                 } finally {
                     client.closeGracefully()
                 }

@@ -2,8 +2,6 @@ package com.github.yonaprojects.yona.web
 
 import com.github.yonaprojects.yona.AbstractIntegrationTest
 import com.github.yonaprojects.yona.domain.enumeration.State
-import com.github.yonaprojects.yona.domain.issue.Assignee
-import com.github.yonaprojects.yona.domain.issue.AssigneeRepository
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueLabel
 import com.github.yonaprojects.yona.domain.issue.IssueLabelCategory
@@ -46,7 +44,6 @@ class IssueListTemplateRenderingSpec @Autowired constructor(
     private val milestoneRepository: MilestoneRepository,
     private val issueLabelCategoryRepository: IssueLabelCategoryRepository,
     private val issueLabelRepository: IssueLabelRepository,
-    private val assigneeRepository: AssigneeRepository,
     private val entityManagerFactory: EntityManagerFactory
 ) : AbstractIntegrationTest() {
 
@@ -57,17 +54,17 @@ class IssueListTemplateRenderingSpec @Autowired constructor(
             it("라벨/담당자/마일스톤/서브태스크가 있는 이슈 목록이 issue/partial_list 공용 조각으로 실제 렌더링돼야 한다") {
                 val author = userRepository.save(User(loginId = "tmpl-issuelist-author", name = "이슈작성자", email = "tmpl-issuelist-author@yona.io"))
                 val assigneeUser = userRepository.save(User(loginId = "tmpl-issuelist-assignee", name = "담당자", email = "tmpl-issuelist-assignee@yona.io"))
+                val secondAssignee = userRepository.save(User(loginId = "tmpl-second-assignee", name = "Second assignee", email = "tmpl-second-assignee@yona.io"))
                 val project = projectRepository.save(Project(name = "tmpl-issuelist-proj", owner = "tmpl-issuelist-owner", projectScope = ProjectScope.PUBLIC))
                 val milestone = milestoneRepository.save(Milestone(title = "이슈목록 마일스톤", project = project, state = State.OPEN))
                 val labelCategory = issueLabelCategoryRepository.save(IssueLabelCategory(name = "종류", project = project))
                 val label = issueLabelRepository.save(IssueLabel(category = labelCategory, color = "#333333", name = "버그", project = project))
-                val assignee = assigneeRepository.save(Assignee(user = assigneeUser, project = project))
 
                 val parentIssue = issueRepository.save(
                     Issue(
                         title = "부모 이슈", body = "본문", project = project, number = 1L, authorId = author.id,
                         authorLoginId = author.loginId, authorName = author.name, state = State.OPEN,
-                        milestone = milestone, assignee = assignee,
+                        milestone = milestone, assignees = mutableSetOf(assigneeUser, secondAssignee),
                         dueDate = Instant.now().plus(3, ChronoUnit.DAYS)
                     )
                 )
@@ -91,6 +88,8 @@ class IssueListTemplateRenderingSpec @Autowired constructor(
                 body shouldContain "부모 이슈"
                 body shouldContain "버그"
                 body shouldContain "담당자"
+                body shouldContain "tmpl-issuelist-assignee"
+                body shouldContain "tmpl-second-assignee"
                 body shouldContain "이슈목록 마일스톤"
                 body shouldContain "자식 이슈"
             }

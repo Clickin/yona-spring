@@ -1,5 +1,6 @@
 package com.github.yonaprojects.yona.domain.notification
 
+import com.github.yonaprojects.yona.domain.enumeration.EventType
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -44,7 +45,9 @@ class NotificationEventRecorder(
         val lastEvent = notificationEventRepository
             .findFirstByResourceTypeAndResourceIdAndCreatedAfterOrderByIdDesc(event.resourceType, event.resourceId, draftSince)
 
-        if (lastEvent != null && lastEvent.eventType == event.eventType && lastEvent.senderId == event.senderId) {
+        // Assignment deltas describe different people, not successive values of one scalar.
+        if (event.eventType != EventType.ISSUE_ASSIGNEE_CHANGED &&
+            lastEvent != null && lastEvent.eventType == event.eventType && lastEvent.senderId == event.senderId) {
             if (skipWaypoint) {
                 event.oldValue = lastEvent.oldValue
                 notificationMailRepository.findByNotificationEvent(lastEvent)?.let { notificationMailRepository.delete(it) }

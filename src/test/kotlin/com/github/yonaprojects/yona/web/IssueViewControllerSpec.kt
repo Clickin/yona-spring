@@ -23,6 +23,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.util.Optional
@@ -451,7 +452,7 @@ class IssueViewControllerSpec : DescribeSpec({
                     body = "본문",
                     parentIssueId = null,
                     targetProjectId = null,
-                    assigneeLoginId = null,
+                    assigneeLoginIds = null,
                     milestoneId = null,
                     dueDate = null,
                     labelIds = null,
@@ -497,7 +498,7 @@ class IssueViewControllerSpec : DescribeSpec({
                     body = "본문",
                     parentIssueId = null,
                     targetProjectId = null,
-                    assigneeLoginId = null,
+                    assigneeLoginIds = null,
                     milestoneId = null,
                     dueDate = null,
                     labelIds = null,
@@ -1520,7 +1521,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 val result = issueViewController.createIssue(
                     owner = "owner", projectName = "NoSuch", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = null, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = null, labelIds = null, isDraft = false,
                     temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
                 )
@@ -1533,7 +1534,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 val result = issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = null, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = null, labelIds = null, isDraft = false,
                     temporaryUploadFiles = null, authentication = null, model = ExtendedModelMap()
                 )
@@ -1547,7 +1548,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 val result = issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = null, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = null, labelIds = null, isDraft = false,
                     temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
                 )
@@ -1561,7 +1562,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 val result = issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = null, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = null, labelIds = null, isDraft = false,
                     temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
                 )
@@ -1578,7 +1579,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = null, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = "", labelIds = null, isDraft = false,
                     temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
                 )
@@ -1594,7 +1595,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = null, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = null, labelIds = null, isDraft = false,
                     temporaryUploadFiles = "   ", authentication = userAuth, model = ExtendedModelMap()
                 )
@@ -1613,7 +1614,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = 6L, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = 6L, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = null, labelIds = null, isDraft = false,
                     temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
                 )
@@ -1630,7 +1631,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = null, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = "2026-12-31", labelIds = null, isDraft = false,
                     temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
                 )
@@ -1647,7 +1648,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = null, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = "잘못된-날짜", labelIds = null, isDraft = false,
                     temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
                 )
@@ -1655,40 +1656,15 @@ class IssueViewControllerSpec : DescribeSpec({
                 issueSlot.captured.dueDate shouldBe null
             }
 
-            it("assigneeLoginId로 담당자를 찾으면 createIssue에 담당자로 전달되어야 한다") {
-                val savedIssue = Issue(id = 100L, number = 5L, title = "제목", project = project)
-                val assignee = User(id = 12L, loginId = "assignee1", name = "담당자")
-                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
-                every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
-                every { userRepository.findByLoginId("assignee1") } returns Optional.of(assignee)
-                every { issueService.createIssue(any(), any(), assignee, any(), any()) } returns savedIssue
-
-                val result = issueViewController.createIssue(
-                    owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = "assignee1",
-                    milestoneId = null, dueDate = null, labelIds = null, isDraft = false,
-                    temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
-                )
-
-                result shouldBe "redirect:/owner/TestProj/issue/5"
-                verify(exactly = 1) { issueService.createIssue(any(), any(), assignee, any(), any()) }
-            }
-
-            it("assigneeLoginId에 해당하는 사용자가 없으면 담당자 없이 생성되어야 한다") {
-                val savedIssue = Issue(id = 100L, number = 5L, title = "제목", project = project)
+            it("알 수 없는 담당자가 있으면 이슈 생성 없이 400을 반환한다") {
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
                 every { userRepository.findByLoginId("nobody") } returns Optional.empty()
-                every { issueService.createIssue(any(), any(), null, any(), any()) } returns savedIssue
-
-                issueViewController.createIssue(
-                    owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = "nobody",
-                    milestoneId = null, dueDate = null, labelIds = null, isDraft = false,
-                    temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
-                )
-
-                verify(exactly = 1) { issueService.createIssue(any(), any(), null, any(), any()) }
+                mockMvc.perform(post("/owner/TestProj/issues").principal(userAuth)
+                    .param("title", "제목").param("body", "본문")
+                    .param("assigneeLoginIds", "nobody"))
+                    .andExpect(status().isBadRequest)
+                verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any()) }
             }
 
             it("isDraft=true이면 State.DRAFT로 생성되어야 한다") {
@@ -1700,7 +1676,7 @@ class IssueViewControllerSpec : DescribeSpec({
 
                 issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
-                    parentIssueId = null, targetProjectId = null, assigneeLoginId = null,
+                    parentIssueId = null, targetProjectId = null, assigneeLoginIds = null,
                     milestoneId = null, dueDate = null, labelIds = null, isDraft = true,
                     temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
                 )
@@ -1810,40 +1786,6 @@ class IssueViewControllerSpec : DescribeSpec({
                 )
 
                 result shouldBe "error/forbidden"
-            }
-
-            it("assigneeLoginId가 공백이면 담당자를 조회하지 않아야 한다") {
-                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
-                every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
-                every { issueRepository.findByProjectAndNumber(project, 1L) } returns issue
-                every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
-                every { issueService.updateIssue(any(), any(), any(), any(), any(), any(), any()) } returns issue
-
-                issueViewController.editIssue(
-                    owner = "owner", projectName = "TestProj", number = 1L,
-                    request = IssueForm(title = "새 제목", body = "새 본문", assigneeLoginId = "   "),
-                    authentication = userAuth, model = ExtendedModelMap()
-                )
-
-                verify(exactly = 0) { userRepository.findByLoginId("   ") }
-            }
-
-            it("assigneeLoginId가 유효하면 담당자를 조회해야 한다") {
-                val assignee = User(id = 13L, loginId = "assignee2", name = "담당자2")
-                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
-                every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
-                every { issueRepository.findByProjectAndNumber(project, 1L) } returns issue
-                every { userRepository.findByLoginId("assignee2") } returns Optional.of(assignee)
-                every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
-                every { issueService.updateIssue(any(), any(), any(), any(), any(), any(), any()) } returns issue
-
-                issueViewController.editIssue(
-                    owner = "owner", projectName = "TestProj", number = 1L,
-                    request = IssueForm(title = "새 제목", body = "새 본문", assigneeLoginId = "assignee2"),
-                    authentication = userAuth, model = ExtendedModelMap()
-                )
-
-                verify(exactly = 1) { userRepository.findByLoginId("assignee2") }
             }
 
             it("dueDate가 유효한 형식이면 파싱되어 저장되어야 한다") {
@@ -2111,79 +2053,20 @@ class IssueViewControllerSpec : DescribeSpec({
                 verify(exactly = 0) { issueService.changeState(any(), any(), any()) }
             }
 
-            it("담당자 id가 -1이면 담당자 해제, 유효하면 해당 사용자로 배정되어야 한다") {
-                val target1 = Issue(id = 77L, number = 8L, title = "이슈1", project = project, authorLoginId = "testuser")
-                val target2 = Issue(id = 78L, number = 9L, title = "이슈2", project = project, authorLoginId = "testuser")
-                val assignee = User(id = 99L, loginId = "assignee3", name = "담당자3")
+            it("일괄 변경에 알 수 없는 담당자가 있으면 변경 없이 400을 반환한다") {
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
-                every { issueRepository.findAllById(listOf(77L)) } returns listOf(target1)
-                every { issueRepository.findAllById(listOf(78L)) } returns listOf(target2)
-                every { issueService.changeAssignee(77L, null, "testuser") } returns target1
-                every { issueService.changeAssignee(78L, assignee, "testuser") } returns target2
-                every { userRepository.findById(99L) } returns Optional.of(assignee)
-
-                val unassignForm = IssueMassUpdateForm()
-                unassignForm.issues = listOf(IssueIdForm().apply { id = 77L })
-                unassignForm.assignee = AssigneeIdForm().apply { id = -1L }
-                issueViewController.massUpdate(
-                    owner = "owner", projectName = "TestProj", form = unassignForm,
-                    authentication = userAuth, delete = false, isDueDateChanged = false, dueDate = null,
-                    accept = null, model = ExtendedModelMap()
-                )
-                verify(exactly = 1) { issueService.changeAssignee(77L, null, "testuser") }
-
-                val assignForm = IssueMassUpdateForm()
-                assignForm.issues = listOf(IssueIdForm().apply { id = 78L })
-                assignForm.assignee = AssigneeIdForm().apply { id = 99L }
-                issueViewController.massUpdate(
-                    owner = "owner", projectName = "TestProj", form = assignForm,
-                    authentication = userAuth, delete = false, isDueDateChanged = false, dueDate = null,
-                    accept = null, model = ExtendedModelMap()
-                )
-                verify(exactly = 1) { issueService.changeAssignee(78L, assignee, "testuser") }
-            }
-
-            it("담당자 id가 유효하지만 사용자를 찾을 수 없으면 changeAssignee를 호출하지 않아야 한다") {
-                val target1 = Issue(id = 79L, number = 10L, title = "이슈1", project = project, authorLoginId = "testuser")
-                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
-                every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
-                every { issueRepository.findAllById(listOf(79L)) } returns listOf(target1)
                 every { userRepository.findById(1234L) } returns Optional.empty()
-
-                val form = IssueMassUpdateForm()
-                form.issues = listOf(IssueIdForm().apply { id = 79L })
-                form.assignee = AssigneeIdForm().apply { id = 1234L }
-
-                issueViewController.massUpdate(
-                    owner = "owner", projectName = "TestProj", form = form,
-                    authentication = userAuth, delete = false, isDueDateChanged = false, dueDate = null,
-                    accept = null, model = ExtendedModelMap()
-                )
-
-                verify(exactly = 0) { issueService.changeAssignee(any(), any(), any()) }
-            }
-
-            // "assigneeUserId == null || assigneeUserId == -1L" 중 id 필드 자체가 비어 있는(null)
-            // 경우(-1L 산탄이 아닌) 경로도 담당자 해제로 처리되어야 한다.
-            it("담당자 id 필드가 비어 있으면(null) 담당자 해제로 처리되어야 한다") {
-                val target = Issue(id = 90L, number = 21L, title = "이슈", project = project, authorLoginId = "testuser")
-                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
-                every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
-                every { issueRepository.findAllById(listOf(90L)) } returns listOf(target)
-                every { issueService.changeAssignee(90L, null, "testuser") } returns target
-
-                val form = IssueMassUpdateForm()
-                form.issues = listOf(IssueIdForm().apply { id = 90L })
-                form.assignee = AssigneeIdForm()
-
-                issueViewController.massUpdate(
-                    owner = "owner", projectName = "TestProj", form = form,
-                    authentication = userAuth, delete = false, isDueDateChanged = false, dueDate = null,
-                    accept = null, model = ExtendedModelMap()
-                )
-
-                verify(exactly = 1) { issueService.changeAssignee(90L, null, "testuser") }
+                val form = IssueMassUpdateForm().apply { assigneeIds = listOf(1234L) }
+                val error = io.kotest.assertions.throwables.shouldThrow<org.springframework.web.server.ResponseStatusException> {
+                    issueViewController.massUpdate(
+                        owner = "owner", projectName = "TestProj", form = form,
+                        authentication = userAuth, delete = false, isDueDateChanged = false, dueDate = null,
+                        accept = null, model = ExtendedModelMap()
+                    )
+                }
+                error.statusCode.value() shouldBe 400
+                verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
             }
 
             // "milestoneId == null || milestoneId == -1L" 중 id 필드 자체가 비어 있는(null) 경로도

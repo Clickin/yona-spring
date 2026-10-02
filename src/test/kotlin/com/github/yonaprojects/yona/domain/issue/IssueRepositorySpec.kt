@@ -70,6 +70,40 @@ class IssueRepositorySpec @Autowired constructor(
                 foundIssue.state shouldBe State.OPEN
             }
 
+            it("counts and pages multi-assigned issues once while retaining unassigned author matches") {
+                val first = userRepository.save(User(loginId = "query-first", name = "First", email = "first@query.test"))
+                val second = userRepository.save(User(loginId = "query-second", name = "Second", email = "second@query.test"))
+                val project = projectRepository.save(Project(name = "query-project", owner = "query-owner"))
+                val since = Instant.parse("2026-01-01T00:00:00Z")
+                val assigned = issueRepository.saveAndFlush(
+                    Issue(project = project, number = 1L, title = "needle assigned", state = State.OPEN,
+                        authorId = first.id, updatedDate = since.plusSeconds(2), assignees = mutableSetOf(first, second))
+                )
+                val unassigned = issueRepository.saveAndFlush(
+                    Issue(project = project, number = 2L, title = "needle unassigned", state = State.OPEN,
+                        authorId = first.id, updatedDate = since.plusSeconds(1))
+                )
+                val projects = listOf(project.id!!)
+                val pageable = PageRequest.of(0, 1)
+                val visible = issueRepository.searchIssues(projects, "%needle%", first.id, pageable)
+                visible.totalElements shouldBe 2L
+                issueRepository.countSearchIssues(projects, "%needle%", first.id) shouldBe 2
+                issueRepository.countSearchIssues(projects, "%needle%", null) shouldBe 2
+                issueRepository.findRecentlyByUser(first.id!!, since).map { it.id } shouldBe listOf(assigned.id, unassigned.id)
+                issueRepository.findRecentlyByUser(second.id!!, since).map { it.id } shouldBe listOf(assigned.id)
+                for (user in listOf(first, second)) {
+                    issueRepository.findByAssignees_Id(user.id!!).map { it.id } shouldBe listOf(assigned.id)
+                    val page = issueRepository.findByAssigneeAndState(user.id!!, State.OPEN, "%needle%", pageable)
+                    page.content.map { it.id } shouldBe listOf(assigned.id)
+                    page.totalElements shouldBe 1L
+                    issueRepository.countByAssigneeAndState(user.id!!, State.OPEN) shouldBe 1L
+                }
+                val privateResults = issueRepository.searchIssues(emptyList(), "%needle%", second.id, pageable)
+                privateResults.content.map { it.id } shouldBe listOf(assigned.id)
+                privateResults.totalElements shouldBe 1L
+                issueRepository.countSearchIssues(emptyList(), "%needle%", second.id) shouldBe 1
+            }
+
             // yona Search.java:112-127 issuesEL()의 "(Project && Keyword) || (Author && Keyword) ||
             // (Assignee && Keyword)" 대응 (P1-81).
             describe("searchIssues (P1-81, 프로젝트 접근권한과 무관한 본인 작성/담당 이슈 노출)") {
@@ -110,7 +144,7 @@ class IssueRepositorySpec @Autowired constructor(
                             title = "권한 없는 프로젝트의 담당 이슈", body = "본문", project = inaccessibleProject,
                             authorId = author.id, authorLoginId = author.loginId, authorName = author.name,
                             createdDate = Instant.now(), state = State.OPEN,
-                            assignee = Assignee(user = assigneeUser, project = inaccessibleProject)
+                            assignees = mutableSetOf(author, assigneeUser)
                         )
                     )
 

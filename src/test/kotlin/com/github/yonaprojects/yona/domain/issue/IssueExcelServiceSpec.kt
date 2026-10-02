@@ -46,7 +46,7 @@ class IssueExcelServiceSpec : DescribeSpec({
         body: String? = "이슈 본문",
         state: State = State.OPEN,
         milestone: Milestone? = null,
-        assignee: Assignee? = null,
+        assignees: MutableSet<User> = mutableSetOf(),
         labels: MutableSet<IssueLabel> = mutableSetOf(),
         createdDate: Instant? = null,
         dueDate: Instant? = null
@@ -58,7 +58,7 @@ class IssueExcelServiceSpec : DescribeSpec({
         number = number,
         state = state,
         milestone = milestone,
-        assignee = assignee,
+        assignees = assignees,
         labels = labels,
         createdDate = createdDate,
         dueDate = dueDate
@@ -99,7 +99,7 @@ class IssueExcelServiceSpec : DescribeSpec({
         it("담당자/마일스톤/라벨/본문/날짜가 모두 없는 이슈는 기본값(미지정, 빈 문자열)으로 채워져야 한다") {
             val theIssue = issue(
                 id = 1L, number = 100L, body = null,
-                milestone = null, assignee = null, labels = mutableSetOf(),
+                milestone = null, labels = mutableSetOf(),
                 createdDate = null, dueDate = null
             )
             every { issueCommentRepository.findByIssueIdOrderByCreatedDateAsc(1L) } returns emptyList()
@@ -126,14 +126,17 @@ class IssueExcelServiceSpec : DescribeSpec({
             val category = IssueLabelCategory(id = 1L, name = "카테고리", isExclusive = false, project = proj)
             val label1 = IssueLabel(id = 1L, category = category, color = "#ff0000", name = "버그", project = proj)
             val label2 = IssueLabel(id = 2L, category = category, color = "#00ff00", name = "긴급", project = proj)
-            val assignee = Assignee(id = 1L, user = User(id = 1L, name = "김철수", loginId = "chulsoo", email = "c@x.com"), project = proj)
+            val assignees = mutableSetOf(
+                User(id = 1L, name = "김철수", loginId = "chulsoo", email = "c@x.com"),
+                User(id = 2L, name = "김영희", loginId = "younghee", email = "y@x.com")
+            )
             val milestone = Milestone(id = 1L, title = "1.0 마일스톤", project = proj)
             val createdDate = Instant.parse("2024-03-15T10:30:00Z")
             val dueDate = Instant.parse("2024-04-01T00:00:00Z")
 
             val theIssue = issue(
                 id = 2L, number = 101L, proj = proj, body = "이슈 본문 내용",
-                milestone = milestone, assignee = assignee,
+                milestone = milestone, assignees = assignees,
                 labels = mutableSetOf(label1, label2),
                 createdDate = createdDate, dueDate = dueDate
             )
@@ -147,7 +150,7 @@ class IssueExcelServiceSpec : DescribeSpec({
             val sheet = readWorkbook(bytes).getSheet(0)
 
             sheet.rows shouldBe 2
-            sheet.getCell(3, 1).contents shouldBe "김철수"
+            sheet.getCell(3, 1).contents shouldBe "김철수, 김영희"
             sheet.getCell(4, 1).contents shouldBe "이슈 본문 내용"
             sheet.getCell(5, 1).contents shouldBe "버그, 긴급"
 

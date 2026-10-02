@@ -4,7 +4,6 @@ import com.github.yonaprojects.yona.domain.board.Posting
 import com.github.yonaprojects.yona.domain.board.PostingComment
 import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.enumeration.Operation
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueComment
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
@@ -131,8 +130,7 @@ class AccessControlIssuePostingSpec : DescribeSpec({
             accessControl.isAllowed(stranger, privateProject, issue, Operation.READ) shouldBe false
         }
         it("담당자로 지정되지 않은 사용자는 담당자 우회가 적용되지 않는다") {
-            val assignee = Assignee(user = member, project = privateProject)
-            val issue = Issue(id = 1006L, project = privateProject, authorId = null, assignee = assignee)
+            val issue = Issue(id = 1006L, project = privateProject, authorId = null, assignees = mutableSetOf(member))
             accessControl.isAllowed(stranger, privateProject, issue, Operation.READ) shouldBe false
         }
 

@@ -89,10 +89,10 @@ class IssueMcpToolsSpec : DescribeSpec({
             every { projectRepository.findByOwnerAndName("yona", "yona") } returns Optional.of(project)
             every { scopeGuard.require(auth, ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, project) } returns Unit
             every {
-                issueController.createIssue(1L, IssueController.CreateIssueRequest("새 이슈", "본문", null, null, null), auth)
+                issueController.createIssue(1L, IssueController.CreateIssueRequest("새 이슈", "본문", null, listOf(2L, 3L), null), auth)
             } returns ResponseEntity.ok(created)
 
-            tools.create_issue("yona", "yona", "새 이슈", "본문")
+            tools.create_issue("yona", "yona", "새 이슈", "본문", listOf(2L, 3L))
 
             verify(exactly = 1) { scopeGuard.require(auth, ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, project) }
         }
@@ -106,6 +106,23 @@ class IssueMcpToolsSpec : DescribeSpec({
             shouldThrow<AccessDeniedException> { tools.create_issue("yona", "yona", "제목", null) }
 
             verify(exactly = 0) { issueController.createIssue(any(), any(), any()) }
+        }
+    }
+
+    describe("이슈 담당자 변경") {
+        it("WRITE 스코프가 없으면 추가, 개별 해제, 전체 해제를 모두 거부해야 한다") {
+            every { projectRepository.findByOwnerAndName("yona", "yona") } returns Optional.of(project)
+            every {
+                scopeGuard.require(auth, ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, project)
+            } throws AccessDeniedException("no scope")
+
+            shouldThrow<AccessDeniedException> { tools.add_issue_assignee("yona", "yona", 5L, 2L) }
+            shouldThrow<AccessDeniedException> { tools.remove_issue_assignee("yona", "yona", 5L, 2L) }
+            shouldThrow<AccessDeniedException> { tools.clear_issue_assignees("yona", "yona", 5L) }
+
+            verify(exactly = 0) { issueController.addAssignee(any(), any(), any(), any()) }
+            verify(exactly = 0) { issueController.removeAssignee(any(), any(), any(), any()) }
+            verify(exactly = 0) { issueController.clearAssignees(any(), any(), any()) }
         }
     }
 

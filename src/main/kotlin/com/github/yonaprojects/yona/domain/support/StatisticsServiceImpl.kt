@@ -26,7 +26,7 @@ class StatisticsServiceImpl(
         ).setParameter("userId", userId).singleResult.toLong()
 
         val assignedIssueCount = entityManager.createQuery(
-            "select count(i) from Issue i where i.assignee.user.id = :userId",
+            "select count(i) from Issue i where exists (select a.id from i.assignees a where a.id = :userId)",
             JLong::class.java
         ).setParameter("userId", userId).singleResult.toLong()
 

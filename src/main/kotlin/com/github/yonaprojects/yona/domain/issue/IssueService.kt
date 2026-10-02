@@ -21,7 +21,7 @@ interface IssueService {
     fun createIssue(
         issue: Issue,
         author: User,
-        assigneeUser: User? = null,
+        assigneeUsers: List<User> = emptyList(),
         milestoneId: Long? = null,
         labelIds: List<Long>? = null,
         isDraft: Boolean = false,
@@ -34,14 +34,14 @@ interface IssueService {
         title: String,
         body: String,
         updater: User,
-        assigneeUser: User? = null,
+        assigneeUsers: List<User>? = null,
         milestoneId: Long? = null,
         labelIds: List<Long>? = null
     ): Issue
 
     fun changeState(issueId: Long, newState: State, updaterLoginId: String): Issue
 
-    fun changeAssignee(issueId: Long, newAssigneeUser: User?, updaterLoginId: String): Issue
+    fun changeAssignees(issueId: Long, newAssigneeUsers: List<User>, updaterLoginId: String): Issue
 
     fun changeMilestone(issueId: Long, newMilestoneId: Long?, updaterLoginId: String): Issue
 

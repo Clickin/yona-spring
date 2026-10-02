@@ -111,7 +111,7 @@ data class IssueResponse(
     val isDraft: Boolean,
     val weight: Int,
     val milestoneId: Long?,
-    val assignee: AssigneeResponse?,
+    val assignees: List<UserRefResponse>,
     val labels: List<IssueLabelResponse>,
     val projectId: Long?,
     // yonaco(VS Code Extension) 등 외부 클라이언트가 계정 수준 집계(예:
@@ -141,7 +141,7 @@ fun Issue.toResponse() = IssueResponse(
     isDraft = isDraft,
     weight = weight,
     milestoneId = milestone?.id,
-    assignee = assignee?.toResponse(),
+    assignees = assignees.map { it.toRefResponse() },
     labels = labels.map { it.toResponse() },
     projectId = project.id,
     projectOwner = project.owner,

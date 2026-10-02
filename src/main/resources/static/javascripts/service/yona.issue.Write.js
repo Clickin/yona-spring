@@ -65,7 +65,6 @@
             // 셀렉터로 쓰이지 않는다 - 저장만 하고 값 자체는 사용하지 않는다.
             htElement.welMilestoneRefresh = htOptions.elMilestoneRefresh;
             htElement.welTplFileItem = document.getElementById('tplAttachedFile');
-            htElement.welAssignee = document.getElementById("assignee");
             htElement.welDueDate = _toElement(htOptions.elDueDate) || document.getElementById("issueDueDate");
         }
 
@@ -96,26 +95,6 @@
 
             temporarySaveHandler(htElement.welTextarea);
 
-            // 인스턴스는 htElement.welAssignee.tomselect로 접근한다(yona.issue.Assginee.js가
-            // 생성). weEvt.val은 yona.ui.TomSelect.js의 bridgeChangeEvent가 원본 select2
-            // "change" 이벤트와 동일한 모양으로 채워 넣어준다. setValue의 두 번째 인자
-            // (silent:true)는 이 정규화 재설정이 또 다른 change로 무한루프에 빠지지 않게 막는다.
-            htElement.welAssignee.addEventListener("change", function(weEvt){
-                var tomSelectInstance = htElement.welAssignee && htElement.welAssignee.tomselect;
-                if(tomSelectInstance){
-                    tomSelectInstance.setValue(weEvt.val, true);
-                }
-            });
-
-            // data("forceChange")는 어느 템플릿/JS에서도 설정된 적이 없어 원본(select2)에서도
-            // 이미 도달 불가능한 죽은 코드였다. Tom Select는 애초에 "select2-selecting"
-            // 이벤트를 발생시키지 않으므로 이 바인딩은 등록만 되고 결코 실행되지 않는다 -
-            // 동작 변화가 없어 그대로 보존한다.
-            htElement.welAssignee.addEventListener("select2-selecting", function(weEvt){
-                if(weEvt.object && weEvt.object.element._forceChange){
-                    htElement.welAssignee.dispatchEvent(new Event("change"));
-                }
-            });
         }
 
         function _onBeforeUnload(){
