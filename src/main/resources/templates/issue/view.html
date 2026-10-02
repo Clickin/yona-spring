@@ -98,7 +98,7 @@
                                 </button>
                                 <button th:if="${isAllowedUpdate}" id="issue-share-button" type="button" class="ybtn" data-toggle="popover" data-trigger="hover" data-placement="top" th:data-content="#{issue.sharer.description}" th:text="#{button.share.issue}">공유</button>
                                 <span class="project-btn-item ml4">
-                                    <a th:href="@{/{owner}/{projectName}/issue/new(owner=${project.owner}, projectName=${project.name}, parentIssueId=${issue.id})}" class="ybtn ybtn-success" th:text="#{button.newSubtask}">하위 이슈 등록</a>
+                                    <a th:unless="${project.isArchived}" th:href="@{/{owner}/{projectName}/issue/new(owner=${project.owner}, projectName=${project.name}, parentIssueId=${issue.id})}" class="ybtn ybtn-success" th:text="#{button.newSubtask}">하위 이슈 등록</a>
                                 </span>
                                 <span class="issue-weight">
                                     <span class="divider">|</span>
@@ -197,7 +197,7 @@
                             <div class="timeline-list comments" th:fragment="timelineItems">
                                 <!-- 타임라인 영역 (댓글 + 상태/담당자/라벨/마일스톤/이동 이벤트, Thymeleaf Loop) -->
                                 <th:block th:each="item : ${timeline}">
-                                <div th:if="${item.kind == 'COMMENT'}" th:with="comment=${item.comment}, children=${childCommentsByParentId != null ? childCommentsByParentId.get(comment.id) : null}, canEditThisComment=${currentUser != null and (item.comment.authorId == currentUser.id or isProjectManager)}, issueCommentResourceType=${T(com.github.yonaprojects.yona.domain.enumeration.ResourceType).ISSUE_COMMENT}"
+                                <div th:if="${item.kind == 'COMMENT'}" th:with="comment=${item.comment}, children=${childCommentsByParentId != null ? childCommentsByParentId.get(comment.id) : null}, canEditThisComment=${!project.isArchived and currentUser != null and (item.comment.authorId == currentUser.id or isProjectManager)}, issueCommentResourceType=${T(com.github.yonaprojects.yona.domain.enumeration.ResourceType).ISSUE_COMMENT}"
                                     class="comment" th:classappend="${currentUser != null and comment.authorLoginId == currentUser.loginId} ? ' author'" th:id="'comment-' + ${comment.id}">
                                     <div th:replace="~{common/childCommentsAnchorDiv :: anchorDiv(${children})}"></div>
                                     <div class="comment-avatar">
@@ -400,7 +400,7 @@
                                 <dt th:text="#{milestone}">마일스톤</dt>
                                 <dd>
                                     <div th:if="${openMilestones.isEmpty() and closedMilestones.isEmpty()}">
-                                        <a th:href="@{/{owner}/{projectName}/newMilestoneForm(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-small ybtn-fullsize" target="_blank" th:text="#{milestone.menu.new}">새 마일스톤</a>
+                                        <a th:unless="${project.isArchived}" th:href="@{/{owner}/{projectName}/newMilestoneForm(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-small ybtn-fullsize" target="_blank" th:text="#{milestone.menu.new}">새 마일스톤</a>
                                     </div>
                                     <th:block th:unless="${openMilestones.isEmpty() and closedMilestones.isEmpty()}">
                                         <select th:if="${isAllowedUpdate}" id="milestone" name="milestone.id" data-toggle="tomselect" data-format="milestone" data-container-css-class="fullsize">

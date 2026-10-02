@@ -66,6 +66,7 @@ class BranchProtectionControllerSpec : DescribeSpec({
         beforeTest {
             every { userRepository.findByLoginId("owner") } returns Optional.of(managerUser)
             every { accessControl.isAllowed(managerUser, project, Operation.UPDATE) } returns true
+            every { accessControl.canManageArchive(managerUser, project) } returns true
         }
 
         describe("GET /projects/{owner}/{projectName}/branch-protections") {
@@ -92,7 +93,7 @@ class BranchProtectionControllerSpec : DescribeSpec({
 
             it("비로그인 사용자는 403으로 거부된다") {
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "test-project") } returns Optional.of(project)
-                every { accessControl.isAllowed(null, project, Operation.UPDATE) } returns false
+                every { accessControl.canManageArchive(null, project) } returns false
 
                 mockMvc.perform(get("/projects/owner/test-project/branch-protections"))
                     .andExpect(status().isForbidden)
@@ -103,7 +104,7 @@ class BranchProtectionControllerSpec : DescribeSpec({
                 val stranger = User(id = 200L, loginId = "stranger", name = "stranger")
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "test-project") } returns Optional.of(project)
                 every { userRepository.findByLoginId("stranger") } returns Optional.of(stranger)
-                every { accessControl.isAllowed(stranger, project, Operation.UPDATE) } returns false
+                every { accessControl.canManageArchive(stranger, project) } returns false
 
                 mockMvc.perform(get("/projects/owner/test-project/branch-protections").principal(strangerAuth))
                     .andExpect(status().isForbidden)

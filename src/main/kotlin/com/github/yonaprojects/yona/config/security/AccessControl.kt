@@ -56,6 +56,10 @@ class AccessControl(
 
     private fun isAnonymousNotAllowed(): Boolean = !allowsAnonymousAccess
 
+    fun canManageArchive(user: User?, project: Project): Boolean =
+        user != null && !user.isGuest && (user.isSiteManager ||
+            user.isManagerOf(project) || isOrganizationAdmin(project, user))
+
     /**
      * Checks if a user has a permission to read a project.
      */
@@ -80,6 +84,7 @@ class AccessControl(
      * type in the given project.
      */
     fun isProjectResourceCreatable(user: User?, project: Project, resourceType: ResourceType): Boolean {
+        if (project.isArchived) return false
         if (user == null || user.isGuest || user.loginId == "") {
             return false
         }
@@ -115,6 +120,7 @@ class AccessControl(
      * Checks if a user has a permission to update a project resource like an issue.
      */
     fun isAllowedToUpdateIssue(user: User?, project: Project, authorLoginId: String?): Boolean {
+        if (project.isArchived) return false
         if (user == null || user.isGuest || user.loginId == "") {
             return false
         }
@@ -133,6 +139,7 @@ class AccessControl(
      * Checks if a user has a permission to update a posting.
      */
     fun isAllowedToUpdatePosting(user: User?, project: Project, authorLoginId: String?): Boolean {
+        if (project.isArchived) return false
         if (user == null || user.isGuest || user.loginId == "") {
             return false
         }
@@ -151,6 +158,7 @@ class AccessControl(
      * Checks if a user has a permission to update a milestone.
      */
     fun isAllowedToUpdateMilestone(user: User?, project: Project): Boolean {
+        if (project.isArchived) return false
         if (user == null || user.isGuest || user.loginId == "") {
             return false
         }
@@ -179,6 +187,7 @@ class AccessControl(
     // 댓글을 달 대상 Issue의 작성자/담당자/공유대상이면 프로젝트 멤버 여부와 무관하게 항상 허용되고,
     // 그 외에는 프로젝트 기준 생성권한(isProjectResourceCreatable)으로 위임한다.
     fun isIssueCommentCreatable(user: User?, project: Project, issue: Issue): Boolean {
+        if (project.isArchived || issue.project.isArchived) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user != null) {
             val isAuthor = issue.authorId != null && issue.authorId == user.id
@@ -191,6 +200,7 @@ class AccessControl(
     // 댓글을 달 대상 Posting은 isAllowedIfAssignee/isAllowedIfSharer의 분기 대상이 아니므로 작성자
     // 우회만 적용된다.
     fun isPostingCommentCreatable(user: User?, project: Project, posting: Posting): Boolean {
+        if (project.isArchived || posting.project.isArchived) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user != null && posting.authorId != null && posting.authorId == user.id) return true
         return isProjectResourceCreatable(user, project, ResourceType.NONISSUE_COMMENT)
@@ -276,6 +286,7 @@ class AccessControl(
     // isAllowedAttachment() 시작부에 동일하게 배선했다.
 
     fun isAllowed(user: User?, project: Project, operation: Operation): Boolean {
+        if (project.isArchived && operation != Operation.READ) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
 
@@ -319,6 +330,7 @@ class AccessControl(
     // isAllowedIfAuthor/isAllowedIfAssignee가 적용되는 리소스 타입 — 작성자 또는 담당자는 연산 종류와
     // 무관하게 항상 허용된다(legacy AccessControl.java:225-227).
     fun isAllowed(user: User?, project: Project, issue: Issue, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || issue.project.isArchived)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -345,6 +357,7 @@ class AccessControl(
     }
 
     fun isAllowed(user: User?, project: Project, issueComment: IssueComment, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || issueComment.issue.project.isArchived)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -370,6 +383,7 @@ class AccessControl(
     }
 
     fun isAllowed(user: User?, project: Project, posting: Posting, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || posting.project.isArchived)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -394,6 +408,7 @@ class AccessControl(
     }
 
     fun isAllowed(user: User?, project: Project, postingComment: PostingComment, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || postingComment.posting.project.isArchived)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -421,6 +436,7 @@ class AccessControl(
     // 자동 승격이 없다) contributor 여부는 이 중앙 함수가 아니라 각 컨트롤러의 별도 isManagerOrContributor류
     // 로직이 추가로 처리한다 — legacy도 동일하게 컨트롤러 액션 단에서 별도 체크한다(P1-85_PLAN.md 참고).
     fun isAllowed(user: User?, project: Project, pullRequest: PullRequest, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || pullRequest.toProject.isArchived)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -443,6 +459,7 @@ class AccessControl(
     }
 
     fun isAllowed(user: User?, project: Project, commitComment: CommitComment, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || commitComment.project?.isArchived == true)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -467,6 +484,7 @@ class AccessControl(
     }
 
     fun isAllowed(user: User?, project: Project, commentThread: CommentThread, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || commentThread.project?.isArchived == true || commentThread.pullRequest?.toProject?.isArchived == true)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -491,6 +509,7 @@ class AccessControl(
     }
 
     fun isAllowed(user: User?, project: Project, reviewComment: ReviewComment, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || reviewComment.thread?.project?.isArchived == true || reviewComment.thread?.pullRequest?.toProject?.isArchived == true)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -516,6 +535,7 @@ class AccessControl(
 
     // MILESTONE은 isAllowedIfAuthor 대상이 아니다(legacy 스위치에 없음) — 작성자 개념이 없는 리소스.
     fun isAllowed(user: User?, project: Project, milestone: Milestone, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || milestone.project.isArchived)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -541,6 +561,7 @@ class AccessControl(
     // 스위치를 그대로 따른다 — legacy 규칙상 프로젝트 멤버라면 누구나 webhook을 UPDATE할 수 있다는 점에
     // 유의(매니저 전용이 아님, legacy 원본 그대로).
     fun isAllowed(user: User?, project: Project, webhook: Webhook, operation: Operation): Boolean {
+        if (operation != Operation.READ && (project.isArchived || webhook.project?.isArchived == true)) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -567,6 +588,7 @@ class AccessControl(
     // resource.getType()==CODE면 무조건 false(저장소 자체 삭제는 이 경로로 허용하지 않음 — legacy
     // AccessControl.java:264-267)로 특별 취급한다.
     fun isAllowed(user: User?, project: Project, resourceType: ResourceType, operation: Operation): Boolean {
+        if (project.isArchived && operation != Operation.READ) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (isOrganizationAdmin(project.organization, user)) return true
@@ -592,6 +614,7 @@ class AccessControl(
     // 다른 모든 리소스 타입과 달리 매니저/조직관리자 우회보다도 먼저 체크되며, ACCEPT 연산만 정의돼
     // 있고 그 외는 항상 false다.
     fun isAllowed(user: User?, projectTransfer: ProjectTransfer, operation: Operation): Boolean {
+        if (projectTransfer.project.isArchived && operation != Operation.READ) return false
         if (isAnonymousNotAllowed() && user == null) return false
         if (user?.isSiteManager == true) return true
         if (operation != Operation.ACCEPT || user == null) return false
@@ -613,10 +636,10 @@ class AccessControl(
     // 쓴다(CodeReviewServiceImpl.kt) — 두 경우 모두 ownerLoginId(원 업로더)로 판별한다.
     fun isAllowedAttachment(user: User?, attachment: Attachment, operation: Operation): Boolean {
         if (isAnonymousNotAllowed() && user == null) return false
-        if (user?.isSiteManager == true) return true
+        if (user?.isSiteManager == true && operation == Operation.READ) return true
 
         if (attachment.containerType == ResourceType.USER || attachment.containerType == ResourceType.NOT_A_RESOURCE) {
-            return user != null && user.loginId == attachment.ownerLoginId
+            return user != null && (user.loginId == attachment.ownerLoginId || user.isSiteManager)
         }
 
         if (attachment.containerType == ResourceType.USER_AVATAR) {
@@ -625,7 +648,7 @@ class AccessControl(
             // 허용, UPDATE/DELETE만 본인 확인(:186 case USER_AVATAR: user.id.toString().equals(...)).
             if (operation == Operation.READ) return true
             val ownerId = attachment.containerId.toLongOrNull()
-            return user?.id != null && user.id == ownerId
+            return user?.isSiteManager == true || (user?.id != null && user.id == ownerId)
         }
 
         val containerId = attachment.containerId.toLongOrNull() ?: return false
@@ -681,10 +704,7 @@ class AccessControl(
                     else -> false
                 }
             }
-            // legacy도 위 목록에 없는 컨테이너 타입은 Resource.get()이 처리할 수 없어 사실상 도달하지
-            // 않는 경로다 — yona에서 Attachment.containerType으로 실제 쓰이는 값(위 케이스들 + USER/
-            // USER_AVATAR/NOT_A_RESOURCE)을 모두 다뤘으므로 나머지는 false로 안전하게 막는다.
-            else -> false
+            else -> user?.isSiteManager == true
         }
     }
 }

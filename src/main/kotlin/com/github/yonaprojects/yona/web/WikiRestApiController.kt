@@ -59,6 +59,7 @@ class WikiRestApiController(
 
     // 위키 쓰기 권한 = 프로젝트 멤버(코드 push와 동일 문턱, 클래스 상단 설명 참고).
     private fun canWrite(user: User?, project: Project): Boolean {
+        if (project.isArchived) return false
         if (user == null || user.isGuest) return false
         if (user.isSiteManager) return true
         return projectUserRepository.existsByProjectIdAndUserId(project.id!!, user.id!!)

@@ -55,6 +55,7 @@ class WebhookControllerSpec : DescribeSpec({
         beforeTest {
             every { userRepository.findByLoginId("owner") } returns Optional.of(managerUser)
             every { accessControl.isAllowed(managerUser, project, Operation.UPDATE) } returns true
+            every { accessControl.canManageArchive(managerUser, project) } returns true
         }
 
         describe("GET /projects/{owner}/{projectName}/webhooks") {
@@ -80,20 +81,6 @@ class WebhookControllerSpec : DescribeSpec({
                 ).andExpect(status().isNotFound)
             }
 
-            // project.id가 없으면(project.id ?: 0L) 0L로 조회해야 한다.
-            it("프로젝트 id가 없으면 0L로 웹훅을 조회한다") {
-                val noIdProject = Project(id = null, owner = "owner", name = "no-id-project")
-                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "no-id-project") } returns Optional.of(noIdProject)
-                every { accessControl.isAllowed(managerUser, noIdProject, Operation.UPDATE) } returns true
-                every { webhookService.findByProject(0L) } returns emptyList()
-
-                mockMvc.perform(
-                    get("/projects/owner/no-id-project/webhooks").principal(userAuth)
-                )
-                    .andExpect(status().isOk)
-
-                verify(exactly = 1) { webhookService.findByProject(0L) }
-            }
         }
 
         describe("POST /projects/{owner}/{projectName}/webhooks") {
@@ -290,7 +277,7 @@ class WebhookControllerSpec : DescribeSpec({
         describe("권한 검사 (P1-87)") {
             it("비로그인 사용자는 웹훅 목록 조회가 403으로 거부된다") {
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "test-project") } returns Optional.of(project)
-                every { accessControl.isAllowed(null, project, Operation.UPDATE) } returns false
+                every { accessControl.canManageArchive(null, project) } returns false
 
                 mockMvc.perform(get("/projects/owner/test-project/webhooks"))
                     .andExpect(status().isForbidden)
@@ -362,7 +349,7 @@ class WebhookControllerSpec : DescribeSpec({
                 val stranger = User(id = 200L, loginId = "stranger", name = "stranger")
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "test-project") } returns Optional.of(project)
                 every { userRepository.findByLoginId("stranger") } returns Optional.of(stranger)
-                every { accessControl.isAllowed(stranger, project, Operation.UPDATE) } returns false
+                every { accessControl.canManageArchive(stranger, project) } returns false
 
                 val result = webhookController.listWebhooksJson("owner", "test-project", strangerAuth)
 

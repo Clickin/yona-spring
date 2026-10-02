@@ -25,7 +25,7 @@ class DataBackupServiceImplSpec : DescribeSpec({
     val metaData = mockk<DatabaseMetaData>()
     val jdbcTemplate = mockk<JdbcTemplate>(relaxed = true)
 
-    val service = DataBackupServiceImpl(dataSource, objectMapper)
+    val service = DataBackupServiceImpl(mockk(relaxed = true), dataSource, objectMapper)
     ReflectionTestUtils.setField(service, "jdbcTemplate", jdbcTemplate)
 
     beforeTest {

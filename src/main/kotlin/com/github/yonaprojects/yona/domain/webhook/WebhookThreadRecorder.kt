@@ -25,6 +25,7 @@ class WebhookThreadRecorder(
         if (existing != null) return
 
         val webhook = webhookRepository.findById(webhookId).orElse(null) ?: return
+        if (webhook.project?.isArchived == true) return
 
         webhookThreadRepository.save(
             WebhookThread(

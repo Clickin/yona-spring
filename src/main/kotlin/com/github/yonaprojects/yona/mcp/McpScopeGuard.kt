@@ -40,6 +40,7 @@ class McpScopeGuard {
         permission: ApiTokenPermission,
         project: Project? = null
     ) {
+        if (permission == ApiTokenPermission.WRITE) project?.requireWritable()
         if (authentication == null || !authentication.isAuthenticated) {
             throw AccessDeniedException("인증이 필요합니다.")
         }

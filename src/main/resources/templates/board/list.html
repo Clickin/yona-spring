@@ -40,7 +40,7 @@
                     </div>
                 </form>
                 <div class="pull-right">
-                    <a th:href="@{/{owner}/{projectName}/post/new(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-success" th:text="#{post.write}">글쓰기</a>
+                    <a th:unless="${project.isArchived}" th:href="@{/{owner}/{projectName}/post/new(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-success" th:text="#{post.write}">글쓰기</a>
                 </div>
             </div>
 

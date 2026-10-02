@@ -4,6 +4,8 @@
 </head>
 <body>
 <div th:fragment="header(project)" class="project-header-outer" style="background-image:url(/images/project_default.jpg)">
+    <div th:if="${project.isArchived}" class="alert alert-warning project-archive-banner" role="status" th:text="#{project.archive.banner}">Archived — this project is read-only.</div>
+    <script th:if="${project.isArchived}" th:src="@{/javascripts/project-archive.js}" defer></script>
     <div class="project-header-inner">
         <div class="project-header-wrap">
             <div class="project-header-avatar">
@@ -14,7 +16,7 @@
                     <span class="project-author hide-in-mobile"><a th:href="@{/user/{owner}(owner=${project.owner})}" th:text="${project.owner}">owner</a></span>
                     <span class="project-separator hide-in-mobile">/</span>
                     <span class="project-name"><a th:href="@{/{owner}/{name}(owner=${project.owner}, name=${project.name})}" th:text="${project.name}">name</a></span>
-                    <span class="user-project-list" th:data-project-id="${project.id}">
+                    <span th:unless="${project.isArchived}" class="user-project-list" th:data-project-id="${project.id}">
                         <i class="star material-icons va-text-top" th:classappend="${@templateHelper.isFavoriteProject(project, currentUser)} ? 'starred'">star</i>
                     </span>
                     <span th:if="${project.projectScope == T(com.github.yonaprojects.yona.domain.project.ProjectScope).PRIVATE}" class="project-private">
@@ -29,7 +31,7 @@
                     </a>
                 </div>
             </div>
-            <div class="project-util-wrap" th:if="${currentUser != null}">
+            <div class="project-util-wrap" th:if="${currentUser != null and !project.isArchived}">
                 <ul class="project-util">
                     <li th:if="${!templateHelper.isMember(project, currentUser)}">
                         <th:block th:if="${templateHelper.isEnrolled(project, currentUser)}">

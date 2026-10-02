@@ -147,6 +147,7 @@ class HgBranchProtectionPrePushkeyHook(
     private val logger = LoggerFactory.getLogger(HgBranchProtectionPrePushkeyHook::class.java)
 
     override fun run(context: MutableMap<String, Any>): Boolean {
+        if (project.isArchived) return false
         if (context["namespace"] != BOOKMARKS_NAMESPACE) return true
 
         val projectId = project.id ?: return true
@@ -250,6 +251,7 @@ class HgYonaPostPushkeyHook(
     private val logger = LoggerFactory.getLogger(HgYonaPostPushkeyHook::class.java)
 
     override fun run(context: MutableMap<String, Any>): Boolean {
+        if (projectRepository.existsByIdAndArchivedAtIsNotNull(project.id!!)) return true
         if (context["namespace"] != BOOKMARKS_NAMESPACE) return true
         val branch = context["key"] as? String ?: return true
         val nativeRepo = context["repository"] as? NativeHgRepository ?: return true
@@ -288,11 +290,12 @@ class HgYonaPostPushkeyHook(
 
     private fun updateLastPushedDate() {
         project.lastPushedDate = Instant.now()
-        projectRepository.save(project)
+        projectRepository.recordPush(project.id!!, project.lastPushedDate!!)
     }
 
     private fun cleanupPullRequestsForDeletedBranch(branch: String) {
         val related = pullRequestRepository.findRelatedPullRequests(project, branch)
+            .filterNot { it.toProject.isArchived }
         if (related.isNotEmpty()) {
             pullRequestRepository.deleteAll(related)
         }

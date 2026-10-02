@@ -52,7 +52,7 @@
                      100% 그대로 재사용했다. 편집 가능 여부는 PullRequestController.checkWritePermission()
                      (프로젝트 멤버 여부)과 동일한 @templateHelper.isMember()로 게이트한다. -->
                 <div class="issue-info pr-assignee-label-info"
-                     th:with="prAssigneeLabelEditable=${currentUser != null and @templateHelper.isMember(project, currentUser)}">
+                     th:with="prAssigneeLabelEditable=${!project.isArchived and currentUser != null and @templateHelper.isMember(project, currentUser)}">
                     <dl>
                         <dt th:text="#{issue.assignee}">담당자</dt>
                         <dd>

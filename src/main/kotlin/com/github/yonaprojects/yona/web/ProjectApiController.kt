@@ -215,7 +215,9 @@ class ProjectApiController(
             "owner" to project.owner,
             "name" to project.name,
             "overview" to project.overview,
-            "vcs" to project.vcs
+            "vcs" to project.vcs,
+            "archived" to project.isArchived,
+            "archivedAt" to project.archivedAt
         )
     }
 

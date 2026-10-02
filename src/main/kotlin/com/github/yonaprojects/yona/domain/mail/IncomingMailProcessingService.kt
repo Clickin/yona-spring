@@ -166,6 +166,9 @@ class IncomingMailProcessingService(
         if (project == null || !accessControl.isAllowedToReadProject(sender, project)) {
             return IncomingMailOutcome.Rejected("프로젝트를 찾을 수 없거나 권한이 없습니다: $owner/$projectName")
         }
+        if (project.isArchived) {
+            return IncomingMailOutcome.Rejected("Archived project is read-only: $owner/$projectName")
+        }
 
         val thread = threads.firstOrNull { it.projectId == project.id }
         val outcome = if (thread != null) {

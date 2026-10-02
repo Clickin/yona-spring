@@ -426,7 +426,9 @@ class ProjectController(
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
 
-        pushedBranchRepository.findById(id).ifPresent { pushedBranchRepository.delete(it) }
+        val pushedBranch = pushedBranchRepository.findById(id).orElse(null)
+        if (pushedBranch?.project?.isArchived == true) return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+        if (pushedBranch != null) pushedBranchRepository.delete(pushedBranch)
         return ResponseEntity.ok().build()
     }
 

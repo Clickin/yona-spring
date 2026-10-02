@@ -95,6 +95,7 @@ class GitPostReceiveEventListenerSpec : DescribeSpec({
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
 
     val listener = GitPostReceiveEventListener(
+        mockk<com.github.yonaprojects.yona.domain.project.ProjectRepository>(relaxed = true),
         gitService, notificationEventRecorder, issueRepository, issueEventRepository, webhookService,
         watchService, eventPublisher
     )

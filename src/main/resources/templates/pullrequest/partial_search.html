@@ -54,7 +54,7 @@
         <div th:replace="~{pullrequest/partial_recently_pushed_branches :: recentlyPushedBranches(${pushedBranches}, ${pushedBranchDefaultBranches})}"></div>
 
         <div class="pull-right">
-            <a th:href="@{/{owner}/{projectName}/pull/new(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-success" th:text="#{pullRequest.new}">새 코드 보내기</a>
+            <a th:unless="${project.isArchived}" th:href="@{/{owner}/{projectName}/pull/new(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-success" th:text="#{pullRequest.new}">새 코드 보내기</a>
         </div>
         <ul class="nav nav-tabs nm pullrequeset-tab-menu">
             <li th:classappend="${requestType == 'open'} ? 'active'">

@@ -104,7 +104,7 @@
                                  상시 펼쳐진 채로 보인다. -->
                             <div class="timeline-list comments">
                                 <div th:each="comment : ${comments}"
-                                     th:with="children=${childCommentsByParentId != null ? childCommentsByParentId.get(comment.id) : null}, canEditThisComment=${currentUser != null and (comment.authorId == currentUser.id or isProjectManager)}, postingCommentResourceType=${T(com.github.yonaprojects.yona.domain.enumeration.ResourceType).NONISSUE_COMMENT}"
+                                     th:with="children=${childCommentsByParentId != null ? childCommentsByParentId.get(comment.id) : null}, canEditThisComment=${!project.isArchived and currentUser != null and (comment.authorId == currentUser.id or isProjectManager)}, postingCommentResourceType=${T(com.github.yonaprojects.yona.domain.enumeration.ResourceType).NONISSUE_COMMENT}"
                                      class="comment" th:classappend="${currentUser != null and comment.authorLoginId == currentUser.loginId} ? ' author'" th:id="'comment-' + ${comment.id}">
                                     <div th:replace="~{common/childCommentsAnchorDiv :: anchorDiv(${children})}"></div>
                                     <div class="comment-avatar">
@@ -178,7 +178,7 @@
                     <div class="issue-info board-labels">
                         <dl>
                             <dd class="project-btn-item">
-                                <a th:href="@{/{owner}/{projectName}/post/new(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-success" th:text="#{post.write}">글쓰기</a>
+                                <a th:unless="${project.isArchived}" th:href="@{/{owner}/{projectName}/post/new(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-success" th:text="#{post.write}">글쓰기</a>
                             </dd>
                         </dl>
 

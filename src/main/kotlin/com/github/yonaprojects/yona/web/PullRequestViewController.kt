@@ -403,7 +403,7 @@ class PullRequestViewController(
         pullRequest: PullRequest,
         loginUser: User?
     ): PullRequestMergeResult? {
-        val mergeResult = try {
+        val mergeResult = if (project.isArchived) null else try {
             pullRequestService.attemptMerge(pullRequest.id!!)
         } catch (e: Exception) {
             null

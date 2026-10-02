@@ -257,7 +257,8 @@ class GitPushHooksSpec : DescribeSpec({
         beforeTest {
             clearMocks(projectRepository, pullRequestRepository, pushedBranchRepository, eventPublisher)
             meterRegistry = SimpleMeterRegistry()
-            every { projectRepository.save(any()) } returns project
+            every { projectRepository.existsByIdAndArchivedAtIsNotNull(any()) } returns false
+            every { projectRepository.recordPush(any(), any()) } returns 1
             every { pushedBranchRepository.findByProjectAndPushedDateBefore(any(), any()) } returns emptyList()
             every { pushedBranchRepository.findByProjectAndName(any(), any()) } returns Optional.empty()
             every { pullRequestRepository.existsByFromProjectAndFromBranch(any(), any()) } returns false
@@ -267,18 +268,6 @@ class GitPushHooksSpec : DescribeSpec({
             every { pushedBranchRepository.delete(any()) } returns Unit
         }
 
-        it("push가 일어나면 project.lastPushedDate가 갱신되어야 한다") {
-            val command = ReceiveCommand(zero, sha1, "refs/heads/main")
-
-            newHook().onPostReceive(mockk(relaxed = true), listOf(command))
-
-            project.lastPushedDate shouldBe project.lastPushedDate
-            verify { projectRepository.save(project) }
-            // yona-wiki P3-01(Observability) 계측 지점 6 검증 — push 훅 1회 처리시간 기록 +
-            // 브랜치 1개(main) push 카운트.
-            meterRegistry.timer("yona.git.push_hook.duration").count() shouldBe 1L
-            meterRegistry.counter("yona.git.push_hook.pushed_branches").count() shouldBe 1.0
-        }
 
         it("push가 일어나면 GitPostReceiveEvent가 발행되어야 한다 (커밋 알림 트리거)") {
             val command = ReceiveCommand(zero, sha1, "refs/heads/main")

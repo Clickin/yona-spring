@@ -26,6 +26,7 @@ import java.io.OutputStream
  * 이 방식이 맞다.
  */
 class YonaSshGitCommand(
+    private val projectRepository: com.github.yonaprojects.yona.domain.project.ProjectRepository,
     private val commandLine: String,
     private val principal: SshAuthPrincipal,
     private val sshAuthService: SshAuthService,
@@ -44,7 +45,7 @@ class YonaSshGitCommand(
 
     // GitServletConfig(HTTPS)와 동일한 훅 체이닝 로직을 공유 클래스로 뽑아내, 이 MINA 경로와
     // 유닉스 도메인 소켓 릴레이(SshRelayServer) 둘 다 같은 구현을 호출하도록 한다.
-    private val gitProtocolHandler = GitSshProtocolHandler(protectedBranchRepository, projectUserRepository, gpgSignatureVerifier)
+    private val gitProtocolHandler = GitSshProtocolHandler(projectRepository, protectedBranchRepository, projectUserRepository, gpgSignatureVerifier)
 
     private var inputStream: InputStream? = null
     private var outputStream: OutputStream? = null

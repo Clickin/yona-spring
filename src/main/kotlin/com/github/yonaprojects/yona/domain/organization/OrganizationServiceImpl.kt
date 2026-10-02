@@ -127,6 +127,7 @@ class OrganizationServiceImpl(
     }
 
     private fun renameProjects(organization: Organization, newOwner: String) {
+        organization.projects.forEach { it.requireWritable() }
         val moved = mutableListOf<Pair<File, File>>()
         fun move(source: File, destination: File) {
             check(!Files.exists(destination.toPath(), LinkOption.NOFOLLOW_LINKS)) {

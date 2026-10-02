@@ -49,7 +49,7 @@ class WebhookController(
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found")
 
         val user = getLoginUser(authentication)
-        if (!checkWebhookPermission(project, user)) {
+        if (!accessControl.canManageArchive(user, project)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden")
         }
 
@@ -140,7 +140,7 @@ class WebhookController(
             ?: return ResponseEntity.notFound().build()
 
         val user = getLoginUser(authentication)
-        if (!checkWebhookPermission(project, user)) {
+        if (!accessControl.canManageArchive(user, project)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
 

@@ -1,6 +1,13 @@
 package com.github.yonaprojects.yona.config.oauth2server
 
 import com.github.yonaprojects.yona.config.ApiTokenAuthenticationFilter
+import com.github.yonaprojects.yona.config.SpaCsrfTokenRequestHandler
+import org.springframework.security.authentication.AnonymousAuthenticationToken
+import org.springframework.security.core.context.SecurityContext
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository
+import org.springframework.security.web.csrf.CsrfFilter
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -113,9 +120,21 @@ class ResourceServerConfig(
         @Qualifier("apiJwtDecoder") apiJwtDecoder: JwtDecoder,
         oAuthApiScopeAuthorizationFilter: OAuthApiScopeAuthorizationFilter
     ): SecurityFilterChain {
+        val archiveEndpoint = PathPatternRequestMatcher.pathPattern("/api/v1/projects/{owner}/{project}/settings/archive")
         http
             .securityMatcher("/api/v1/**")
-            .csrf { it.disable() }
+            .csrf { csrf ->
+                csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    .csrfTokenRequestHandler(SpaCsrfTokenRequestHandler())
+                    .requireCsrfProtectionMatcher { request ->
+                        val sessionContext = request.getSession(false)
+                            ?.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY) as? SecurityContext
+                        val authentication = sessionContext?.authentication
+                        CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request) &&
+                            archiveEndpoint.matches(request) &&
+                            authentication?.isAuthenticated == true && authentication !is AnonymousAuthenticationToken
+                    }
+            }
             .authorizeHttpRequests { authorize ->
                 authorize
                     .requestMatchers(HttpMethod.GET, "/api/v1/projects/**").permitAll()

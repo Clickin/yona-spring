@@ -336,6 +336,7 @@ class IssueServiceImpl(
 
     override fun changeState(issueId: Long, newState: State, updaterLoginId: String): Issue {
         val issue = issueRepository.findById(issueId).orElseThrow { IllegalArgumentException("Issue not found") }
+        issue.project.requireWritable()
         val oldState = issue.state
         if (oldState == newState) {
             return issue
@@ -488,6 +489,7 @@ class IssueServiceImpl(
     override fun moveIssue(issueId: Long, targetProjectId: Long, mover: User): Issue {
         val issue = issueRepository.findById(issueId).orElseThrow { IllegalArgumentException("Issue not found: $issueId") }
         val previous = issue.project
+        previous.requireWritable()
 
         // yona isRequestedToOtherProject() 대응 — 같은 프로젝트면 아무 것도 하지 않는다.
         if (previous.id == targetProjectId) {
@@ -496,6 +498,7 @@ class IssueServiceImpl(
 
         val targetProject = projectRepository.findById(targetProjectId)
             .orElseThrow { IllegalArgumentException("Project not found: $targetProjectId") }
+        targetProject.requireWritable()
 
         // yona editIssue()의 "Set<User> fromWatchers = originalIssue.getWatchers()" 대응 — 이동
         // 시점(=기존 프로젝트 기준)의 감시자를 미리 캡처해둔다. 이동 후에 계산하면 새 프로젝트의

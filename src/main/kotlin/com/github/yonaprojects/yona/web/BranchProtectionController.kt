@@ -63,7 +63,7 @@ class BranchProtectionController(
         val project = findProjectOrThrow(owner, projectName)
 
         val user = getLoginUser(authentication)
-        if (!checkPermission(project, user)) {
+        if (!accessControl.canManageArchive(user, project)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden")
         }
 

@@ -316,18 +316,7 @@ class ProjectViewController(
             ?: return "error/404"
 
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
-        if (loginUser == null || !projectUserRepository.existsByProjectIdAndUserId(project.id!!, loginUser.id!!)) {
-            model.addAttribute("project", project)
-            return "error/forbidden"
-        }
-
-        // 설정 권한 검사 (MANAGER인지 여부)
-        val isManager = projectUserRepository.findByProjectIdAndUserId(project.id!!, loginUser.id!!)
-            .map { it.role.id == RoleType.MANAGER.roleType }
-            .orElse(false)
-
-
-        if (!isManager) {
+        if (!accessControl.canManageArchive(loginUser, project)) {
             model.addAttribute("project", project)
             return "error/forbidden"
         }

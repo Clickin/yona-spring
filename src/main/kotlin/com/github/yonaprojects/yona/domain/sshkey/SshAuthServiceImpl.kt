@@ -114,6 +114,9 @@ class SshAuthServiceImpl(
 
         val project = resolveProject(owner, projectName)
             ?: return SshCommandAuthorization.denied("존재하지 않는 저장소입니다: $owner/$projectName")
+        if (isWrite && project.isArchived) {
+            return SshCommandAuthorization.denied("Archived project is read-only")
+        }
 
         return when (principal) {
             is SshAuthPrincipal.DeployKeyPrincipal -> authorizeForDeployKey(principal.deployKey.let { it }, project, isWrite, service)
@@ -152,7 +155,7 @@ class SshAuthServiceImpl(
             return SshCommandAuthorization.denied("이 Deploy Key는 이 저장소에 접근할 수 없습니다.")
         }
         return SshCommandAuthorization(
-            allowed = true, isWrite = !deployKey.readOnly, repoDir = hgRepoDirOf(project), service = "hg-serve",
+            allowed = true, isWrite = !project.isArchived && !deployKey.readOnly, repoDir = hgRepoDirOf(project), service = "hg-serve",
             project = project, pusher = null
         )
     }
@@ -176,7 +179,7 @@ class SshAuthServiceImpl(
         if (repoAccessPolicy.requiresAuth(project, false) && !isMember) {
             return SshCommandAuthorization.denied("이 저장소에 접근할 권한이 없습니다.")
         }
-        val canWrite = !repoAccessPolicy.requiresAuth(project, true) || isMember
+        val canWrite = !project.isArchived && (!repoAccessPolicy.requiresAuth(project, true) || isMember)
 
         return SshCommandAuthorization(
             allowed = true, isWrite = canWrite, repoDir = hgRepoDirOf(project), service = "hg-serve",

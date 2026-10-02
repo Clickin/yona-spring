@@ -16,6 +16,7 @@ import java.util.Locale
 class WebMvcConfig(
     private val bootstrapSetupInterceptor: BootstrapSetupInterceptor,
     private val errorViewStatusInterceptor: ErrorViewStatusInterceptor,
+    private val projectArchiveInterceptor: ProjectArchiveInterceptor,
     private val thymeleafViewResolver: ThymeleafViewResolver,
     @Value("\${yona.feedback-url}")
     private val feedbackUrl: String
@@ -46,6 +47,7 @@ class WebMvcConfig(
             .addPathPatterns("/**")
         registry.addInterceptor(errorViewStatusInterceptor)
             .addPathPatterns("/**")
+        registry.addInterceptor(projectArchiveInterceptor).addPathPatterns("/**")
     }
 
     override fun addResourceHandlers(registry: ResourceHandlerRegistry) {

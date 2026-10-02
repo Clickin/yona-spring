@@ -54,6 +54,8 @@ class CodeReviewServiceImpl(
         threadId: Long?,
         currentUser: User
     ): ReviewComment {
+        project.requireWritable()
+        pullRequest?.toProject?.requireWritable()
         val userIdent = UserIdent(currentUser)
         val comment = ReviewComment(
             contents = contents,
@@ -111,6 +113,8 @@ class CodeReviewServiceImpl(
         } else {
             targetThread = commentThreadRepository.findById(threadId)
                 .orElseThrow { IllegalArgumentException("CommentThread not found for id: $threadId") }
+            targetThread.project?.requireWritable()
+            targetThread.pullRequest?.toProject?.requireWritable()
         }
 
         comment.thread = targetThread

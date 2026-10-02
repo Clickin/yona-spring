@@ -27,6 +27,16 @@ private const val RESERVED_REF_PREFIX = "refs/yobi/"
 private const val BRANCH_PREFIX = "refs/heads/"
 private val RECENTLY_PUSHED_WINDOW: Duration = Duration.ofHours(1)
 
+class ArchivedProjectPreReceiveHook(
+    private val projectId: Long,
+    private val projectRepository: ProjectRepository
+) : PreReceiveHook {
+    override fun onPreReceive(rp: ReceivePack, commands: Collection<ReceiveCommand>) {
+        if (!projectRepository.existsByIdAndArchivedAtIsNotNull(projectId)) return
+        commands.forEach { it.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, "Archived project is read-only") }
+    }
+}
+
 /**
  * yona의 playRepository/hooks/RejectPushToReservedRefs.java 대응.
  * refs/yobi 하위 ref는 내부적으로 PR 병합 상태 추적 등에 쓰이는 예약 ref이므로
@@ -182,6 +192,7 @@ class YonaPostReceiveHook(
 ) : PostReceiveHook {
 
     override fun onPostReceive(rp: ReceivePack, commands: Collection<ReceiveCommand>) {
+        if (projectRepository.existsByIdAndArchivedAtIsNotNull(project.id!!)) return
         val sample = Timer.start(meterRegistry)
         try {
             updateLastPushedDate()
@@ -212,7 +223,7 @@ class YonaPostReceiveHook(
 
     private fun updateLastPushedDate() {
         project.lastPushedDate = Instant.now()
-        projectRepository.save(project)
+        projectRepository.recordPush(project.id!!, project.lastPushedDate!!)
     }
 
     private fun notifyPushedCommits(commands: Collection<ReceiveCommand>) {
@@ -225,6 +236,7 @@ class YonaPostReceiveHook(
             .map { it.refName.removePrefix(BRANCH_PREFIX) }
             .forEach { branch ->
                 val related = pullRequestRepository.findRelatedPullRequests(project, branch)
+                    .filterNot { it.toProject.isArchived }
                 if (related.isNotEmpty()) {
                     pullRequestRepository.deleteAll(related)
                 }

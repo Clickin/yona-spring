@@ -35,6 +35,7 @@ import java.time.Instant
 // PushedHgCommits) 뿐이다.
 @Component
 class HgPostReceiveEventListener(
+    private val projectRepository: com.github.yonaprojects.yona.domain.project.ProjectRepository,
     private val repositoryService: RepositoryService,
     private val notificationEventRecorder: NotificationEventRecorder,
     private val issueRepository: IssueRepository,
@@ -49,6 +50,7 @@ class HgPostReceiveEventListener(
     @EventListener
     @Transactional
     fun handleHgPostReceiveEvent(event: HgPostReceiveEvent) {
+        if (projectRepository.existsByIdAndArchivedAtIsNotNull(event.project.id!!)) return
         logger.info(
             "Handling HgPostReceiveEvent asynchronously for project: ${event.project.name} bookmark: ${event.move.name} by user: ${event.user.loginId}"
         )

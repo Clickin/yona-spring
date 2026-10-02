@@ -132,6 +132,7 @@ class GitServletConfig(
                 // restrict_push_to가 설정된 브랜치는 익명 push도 당연히 거부돼야 하기 때문이다.
                 val preReceiveHooks = mutableListOf<PreReceiveHook>(RejectPushToReservedRefsPreReceiveHook())
                 if (project != null) {
+                    preReceiveHooks.add(com.github.yonaprojects.yona.domain.vcs.ArchivedProjectPreReceiveHook(project.id!!, projectRepository))
                     preReceiveHooks.add(
                         BranchProtectionPreReceiveHook(
                             project, pusher, protectedBranchRepository, projectUserRepository, gpgSignatureVerifier

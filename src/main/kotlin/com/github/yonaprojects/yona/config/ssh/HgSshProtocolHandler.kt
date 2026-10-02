@@ -56,7 +56,7 @@ class HgSshProtocolHandler(
             val server = HgSshWireServer(repository)
             server.registerPreChangegroupHook(
                 HgHook {
-                    if (!authorization.isWrite) {
+                    if (!authorization.isWrite || authorization.project?.id?.let { projectRepository.existsByIdAndArchivedAtIsNotNull(it) } == true) {
                         throw IOException(authorization.reason ?: "이 저장소에 push 권한이 없습니다.")
                     }
                     true
@@ -67,6 +67,9 @@ class HgSshProtocolHandler(
             if (project != null) {
                 server.registerPrePushkeyHook(
                     HgHook { context ->
+                        if (!authorization.isWrite || projectRepository.existsByIdAndArchivedAtIsNotNull(project.id!!)) {
+                            throw IOException("Archived project or read-only credential cannot push")
+                        }
                         HgBranchProtectionPrePushkeyHook(
                             project, authorization.pusher, protectedBranchRepository, projectUserRepository, gpgSignatureVerifier
                         ).run(context)

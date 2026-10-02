@@ -149,6 +149,7 @@ class CommentServiceImpl(
         parentCommentId: Long?
     ): IssueComment {
         val issue = issueRepository.findById(issueId).orElseThrow { IllegalArgumentException("Issue not found") }
+        issue.project.requireWritable()
         
         var parentComment: IssueComment? = null
         if (parentCommentId != null) {
@@ -214,6 +215,7 @@ class CommentServiceImpl(
         parentCommentId: Long?
     ): PostingComment {
         val posting = postingRepository.findById(postingId).orElseThrow { IllegalArgumentException("Posting not found") }
+        posting.project.requireWritable()
         
         var parentComment: PostingComment? = null
         if (parentCommentId != null) {

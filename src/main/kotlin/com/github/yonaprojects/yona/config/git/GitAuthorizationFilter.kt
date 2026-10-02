@@ -49,6 +49,10 @@ class GitAuthorizationFilter(
         }
 
         val isWriteRequest = isWriteRequest(request)
+        if (isWriteRequest && project.isArchived) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Archived project is read-only")
+            return
+        }
         val requiresAuth = repoAccessPolicy.requiresAuth(project, isWriteRequest)
 
         if (requiresAuth) {

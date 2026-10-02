@@ -31,6 +31,7 @@ class UnsupportedGitServiceException(service: String?) : Exception("지원하지
  * 핵심 목적, 정책이 두 코드 경로로 갈라져 드리프트하는 것을 막는다).
  */
 class GitSshProtocolHandler(
+    private val projectRepository: com.github.yonaprojects.yona.domain.project.ProjectRepository,
     private val protectedBranchRepository: ProtectedBranchRepository,
     private val projectUserRepository: ProjectUserRepository,
     private val gpgSignatureVerifier: GpgSignatureVerifier
@@ -53,6 +54,7 @@ class GitSshProtocolHandler(
                     // 의미).
                     val preReceiveHooks = mutableListOf<PreReceiveHook>(RejectPushToReservedRefsPreReceiveHook())
                     if (authorization.project != null) {
+                        preReceiveHooks.add(com.github.yonaprojects.yona.domain.vcs.ArchivedProjectPreReceiveHook(authorization.project.id!!, projectRepository))
                         preReceiveHooks.add(
                             BranchProtectionPreReceiveHook(
                                 authorization.project, authorization.pusher, protectedBranchRepository,

@@ -38,7 +38,7 @@
                 </a>
             </div>
 
-            <th:block th:if="${pull.state.name() == 'OPEN'}" th:with="isReviewer=${pull.reviewers.![id].contains(currentUser.id)}">
+            <th:block th:if="${!project.isArchived and pull.state.name() == 'OPEN'}" th:with="isReviewer=${pull.reviewers.![id].contains(currentUser.id)}">
                 <button th:if="${isReviewer}" type="button" id="btn-unreview" class="ybtn ybtn-default" th:text="#{pullRequest.unreview}">리뷰 취소</button>
                 <button th:unless="${isReviewer}" type="button" id="btn-review" th:classappend="${!pull.reviewers.isEmpty()} ? 'ybtn-default' : 'ybtn-success'" class="ybtn" th:text="#{pullRequest.review}">리뷰 승인</button>
             </th:block>

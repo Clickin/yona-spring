@@ -114,7 +114,7 @@
                                             <div class="overview-assignee">
                                                 <div class="empty" th:if="${openIssuesCount == 0}">
                                                     <p th:text="#{issue.is.empty}">No issues</p>
-                                                    <a th:href="@{/{owner}/{name}/issueform(owner=${project.owner}, name=${project.name})}" target="_blank" class="ybtn ybtn-small" th:text="#{issue.menu.new}">New issue</a>
+                                                    <a th:unless="${project.isArchived}" th:href="@{/{owner}/{name}/issueform(owner=${project.owner}, name=${project.name})}" target="_blank" class="ybtn ybtn-small" th:text="#{issue.menu.new}">New issue</a>
                                                 </div>
                                                 <div th:if="${openIssuesCount > 0}">
                                                     <div class="row-fluid" th:each="dto : ${assigneeList}">
@@ -165,7 +165,7 @@
                                             <div class="overview-milestone">
                                                 <div class="empty" th:if="${milestoneList.isEmpty() && noMilestoneIssuesCount == 0}">
                                                     <p th:text="#{milestone.is.empty}">No milestones</p>
-                                                    <a th:href="@{/{owner}/{name}/milestoneform(owner=${project.owner}, name=${project.name})}" target="_blank" class="ybtn ybtn-small" th:text="#{milestone.menu.new}">New milestone</a>
+                                                    <a th:unless="${project.isArchived}" th:href="@{/{owner}/{name}/milestoneform(owner=${project.owner}, name=${project.name})}" target="_blank" class="ybtn ybtn-small" th:text="#{milestone.menu.new}">New milestone</a>
                                                 </div>
                                                 <div th:if="${!milestoneList.isEmpty() || noMilestoneIssuesCount > 0}">
                                                     <div class="row-fluid" th:each="dto : ${milestoneList}">
@@ -202,7 +202,7 @@
                                             <div class="overview-pullrequest">
                                                 <div class="empty" th:if="${openPullRequests.isEmpty()}">
                                                     <p th:text="#{pullRequest.is.empty}">No pull requests</p>
-                                                    <a th:href="@{/{owner}/{name}/newFork(owner=${project.owner}, name=${project.name})}" target="_blank" class="ybtn ybtn-small" th:text="#{pullRequest.new}">New pull request</a>
+                                                    <a th:unless="${project.isArchived}" th:href="@{/{owner}/{name}/newFork(owner=${project.owner}, name=${project.name})}" target="_blank" class="ybtn ybtn-small" th:text="#{pullRequest.new}">New pull request</a>
                                                 </div>
                                                 <div th:if="${!openPullRequests.isEmpty()}">
                                                     <div class="row-fluid" th:each="pr : ${openPullRequests}">
@@ -259,10 +259,10 @@
                     <div class="bubble-wrap gray project-home">
                         <div class="project-btn-wrap">
                             <span th:if="${project.isIssueEnabled}" class="project-btn-item">
-                                <a th:href="@{/{owner}/{name}/issueform(owner=${project.owner}, name=${project.name})}" class="ybtn ybtn-success" th:text="#{button.newIssue}">New issue</a>
+                                <a th:unless="${project.isArchived}" th:href="@{/{owner}/{name}/issueform(owner=${project.owner}, name=${project.name})}" class="ybtn ybtn-success" th:text="#{button.newIssue}">New issue</a>
                             </span>
                             <span th:if="${project.isCodeEnabled}" class="project-btn-item">
-                                <a th:href="@{/{owner}/{name}/newFork(owner=${project.owner}, name=${project.name})}" class="ybtn ybtn-inverse" th:text="#{fork}">Fork</a>
+                                <a th:unless="${project.isArchived}" th:href="@{/{owner}/{name}/newFork(owner=${project.owner}, name=${project.name})}" class="ybtn ybtn-inverse" th:text="#{fork}">Fork</a>
                             </span>
                         </div>
 

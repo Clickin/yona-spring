@@ -55,6 +55,7 @@ class PullRequestMergeEventListener(
         }
 
         val pullRequest = pullRequestOptional.get()
+        if (pullRequest.toProject.isArchived) return
         val oldState = pullRequest.state
         pullRequest.isMerging = true
         pullRequest.state = State.MERGED
@@ -82,6 +83,7 @@ class PullRequestMergeEventListener(
 
     fun closeReferredIssues(pullRequest: PullRequest, senderLoginId: String) {
         val project = pullRequest.toProject
+        if (project.isArchived) return
         val textsToSearch = mutableListOf<String>()
 
         textsToSearch.add(pullRequest.title)
@@ -138,6 +140,7 @@ class PullRequestMergeEventListener(
 
         val relatedPullRequests = pullRequestRepository.findRelatedPullRequests(event.project, event.branch)
         for (pullRequest in relatedPullRequests) {
+            if (pullRequest.toProject.isArchived) continue
             val id = pullRequest.id ?: continue
             val wasConflict = pullRequest.isConflict ?: false
 

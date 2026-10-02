@@ -31,6 +31,7 @@ import java.time.Instant
 
 @Component
 class GitPostReceiveEventListener(
+    private val projectRepository: com.github.yonaprojects.yona.domain.project.ProjectRepository,
     private val gitService: GitService,
     private val notificationEventRecorder: NotificationEventRecorder,
     private val issueRepository: IssueRepository,
@@ -45,6 +46,7 @@ class GitPostReceiveEventListener(
     @EventListener
     @Transactional
     fun handleGitPostReceiveEvent(event: GitPostReceiveEvent) {
+        if (projectRepository.existsByIdAndArchivedAtIsNotNull(event.project.id!!)) return
         logger.info("Handling GitPostReceiveEvent asynchronously for project: ${event.project.name} by user: ${event.user.loginId}")
         
         val commits = mutableListOf<RevCommit>()

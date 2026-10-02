@@ -324,15 +324,16 @@ class ProjectViewControllerSpec : DescribeSpec({
 
         describe("GET /{owner}/{projectName}/setting") {
             it("MANAGER 권한을 지닌 멤버라면 200 OK와 project/setting 뷰를 반환해야 한다") {
+                val settingManager = User(id = 10L, loginId = "testuser", name = "테스트유저").apply {
+                    projectUsers.add(ProjectUser(user = this, project = project, role = managerRole))
+                }
                 val playRepository = mockk<PlayRepository>()
                 every { repositoryService.getRepository(project) } returns playRepository
                 every { playRepository.getRefNames() } returns listOf("refs/heads/master")
                 every { playRepository.getDefaultBranch() } returns "refs/heads/master"
 
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
-                every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
-                every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
-                every { projectUserRepository.findByProjectIdAndUserId(1L, 10L) } returns Optional.of(projectUser)
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(settingManager)
 
                 mockMvc.perform(get("/owner/TestProj/setting").principal(userAuth))
                     .andExpect(status().isOk)
@@ -1931,6 +1932,7 @@ class ProjectViewControllerSpec : DescribeSpec({
         it("브랜치 목록/기본 브랜치 조회 중 예외가 발생하면 빈 목록과 master로 대체해야 한다") {
             val proj = Project(id = 190L, name = "SettingExProj", owner = "owner")
             val manager = User(id = 190L, loginId = "settingexmanager", name = "설정예외매니저")
+            manager.projectUsers.add(ProjectUser(user = manager, project = proj, role = Role(id = RoleType.MANAGER.roleType)))
             val managerAuth = UsernamePasswordAuthenticationToken("settingexmanager", "password")
             val playRepo = mockk<PlayRepository>()
             every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "SettingExProj") } returns Optional.of(proj)

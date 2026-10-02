@@ -226,6 +226,8 @@ class ProjectRestApiController(
             "name" to project.name,
             "overview" to project.overview,
             "vcs" to project.vcs,
+            "archived" to project.isArchived,
+            "archivedAt" to project.archivedAt,
             "scope" to project.projectScope.name
         )
     }

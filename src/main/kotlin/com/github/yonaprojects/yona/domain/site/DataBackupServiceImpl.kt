@@ -43,6 +43,7 @@ import javax.sql.DataSource
  */
 @Service
 class DataBackupServiceImpl(
+    private val projectRepository: com.github.yonaprojects.yona.domain.project.ProjectRepository,
     private val dataSource: DataSource,
     private val objectMapper: ObjectMapper
 ) : DataBackupService {
@@ -68,6 +69,9 @@ class DataBackupServiceImpl(
     @Transactional
     @Suppress("UNCHECKED_CAST")
     override fun importAll(bytes: ByteArray) {
+        if (projectRepository.existsByArchivedAtIsNotNull()) {
+            throw org.springframework.security.access.AccessDeniedException("Unarchive projects before replacing the database")
+        }
         val root = objectMapper.readValue(bytes, Map::class.java) as Map<String, Any?>
         val dump = root["tables"] as Map<String, List<Map<String, Any?>>>
         val sequences = (root["sequences"] as? Map<String, Any?>)

@@ -85,6 +85,7 @@ class WebhookServiceImpl(
         sender: User,
         resource: Any
     ) {
+        if (project.isArchived) return
         val webhooks = webhookRepository.findByProjectId(project.id ?: return)
         if (webhooks.isEmpty()) return
 

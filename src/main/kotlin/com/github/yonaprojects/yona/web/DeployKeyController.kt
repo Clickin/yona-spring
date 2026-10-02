@@ -46,7 +46,7 @@ class DeployKeyController(
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found")
 
         val user = getLoginUser(authentication)
-        if (!checkPermission(project, user)) {
+        if (!accessControl.canManageArchive(user, project)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden")
         }
 

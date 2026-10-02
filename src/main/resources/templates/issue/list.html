@@ -199,7 +199,7 @@
                 <!-- 오른쪽 이슈 목록 영역 -->
                 <div class="span10 span-hard-wrap" id="span10">
                     <div class="pull-right">
-                        <a th:href="@{/{owner}/{projectName}/issueform(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-success" th:text="#{issue.menu.new}">새 이슈</a>
+                        <a th:unless="${project.isArchived}" th:href="@{/{owner}/{projectName}/issueform(owner=${project.owner}, projectName=${project.name})}" class="ybtn ybtn-success" th:text="#{issue.menu.new}">새 이슈</a>
                     </div>
                     
                     <!-- 상태 탭 (열림/닫힘) -->

@@ -30,6 +30,7 @@ import java.nio.file.Paths
  */
 @Component
 final class YonaMinaSshServer(
+    private val projectRepository: com.github.yonaprojects.yona.domain.project.ProjectRepository,
     private val sshAuthService: SshAuthService,
     // YonaSshGitCommand가 BranchProtectionPreReceiveHook을 HTTPS 경로와 동일하게 체이닝하는 데 필요.
     private val protectedBranchRepository: ProtectedBranchRepository,
@@ -87,6 +88,7 @@ final class YonaMinaSshServer(
             val principal = channel.session.getAttribute(PRINCIPAL_ATTRIBUTE)
                 ?: throw IOException("인증되지 않은 세션입니다.")
             YonaSshGitCommand(
+                projectRepository,
                 command, principal, sshAuthService, protectedBranchRepository, projectUserRepository, gpgSignatureVerifier
             )
         }

@@ -61,6 +61,7 @@ class HgPostReceiveEventListenerSpec : DescribeSpec({
     val eventPublisher = mockk<ApplicationEventPublisher>(relaxed = true)
 
     val listener = HgPostReceiveEventListener(
+        mockk<com.github.yonaprojects.yona.domain.project.ProjectRepository>(relaxed = true),
         repositoryService, notificationEventRecorder, issueRepository, issueEventRepository, webhookService,
         watchService, eventPublisher
     )

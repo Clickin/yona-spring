@@ -18,7 +18,7 @@
                     <span class="subcomment-author hide">
                         - <a th:if="${child.authorLoginId != null}" th:href="@{/user/{loginId}(loginId=${child.authorLoginId})}" th:text="${child.authorName != null ? child.authorName : child.authorLoginId}">작성자</a>
                         <a th:href="'#comment-' + ${child.id}" class="ago" th:title="${@templateHelper.getDateString(child.createdDate)}" th:text="${@templateHelper.agoOrDateString(child.createdDate)}">방금 전</a>
-                        <a th:if="${currentUser != null and (child.authorId == currentUser.id or isProjectManager)}" href="javascript:void(0)" class="btn-transparent deleteButtonX"
+                        <a th:if="${!project.isArchived and currentUser != null and (child.authorId == currentUser.id or isProjectManager)}" href="javascript:void(0)" class="btn-transparent deleteButtonX"
                            data-toggle="comment-delete" th:data-request-uri="${apiBase} + '/' + ${child.id}" th:title="#{common.comment.delete}">x</a>
                     </span>
                 </div>

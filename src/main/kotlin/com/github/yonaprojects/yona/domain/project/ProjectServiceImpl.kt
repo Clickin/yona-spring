@@ -128,6 +128,7 @@ class ProjectServiceImpl(
     override fun updateProject(projectId: Long, param: UpdateProjectParam): Project {
         val project = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
+        project.requireWritable()
 
         // 개명 검사를 가장 먼저 수행해, 다른 필드가 바뀌기 전에 실패하면 아무 것도 반영되지
         // 않게 한다.
@@ -196,6 +197,8 @@ class ProjectServiceImpl(
     override fun deleteProject(projectId: Long) {
         val project = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
+        project.requireWritable()
+        project.forkingProjects.forEach { it.requireWritable() }
 
         projectTransferRepository.deleteAll(projectTransferRepository.findByProjectId(projectId))
 
@@ -272,6 +275,7 @@ class ProjectServiceImpl(
     // 제3 프로젝트로 보낸 PR이나 이 프로젝트 자신이 보낸 PR에 달린 스레드는 project 단위 정리로는
     // 잡히지 않는다.
     private fun deletePullRequestCascade(pullRequest: PullRequest) {
+        pullRequest.toProject.requireWritable()
         commentThreadRepository.deleteAll(commentThreadRepository.findByPullRequest(pullRequest))
         pullRequestEventRepository.deleteAll(pullRequestEventRepository.findByPullRequestOrderByCreatedAsc(pullRequest))
         pullRequestCommitRepository.deleteAll(pullRequestCommitRepository.findByPullRequest(pullRequest))
@@ -283,6 +287,7 @@ class ProjectServiceImpl(
     override fun requestNewTransfer(projectId: Long, senderId: Long, destination: String): ProjectTransfer {
         val project = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("Project not found") }
+        project.requireWritable()
         val sender = userRepository.findById(senderId)
             .orElseThrow { IllegalArgumentException("Sender not found") }
 
@@ -359,6 +364,7 @@ class ProjectServiceImpl(
         }
 
         val project = pt.project
+        project.requireWritable()
         val originalOwner = project.owner ?: ""
         val originalName = project.name
         val newOwner = pt.destination
@@ -464,6 +470,7 @@ class ProjectServiceImpl(
     ): Project {
         val original = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("Original project not found") }
+        original.requireWritable()
         val forker = userRepository.findById(forkerId)
             .orElseThrow { IllegalArgumentException("Forker user not found") }
 
@@ -566,6 +573,8 @@ class ProjectServiceImpl(
     @Transactional
     override fun changeVCS(projectId: Long): Project {
         val project = projectRepository.findById(projectId).orElseThrow { IllegalArgumentException("Project not found") }
+        project.requireWritable()
+        project.forkingProjects.forEach { it.requireWritable() }
 
         for (fork in project.forkingProjects) {
             fork.originalProject = null
@@ -596,6 +605,7 @@ class ProjectServiceImpl(
     override fun attachLabel(projectId: Long, category: String?, name: String): AttachLabelResult {
         val project = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
+        project.requireWritable()
         val resolvedCategory = category ?: "Label"
 
         var label = labelRepository.findByCategoryAndName(resolvedCategory, name).orElse(null)
@@ -618,6 +628,7 @@ class ProjectServiceImpl(
     override fun detachLabel(projectId: Long, labelId: Long): Boolean {
         val project = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
+        project.requireWritable()
         val label = labelRepository.findById(labelId).orElse(null) ?: return false
 
         project.labels.remove(label)

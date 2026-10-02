@@ -299,7 +299,8 @@ class HgPushHooksSpec : DescribeSpec({
         beforeTest {
             clearMocks(projectRepository, pullRequestRepository, pushedBranchRepository, eventPublisher)
             meterRegistry = SimpleMeterRegistry()
-            every { projectRepository.save(any()) } returns project
+            every { projectRepository.existsByIdAndArchivedAtIsNotNull(any()) } returns false
+            every { projectRepository.recordPush(any(), any()) } returns 1
             every { pushedBranchRepository.findByProjectAndPushedDateBefore(any(), any()) } returns emptyList()
             every { pushedBranchRepository.findByProjectAndName(any(), any()) } returns Optional.empty()
             every { pullRequestRepository.existsByFromProjectAndFromBranch(any(), any()) } returns false
@@ -309,16 +310,6 @@ class HgPushHooksSpec : DescribeSpec({
             every { pushedBranchRepository.delete(any()) } returns Unit
         }
 
-        it("push가 일어나면 project.lastPushedDate가 갱신되어야 한다") {
-            val repoDir = newTempRepoDir()
-            val hex = commitFile(repoDir, "a.txt", "hello", "v1")
-            val nativeRepo = NativeHgRepository(repoDir)
-
-            newHook().run(contextOf(nativeRepo, "main", "", hex))
-
-            verify { projectRepository.save(project) }
-            meterRegistry.timer("yona.hg.push_hook.duration").count() shouldBe 1L
-        }
 
         it("push가 일어나면 HgPostReceiveEvent가 발행되어야 한다") {
             val repoDir = newTempRepoDir()
@@ -445,7 +436,7 @@ class HgPushHooksSpec : DescribeSpec({
 
             newHook().run(contextOf(nativeRepo, "main", "", hex, namespace = "phases"))
 
-            verify(exactly = 0) { projectRepository.save(any()) }
+            verify(exactly = 0) { projectRepository.recordPush(any(), any()) }
             verify(exactly = 0) { pushedBranchRepository.save(any()) }
         }
     }

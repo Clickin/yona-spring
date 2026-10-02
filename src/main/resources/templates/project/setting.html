@@ -15,6 +15,14 @@
             <!-- 설정 서브 메뉴 탭 -->
             <div th:replace="~{project/setting_menu :: menu(${project}, 'setting')}"></div>
 
+            <section class="bubble-wrap gray" aria-labelledby="archive-title">
+                <h2 id="archive-title" th:text="${project.isArchived} ? #{project.archive.restore} : #{project.archive.action}">Archive project</h2>
+                <p th:text="#{project.archive.description}">Archived projects are read-only. Unarchive to restore writes.</p>
+                <form method="post" data-archive-control th:action="@{/{owner}/{name}/settings/archive(owner=${project.owner}, name=${project.name})}">
+                    <input type="hidden" name="archived" th:value="${!project.isArchived}">
+                    <button type="submit" class="ybtn ybtn-warning" th:text="${project.isArchived} ? #{project.archive.restore} : #{project.archive.action}">Archive</button>
+                </form>
+            </section>
             <form id="saveSetting" method="post" th:action="@{/api/projects/{id}(id=${project.id})}" enctype="multipart/form-data" class="nm" onsubmit="return false">
                 <div class="bubble-wrap gray" style="overflow: visible">
                     <input type="hidden" name="id" th:value="${project.id}">

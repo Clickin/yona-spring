@@ -14,6 +14,13 @@ interface ProjectRepository : JpaRepository<Project, Long> {
     fun existsByOwnerAndName(owner: String, name: String): Boolean
     fun findByOwner(owner: String): List<Project>
     fun countByLabelsId(labelId: Long): Long
+    fun existsByIdAndArchivedAtIsNotNull(id: Long): Boolean
+    fun existsByArchivedAtIsNotNull(): Boolean
+
+    @Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE Project p SET p.lastPushedDate = :pushedAt WHERE p.id = :id AND p.archivedAt IS NULL")
+    fun recordPush(@Param("id") id: Long, @Param("pushedAt") pushedAt: java.time.Instant): Int
 
     // issue/posting 번호 채번(project.lastIssueNumber/lastPostingNumber
     // 증가)이 전부 "읽고-증가시켜-저장"하는 read-modify-write 패턴인데, 그 사이 프로젝트 행에 아무

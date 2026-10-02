@@ -89,6 +89,7 @@ class SiteService(
 
         // 사용자의 프로젝트 멤버십 관계 수동 소거
         val projectUsers = projectUserRepository.findByUserId(userId)
+        projectUsers.forEach { it.project.requireWritable() }
         projectUserRepository.deleteAll(projectUsers)
 
         targetUser.state = UserState.DELETED

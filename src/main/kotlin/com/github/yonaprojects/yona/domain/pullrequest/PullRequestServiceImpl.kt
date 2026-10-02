@@ -219,6 +219,7 @@ class PullRequestServiceImpl(
     @Transactional
     override fun processMergeCheck(pullRequestId: Long, sender: User, isNewPullRequest: Boolean): PullRequestMergeResult {
         val before = pullRequestRepository.findById(pullRequestId).orElse(null)
+        before?.toProject?.requireWritable()
         val beforeMergedCommitIdTo = before?.mergedCommitIdTo
         // updateMerge() 호출 전(재검사 이전) 상태를 미리 캡처해둔다.
         val wasConflict = before?.isConflict ?: false
@@ -352,6 +353,7 @@ class PullRequestServiceImpl(
     override fun merge(pullRequestId: Long, updater: User): PullRequestMergeResult {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
+        pullRequest.toProject.requireWritable()
 
         // 이 가드가 없으면 이미 MERGED된 PR을 다시 merge할 때마다 새 머지 커밋을 만들어
         // refs/heads/{toBranch}에 중복으로 이어붙인다. 머지는 OPEN 상태에서만 의미가 있으므로 그 외
@@ -1250,6 +1252,8 @@ class PullRequestServiceImpl(
     override fun deleteFromBranch(pullRequestId: Long): PullRequest {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
+        pullRequest.toProject.requireWritable()
+        pullRequest.fromProject.requireWritable()
 
         if (pullRequest.state != State.MERGED) {
             throw InvalidBranchOperationException("병합된 PR만 원본 브랜치를 삭제할 수 있습니다.")
@@ -1269,6 +1273,8 @@ class PullRequestServiceImpl(
     override fun restoreFromBranch(pullRequestId: Long): PullRequest {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
+        pullRequest.toProject.requireWritable()
+        pullRequest.fromProject.requireWritable()
 
         val lastCommitId = pullRequest.lastCommitId
             ?: throw InvalidBranchOperationException("복원할 브랜치의 커밋 정보가 없습니다.")

@@ -25,6 +25,8 @@ class Project(
 
     var createdDate: Instant? = null,
 
+    var archivedAt: Instant? = null,
+
     // legacy Project의 previousOwnerLoginId/previousName/previousNameChangedTime 대응 — 이전(transfer)/
     // 이름 변경 시의 예전 위치를 기록해, 예전 owner/name으로 들어온 요청도(git remote 등) 계속 이
     // 프로젝트로 폴백 조회될 수 있게 한다.
@@ -81,6 +83,13 @@ class Project(
     )
     var labels: MutableSet<Label> = mutableSetOf()
 ) {
+    val isArchived: Boolean
+        get() = archivedAt != null
+
+    fun requireWritable() {
+        if (isArchived) throw org.springframework.security.access.AccessDeniedException("Archived project is read-only")
+    }
+
     val isPrivate: Boolean
         get() = projectScope == ProjectScope.PRIVATE
 

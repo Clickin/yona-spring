@@ -42,6 +42,7 @@ class WikiViewController(
     }
 
     private fun canWrite(user: User?, project: Project): Boolean {
+        if (project.isArchived) return false
         if (user == null || user.isGuest) return false
         if (user.isSiteManager) return true
         return projectUserRepository.existsByProjectIdAndUserId(project.id!!, user.id!!)
