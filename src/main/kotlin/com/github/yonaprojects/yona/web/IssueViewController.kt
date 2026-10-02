@@ -8,6 +8,7 @@ import com.github.yonaprojects.yona.domain.enumeration.State
 import com.github.yonaprojects.yona.domain.support.sha1Hex
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueCommentRepository
+import com.github.yonaprojects.yona.domain.issue.IssueDependencyService
 import com.github.yonaprojects.yona.domain.issue.IssueEventRepository
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.issue.IssueLabelRepository
@@ -87,7 +88,8 @@ class IssueViewController(
     private val accessControl: AccessControl,
     private val titleHeadService: TitleHeadService,
     private val issueEventRepository: IssueEventRepository,
-    private val attachmentService: AttachmentService
+    private val attachmentService: AttachmentService,
+    private val issueDependencyService: IssueDependencyService
 ) {
 
     @GetMapping("/{owner}/{projectName}/issues")
@@ -400,6 +402,7 @@ class IssueViewController(
         model.addAttribute("attachmentsJson", attachmentsJson)
         model.addAttribute("openMilestones", openMilestones)
         model.addAttribute("closedMilestones", closedMilestonesForIssue)
+        model.addAttribute("dependencies", issueDependencyService.overview(issue, loginUser))
 
         // service/yona.detectChange.js(폴링으로 본문/댓글 변경 감지) 배선용 초기 상태값.
         // IssueController.detectChange()가 매 폴링마다 비교하는 것과 동일한 값을 최초 페이지

@@ -48,7 +48,8 @@ class IssueServiceImpl(
     // nextIssueNumber()의 원자적 채번 UPDATE 이후, 이미 영속성 컨텍스트에 관리 중인 project
     // 엔티티의 lastIssueNumber 필드를 DB의 최신 값으로 다시 동기화하는 데 쓴다(JPQL 벌크 UPDATE는
     // 1차 캐시를 자동으로 갱신하지 않는다).
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val issueDependencyRepository: IssueDependencyRepository
 ) : IssueService {
 
     override fun getIssuesByFilter(filter: IssueFilterType, user: User): List<Issue> {
@@ -497,6 +498,12 @@ class IssueServiceImpl(
         val targetProject = projectRepository.findById(targetProjectId)
             .orElseThrow { IllegalArgumentException("Project not found: $targetProjectId") }
 
+        // Use the same DB mutex as dependency mutations. Ordered locks also cover moves in
+        // opposite directions; removing edges prevents cross-project/private metadata leaks.
+        listOf(previous.id!!, targetProjectId).sorted().forEach { projectRepository.lockIssueDependencies(it) }
+        entityManager.refresh(issue, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+        check(issue.project.id == previous.id) { "Issue was moved concurrently" }
+
         // yona editIssue()의 "Set<User> fromWatchers = originalIssue.getWatchers()" 대응 — 이동
         // 시점(=기존 프로젝트 기준)의 감시자를 미리 캡처해둔다. 이동 후에 계산하면 새 프로젝트의
         // 뮤트/권한 설정을 기준으로 잘못 계산되므로 반드시 이동 직전에 캡처해야 한다.
@@ -543,6 +550,7 @@ class IssueServiceImpl(
 
     // yona updateIssueToOtherProject() 대응.
     private fun updateIssueToOtherProject(issue: Issue, targetProject: Project, mover: User) {
+        issueDependencyRepository.deleteForIssue(issue.id!!)
         issue.project = targetProject
         issue.number = nextIssueNumber(targetProject)
         issue.createdDate = Instant.now()
@@ -663,20 +671,26 @@ class IssueServiceImpl(
     // issueRepository.delete(issue)가 FK 제약 위반 없이 성공한다(assignee/sharers/labels/voters는
     // Issue 엔티티 자체의 cascade로 처리됨).
     override fun deleteIssueCascade(issue: Issue) {
+        val projectId = issue.project.id!!
+        projectRepository.lockIssueDependencies(projectId)
+        val managedIssue = issueRepository.findById(issue.id!!).orElseThrow { IllegalArgumentException("Issue not found") }
+        entityManager.refresh(managedIssue, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+        check(managedIssue.project.id == projectId) { "Issue was moved concurrently" }
+        issueDependencyRepository.deleteForIssue(issue.id!!)
         val comments = issueCommentRepository.findByIssueIdOrderByCreatedDateAsc(issue.id!!)
         for (comment in comments) {
             attachmentService.deleteAll(ResourceType.ISSUE_COMMENT, comment.id.toString())
         }
         attachmentService.deleteAll(ResourceType.ISSUE_POST, issue.id.toString())
         watchService.deleteAll(ResourceType.ISSUE_POST, issue.id.toString())
-        titleHeadService.deleteTitleHeadKeyword(issue.project, issue.title)
+        titleHeadService.deleteTitleHeadKeyword(managedIssue.project, managedIssue.title)
 
         favoriteIssueRepository.deleteAll(favoriteIssueRepository.findByIssueId(issue.id!!))
-        issueEventRepository.deleteAll(issueEventRepository.findByIssueOrderByCreatedAsc(issue))
+        issueEventRepository.deleteAll(issueEventRepository.findByIssueOrderByCreatedAsc(managedIssue))
         // 답글(parentComment)이 원 댓글보다 항상 나중에 생성되므로, 생성일 역순으로 지우면
         // 답글이 부모보다 먼저 삭제돼 자기참조 FK(parent_comment_id) 위반을 피할 수 있다.
         issueCommentRepository.deleteAll(comments.asReversed())
-        issueRepository.delete(issue)
+        issueRepository.delete(managedIssue)
     }
 
     override fun unvoteIssue(issueId: Long, user: User) {

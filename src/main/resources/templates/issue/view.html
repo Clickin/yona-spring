@@ -183,6 +183,43 @@
                         <div th:unless="${amIShared}" th:replace="~{issue/partial_view_childIssueList :: childIssueList(${issue}, ${project}, ${currentUser})}"></div>
                     </div>
 
+                    <section id="issue-dependencies" th:if="${dependencies != null}" aria-labelledby="issue-dependencies-heading">
+                        <h3 id="issue-dependencies-heading" th:text="#{issue.dependencies}">Dependencies</h3>
+                        <p th:if="${dependencyError != null}" role="alert" class="alert alert-error" th:text="${#messages.msg(dependencyError)}"></p>
+                        <p th:if="${dependencies.blocked}" class="alert" th:text="#{issue.dependencies.blocked}">Blocked by an unresolved issue</p>
+                        <th:block th:each="direction : ${ {'BLOCKED_BY', 'BLOCKS'} }"
+                                  th:with="items=${direction == 'BLOCKED_BY' ? dependencies.blockedBy : dependencies.blocking}">
+                            <h4 th:text="${#messages.msg(direction == 'BLOCKED_BY' ? 'issue.dependencies.blockedBy' : 'issue.dependencies.blocking')}">Relationship</h4>
+                            <p th:if="${items.isEmpty()}" th:text="#{issue.dependencies.none}">No visible dependencies</p>
+                            <ul>
+                                <li th:each="dependency : ${items}">
+                                    <a th:href="@{/{owner}/{projectName}/issue/{number}(owner=${project.owner}, projectName=${project.name}, number=${dependency.number})}"
+                                       th:text="${'#' + dependency.number + ' ' + dependency.title}">Issue</a>
+                                    <span class="badge" th:text="${#messages.msg('issue.state.' + #strings.toLowerCase(dependency.state))}">State</span>
+                                    <span th:text="${#messages.msg(dependency.active ? 'issue.dependencies.active' : 'issue.dependencies.inactive')}">Active</span>
+                                    <form th:if="${dependency.canRemove}" method="post" data-turbo="false" style="display:inline"
+                                          th:action="@{/{owner}/{projectName}/issue/{number}/dependencies/delete(owner=${project.owner}, projectName=${project.name}, number=${issue.number})}">
+                                        <input type="hidden" name="targetNumber" th:value="${dependency.number}">
+                                        <input type="hidden" name="direction" th:value="${direction}">
+                                        <button type="submit" class="ybtn ybtn-small" th:text="#{issue.dependencies.remove}"
+                                                th:aria-label="#{issue.dependencies.removeIssue(${dependency.number})}">Remove dependency</button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </th:block>
+                        <form th:if="${dependencies.canEdit}" method="post" data-turbo="false"
+                              th:action="@{/{owner}/{projectName}/issue/{number}/dependencies(owner=${project.owner}, projectName=${project.name}, number=${issue.number})}">
+                            <label for="dependency-direction" th:text="#{issue.dependencies.direction}">This issue</label>
+                            <select id="dependency-direction" name="direction">
+                                <option value="BLOCKED_BY" th:text="#{issue.dependencies.blockedBy}">Is blocked by</option>
+                                <option value="BLOCKS" th:text="#{issue.dependencies.blocking}">Blocks</option>
+                            </select>
+                            <label for="dependency-target" th:text="#{issue.dependencies.number}">Issue number in this project</label>
+                            <input id="dependency-target" type="number" name="targetNumber" min="1" step="1" required>
+                            <button type="submit" class="ybtn" th:text="#{issue.dependencies.add}">Add dependency</button>
+                        </form>
+                    </section>
+
                     <div id="comments" class="board-comment-wrap">
                         <div id="timeline">
                             <!-- yona IssueApp.timeline()/yona.issue.View.js _updateTimeline() 대응.

@@ -7,6 +7,7 @@ import com.github.yonaprojects.yona.domain.organization.OrganizationUserReposito
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.issue.IssueCommentRepository
 import com.github.yonaprojects.yona.domain.issue.IssueEventRepository
+import com.github.yonaprojects.yona.domain.issue.IssueDependencyService
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectScope
@@ -137,7 +138,8 @@ class IssueViewControllerSpec : DescribeSpec({
         accessControl,
         titleHeadService,
         issueEventRepository,
-        attachmentService
+        attachmentService,
+        mockk<IssueDependencyService>(relaxed = true)
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(issueViewController)
         .setCustomArgumentResolvers(PageableHandlerMethodArgumentResolver())

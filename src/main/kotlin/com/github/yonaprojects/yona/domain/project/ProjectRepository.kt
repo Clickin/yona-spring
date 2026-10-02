@@ -15,6 +15,12 @@ interface ProjectRepository : JpaRepository<Project, Long> {
     fun findByOwner(owner: String): List<Project>
     fun countByLabelsId(labelId: Long): Long
 
+    // Transaction-scoped graph mutex; UPDATE holds a real row lock on H2 as well as server DBs.
+    // Do not increment the issue counter or dirty the managed Project entity.
+    @Modifying
+    @Query("UPDATE Project p SET p.lastIssueNumber = p.lastIssueNumber WHERE p.id = :id")
+    fun lockIssueDependencies(@Param("id") id: Long): Int
+
     // issue/posting 번호 채번(project.lastIssueNumber/lastPostingNumber
     // 증가)이 전부 "읽고-증가시켜-저장"하는 read-modify-write 패턴인데, 그 사이 프로젝트 행에 아무
     // 잠금도 걸지 않아 동시 요청 두 개가 같은 값을 읽고 각각 저장하는 경쟁 상태에 노출돼 있었다
