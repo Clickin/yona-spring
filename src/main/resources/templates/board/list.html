@@ -17,6 +17,8 @@
                     <input type="hidden" name="orderBy" th:value="${orderBy}">
                     <input type="hidden" name="orderDir" th:value="${orderDir}">
                     <div class="search-bar">
+                        <input type="hidden" name="literalFilter" value="true">
+                        <label th:if="${titleHead != null}"><span th:text="#{search.titleHead}">머리말</span> <input name="titleHead" th:value="${titleHead}"></label>
                         <input name="filter" class="textbox" type="text" th:placeholder="#{project.searchPlaceholder}" th:value="${filter}">
                         <button type="submit" class="search-btn"><i class="yobicon-search"></i></button>
                     </div>
@@ -54,17 +56,17 @@
             <th:block th:if="${!postingPage.content.isEmpty() || !notices.isEmpty()}">
                 <div class="filter-wrap board" th:if="${postingPage.totalElements > 0}">
                     <div class="filters">
-                        <a th:href="@{/{owner}/{projectName}/posts(owner=${project.owner}, projectName=${project.name}, filter=${filter}, orderBy='updatedDate', orderDir=${orderBy == 'updatedDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
+                        <a th:href="@{/{owner}/{projectName}/posts(owner=${project.owner}, projectName=${project.name}, filter=${filter}, titleHead=${titleHead}, literalFilter=true, labelIds=${labelIds}, orderBy='updatedDate', orderDir=${orderBy == 'updatedDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
                            th:class="${orderBy == 'updatedDate'} ? 'filter active' : 'filter'">
                             <i class="ico btn-gray-arrow" th:classappend="${orderBy == 'updatedDate' && orderDir == 'desc'} ? 'down'"></i>
                             <span th:text="#{common.order.updatedDate}">최근 업데이트순</span>
                         </a>
-                        <a th:href="@{/{owner}/{projectName}/posts(owner=${project.owner}, projectName=${project.name}, filter=${filter}, orderBy='createdDate', orderDir=${orderBy == 'createdDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
+                        <a th:href="@{/{owner}/{projectName}/posts(owner=${project.owner}, projectName=${project.name}, filter=${filter}, titleHead=${titleHead}, literalFilter=true, labelIds=${labelIds}, orderBy='createdDate', orderDir=${orderBy == 'createdDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
                            th:class="${orderBy == 'createdDate'} ? 'filter active' : 'filter'">
                             <i class="ico btn-gray-arrow" th:classappend="${orderBy == 'createdDate' && orderDir == 'desc'} ? 'down'"></i>
                             <span th:text="#{common.order.date}">등록일순</span>
                         </a>
-                        <a th:href="@{/{owner}/{projectName}/posts(owner=${project.owner}, projectName=${project.name}, filter=${filter}, orderBy='numOfComments', orderDir=${orderBy == 'numOfComments' && orderDir == 'desc' ? 'asc' : 'desc'})}"
+                        <a th:href="@{/{owner}/{projectName}/posts(owner=${project.owner}, projectName=${project.name}, filter=${filter}, titleHead=${titleHead}, literalFilter=true, labelIds=${labelIds}, orderBy='numOfComments', orderDir=${orderBy == 'numOfComments' && orderDir == 'desc' ? 'asc' : 'desc'})}"
                            th:class="${orderBy == 'numOfComments'} ? 'filter active' : 'filter'">
                             <i class="ico btn-gray-arrow" th:classappend="${orderBy == 'numOfComments' && orderDir == 'desc'} ? 'down'"></i>
                             <span th:text="#{common.order.comments}">댓글순</span>
@@ -80,7 +82,9 @@
                         </a>
                         <div class="title-wrap">
                             <span class="label label-notice" th:text="#{post.notice}">공지</span>&nbsp;
-                            <span class="bracket-word" th:text="${@templateHelper.showHeaderWordsInBracketsIfExist(notice.title)}"></span>
+                            <a th:each="head : ${T(com.github.yonaprojects.yona.domain.issue.TitleHeads).extract(notice.title)}"
+                               th:href="@{/{owner}/{projectName}/posts(owner=${project.owner}, projectName=${project.name}, titleHead=${head}, literalFilter=true, filter=${filter}, labelIds=${labelIds})}"
+                               th:text="'[' + ${head} + ']'" class="title-head-filter"></a>
                             <a th:href="@{/{owner}/{projectName}/post/{number}(owner=${project.owner}, projectName=${project.name}, number=${notice.number})}" class="title" th:text="${@templateHelper.removeHeaderWords(notice.title)}">
                                 공지 제목
                             </a>
@@ -113,7 +117,9 @@
                             <span th:if="${post.notice}" class="label label-notice" th:text="#{post.notice}">공지</span>&nbsp;
                             <span th:if="${post.readme}" class="label label-important">README</span>&nbsp;
                             <span th:if="${!post.readme}" class="post-id" th:text="${post.number}">1</span>
-                            <span class="bracket-word" th:text="${@templateHelper.showHeaderWordsInBracketsIfExist(post.title)}"></span>
+                            <a th:each="head : ${T(com.github.yonaprojects.yona.domain.issue.TitleHeads).extract(post.title)}"
+                               th:href="@{/{owner}/{projectName}/posts(owner=${project.owner}, projectName=${project.name}, titleHead=${head}, literalFilter=true, filter=${filter}, labelIds=${labelIds})}"
+                               th:text="'[' + ${head} + ']'" class="title-head-filter"></a>
                             <a th:href="@{/{owner}/{projectName}/post/{number}(owner=${project.owner}, projectName=${project.name}, number=${post.number})}" class="title" th:text="${@templateHelper.removeHeaderWords(post.title)}">
                                 게시글 제목
                             </a>

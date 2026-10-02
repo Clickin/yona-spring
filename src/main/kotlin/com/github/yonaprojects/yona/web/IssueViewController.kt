@@ -1,5 +1,6 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.domain.issue.IssueSearchService
 import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.enumeration.EventType
@@ -87,7 +88,8 @@ class IssueViewController(
     private val accessControl: AccessControl,
     private val titleHeadService: TitleHeadService,
     private val issueEventRepository: IssueEventRepository,
-    private val attachmentService: AttachmentService
+    private val attachmentService: AttachmentService,
+    private val issueSearchService: IssueSearchService
 ) {
 
     @GetMapping("/{owner}/{projectName}/issues")
@@ -160,6 +162,11 @@ class IssueViewController(
             }
         }
 
+        val titleHead = request.getParameter("titleHead")?.takeIf { it.isNotBlank() }
+            ?: if (request.getParameter("literalFilter") == "true") null else com.github.yonaprojects.yona.domain.issue.TitleHeads.legacy(filter)
+        val searchText = if (titleHead != null && request.getParameter("titleHead") == null) null else filter
+        model.addAttribute("titleHead", titleHead)
+
         val selectionQuery = request.queryString.orEmpty().split("&")
             .filter { it.isNotEmpty() && URLDecoder.decode(it.substringBefore("="), StandardCharsets.UTF_8) != "selected" }
             .joinToString("&")
@@ -174,7 +181,10 @@ class IssueViewController(
             page
         }
 
-        val sort = if (orderDir.equals("asc", ignoreCase = true)) {
+        val sort = if (orderBy == "relevance") {
+            if (issueSearchService.backend == "lucene" && !filter.isNullOrBlank()) Sort.unsorted()
+            else Sort.by(Sort.Direction.DESC, "createdDate")
+        } else if (orderDir.equals("asc", ignoreCase = true)) {
             Sort.by(Sort.Direction.ASC, orderBy)
         } else {
             Sort.by(Sort.Direction.DESC, orderBy)
@@ -186,7 +196,7 @@ class IssueViewController(
         val spec = IssueSpecification.filterIssues(
             project = project,
             state = state,
-            filter = filter,
+            filter = null,
             authorId = authorId,
             assigneeId = assigneeId,
             milestoneId = milestoneId,
@@ -196,7 +206,7 @@ class IssueViewController(
         )
 
         if (format == "xls") {
-            val allIssues = issueRepository.findAll(spec)
+            val allIssues = issueSearchService.search(spec, searchText, loginUser, org.springframework.data.domain.Pageable.unpaged(), titleHead).content
             val excelData = issueExcelService.excelFrom(allIssues)
 
             val zoneId = ZoneId.systemDefault()
@@ -212,7 +222,7 @@ class IssueViewController(
                 .body(excelData)
         }
 
-        val issuePage = issueRepository.findAll(spec, pageable)
+        val issuePage = issueSearchService.search(spec, searchText, loginUser, pageable, titleHead)
 
         val openIssuesCount = issueRepository.countByProjectAndState(project, State.OPEN)
         val closedIssuesCount = issueRepository.countByProjectAndState(project, State.CLOSED)
@@ -284,7 +294,11 @@ class IssueViewController(
         model.addAttribute("issuePage", issuePage)
         model.addAttribute("state", state)
         model.addAttribute("currentUser", loginUser)
-        model.addAttribute("filter", filter)
+        model.addAttribute("filter", searchText)
+        val searchPage = issuePage as? com.github.yonaprojects.yona.domain.issue.IssueSearchPage
+        model.addAttribute("searchSnippets", searchPage?.snippets.orEmpty())
+        model.addAttribute("searchFallback", issueSearchService.backend == "lucene" && (!searchText.isNullOrBlank() || titleHead != null) && searchPage?.searchBackend == "db")
+        model.addAttribute("fullTextSearch", issueSearchService.backend == "lucene")
         model.addAttribute("orderBy", orderBy)
         model.addAttribute("orderDir", orderDir)
         model.addAttribute("openIssuesCount", openIssuesCount)

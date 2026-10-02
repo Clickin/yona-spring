@@ -66,7 +66,9 @@ class BoardViewController(
         @RequestParam(required = false, defaultValue = "desc") orderDir: String,
         @RequestParam(required = false) labelIds: List<Long>?,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        @RequestParam(required = false) titleHead: String? = null,
+        @RequestParam(defaultValue = "false") literalFilter: Boolean = false
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: return "error/404"
@@ -91,8 +93,22 @@ class BoardViewController(
         // 게시글 목록 페이지 크기는 고정 15, 클라이언트 오버라이드 없음.
         val pageable = PageRequest.of(actualPage, ITEMS_PER_PAGE, sort)
 
+        val head = titleHead?.takeIf { it.isNotBlank() } ?: if (literalFilter) null else com.github.yonaprojects.yona.domain.issue.TitleHeads.legacy(filter)
+        val text = if (head != null && titleHead == null) null else filter
+        model.addAttribute("titleHead", head)
         val labelFilter = labelIds?.filterNotNull()?.takeIf { it.isNotEmpty() }
-        val postingPage = if (labelFilter != null) {
+        val postingPage = if (head != null) {
+            val ids = postingRepository.findHeadCandidates(project.id!!, false,
+                text?.takeIf { it.isNotBlank() }?.let { "%$it%" }, labelFilter?.size ?: 0,
+                labelFilter ?: listOf(-1L)).filter {
+                    head in com.github.yonaprojects.yona.domain.issue.TitleHeads.extract(it.title)
+                }.map { it.id }
+            if (ids.isEmpty()) org.springframework.data.domain.Page.empty(pageable) else
+                postingRepository.findAll(com.github.yonaprojects.yona.domain.issue.TitleHeads.withIds<com.github.yonaprojects.yona.domain.board.Posting>(ids)
+                    .and(org.springframework.data.jpa.domain.Specification { root, _, cb -> cb.and(
+                        cb.equal(root.get<Project>("project"), project), cb.isFalse(root.get("notice"))) }),
+                    com.github.yonaprojects.yona.domain.issue.TitleHeads.stablePage(pageable))
+        } else if (labelFilter != null) {
             postingRepository.findByProjectAndLabelIdsIn(
                 project, labelFilter, if (filter.isNullOrBlank()) null else "%$filter%", pageable
             )
@@ -101,13 +117,13 @@ class BoardViewController(
         } else {
             postingRepository.findByProjectAndNotice(project, false, pageable)
         }
-        val notices = postingService.getNotices(project.id!!)
+        val notices = postingService.getNotices(project.id!!).filter { head == null || head in com.github.yonaprojects.yona.domain.issue.TitleHeads.extract(it.title) }
 
         model.addAttribute("project", project)
         model.addAttribute("postingPage", postingPage)
         model.addAttribute("notices", notices)
         model.addAttribute("currentUser", loginUser)
-        model.addAttribute("filter", filter)
+        model.addAttribute("filter", text)
         model.addAttribute("orderBy", orderBy)
         model.addAttribute("orderDir", orderDir)
         model.addAttribute("labelIds", labelFilter ?: emptyList<Long>())

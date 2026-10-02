@@ -27,7 +27,15 @@ internal class QueueAdminViewController(
     private val queries: QueueAdminQueries,
     private val control: QueueControl,
     private val users: UserRepository,
+    private val searchJobs: com.github.yonaprojects.yona.domain.issue.IssueSearchJobs? = null,
 ) {
+    @PostMapping("/search/sync")
+    fun synchronizeSearch(): String {
+        val jobs = searchJobs ?: throw org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND)
+        val id = jobs.enqueue()
+        return "redirect:$QUEUE_PAGE?type=search.issues.sync&selected=$id"
+    }
+
     @GetMapping
     fun page(request: HttpServletRequest, response: HttpServletResponse, model: Model): String = try {
         parameters(request, QUERY_KEYS)
@@ -97,6 +105,7 @@ internal class QueueAdminViewController(
     }
 
     private fun render(state: ViewState, request: HttpServletRequest, response: HttpServletResponse, model: Model): String {
+        model.addAttribute("searchIndexingEnabled", searchJobs != null)
         response.setHeader("Cache-Control", "no-store")
         response.setHeader("Vary", "Turbo-Frame")
         model.addAttribute("message", "title.siteSetting")

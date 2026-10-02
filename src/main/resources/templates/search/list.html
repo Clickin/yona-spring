@@ -137,6 +137,7 @@
 
             <!-- 1. 이슈 결과 -->
             <div th:if="${searchResult.searchType.name() == 'ISSUE'}">
+              <p th:if="${searchResult.issueSearchFallback}" role="status" th:text="#{search.fallback}"></p>
               <div th:if="${searchResult.issues.content.isEmpty()}" class="empty-result"></div>
               <th:block th:if="${!searchResult.issues.content.isEmpty()}">
               <ul class="search-list-wrap">
@@ -146,7 +147,12 @@
                     <a th:href="@{/{owner}/{name}/issue/{issueNumber}(owner=${issue.project.owner}, name=${issue.project.name}, issueNumber=${issue.number})}" class="title" th:text="${issue.title}">이슈 제목</a>
                   </div>
                   <div class="search-content">
-                    <p th:each="snippet : ${searchResult.makeSnippets(issue.body, 40)}" class="search-content-body" th:text="${snippet} + (${snippet.length() < issue.body.length()} ? ' .....' : '')">스니펫</p>
+                    <a th:if="${searchResult.issueSearchSnippets[issue.id] != null}" th:with="snippet=${searchResult.issueSearchSnippets[issue.id]}"
+                       th:href="@{/{owner}/{name}/issue/{number}(owner=${issue.project.owner}, name=${issue.project.name}, number=${issue.number})} + ${snippet.commentId == null ? '' : '#comment-' + snippet.commentId}"
+                       th:utext="${snippet.html}"></a>
+                    <th:block th:if="${searchResult.issueSearchSnippets[issue.id] == null && issue.body != null}">
+                      <p th:each="snippet : ${searchResult.makeSnippets(issue.body, 40)}" class="search-content-body" th:text="${snippet}">스니펫</p>
+                    </th:block>
                   </div>
                   <div class="search-meta-info">
                     <a th:if="${project == null}" th:href="@{/{owner}/{name}(owner=${issue.project.owner}, name=${issue.project.name})}" class="project-link meta-item" th:text="${issue.project.owner} + '/' + ${issue.project.name}">프로젝트명</a>

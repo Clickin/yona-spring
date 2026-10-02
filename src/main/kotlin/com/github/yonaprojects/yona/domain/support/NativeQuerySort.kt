@@ -16,7 +16,7 @@ fun Pageable.toSnakeCaseSort(): Pageable {
     val converted = Sort.by(
         sort.map { order -> Sort.Order(order.direction, order.property.camelToSnakeCase()) }.toList()
     )
-    return PageRequest.of(pageNumber, pageSize, converted)
+    return if (isUnpaged) Pageable.unpaged(converted) else PageRequest.of(pageNumber, pageSize, converted)
 }
 
 private fun String.camelToSnakeCase(): String =

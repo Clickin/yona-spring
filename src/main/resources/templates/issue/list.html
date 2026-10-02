@@ -71,6 +71,11 @@
                     <!-- 검색 및 상세 필터 폼 -->
                     <form id="search" name="search" th:action="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name})}" method="get">
                         <input type="hidden" name="selected" th:value="${selected}" th:disabled="${selected == null}">
+                        <input type="hidden" name="literalFilter" value="true">
+                        <label th:if="${titleHead != null}"><span th:text="#{search.titleHead}">머리말</span>
+                            <input name="titleHead" th:value="${titleHead}" aria-label="제목 머리말 필터">
+                        </label>
+                        <p th:if="${searchFallback == true}" role="status" th:text="#{search.fallback}"></p>
                         <input type="hidden" name="orderBy" th:value="${orderBy}">
                         <input type="hidden" name="orderDir" th:value="${orderDir}">
                         <input type="hidden" name="state" th:value="${state}">
@@ -348,22 +353,25 @@
                             </div>
                         <div class="filter-wrap board">
                             <div class="filters pull-right" th:if="${issuePage.totalElements > 1}">
-                                <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, orderBy='dueDate', orderDir=${orderBy == 'dueDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
+                                <a th:if="${fullTextSearch == true && filter != null && !filter.isBlank()}"
+                                   th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, literalFilter=true, titleHead=${titleHead}, authorId=${authorId}, assigneeId=${assigneeId}, milestoneId=${milestoneId}, commenterId=${commenterId}, labelIds=${labelIds}, dueDate=${dueDate}, orderBy='relevance')}"
+                                   th:class="${orderBy == 'relevance'} ? 'filter active' : 'filter'" th:text="#{common.order.relevance}">관련도순</a>
+                                <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, literalFilter=true, titleHead=${titleHead}, authorId=${authorId}, assigneeId=${assigneeId}, milestoneId=${milestoneId}, commenterId=${commenterId}, labelIds=${labelIds}, dueDate=${dueDate}, orderBy='dueDate', orderDir=${orderBy == 'dueDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
                                    th:class="${orderBy == 'dueDate'} ? 'filter active' : 'filter'">
                                     <i class="ico btn-gray-arrow" th:classappend="${orderBy == 'dueDate' && orderDir == 'desc'} ? 'down'"></i>
                                     <span th:text="#{common.order.dueDate}">마감일순</span>
                                 </a>
-                                <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, orderBy='updatedDate', orderDir=${orderBy == 'updatedDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
+                                <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, literalFilter=true, titleHead=${titleHead}, authorId=${authorId}, assigneeId=${assigneeId}, milestoneId=${milestoneId}, commenterId=${commenterId}, labelIds=${labelIds}, dueDate=${dueDate}, orderBy='updatedDate', orderDir=${orderBy == 'updatedDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
                                    th:class="${orderBy == 'updatedDate'} ? 'filter active' : 'filter'">
                                     <i class="ico btn-gray-arrow" th:classappend="${orderBy == 'updatedDate' && orderDir == 'desc'} ? 'down'"></i>
                                     <span th:text="#{common.order.updatedDate}">최근 업데이트순</span>
                                 </a>
-                                <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, orderBy='createdDate', orderDir=${orderBy == 'createdDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
+                                <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, literalFilter=true, titleHead=${titleHead}, authorId=${authorId}, assigneeId=${assigneeId}, milestoneId=${milestoneId}, commenterId=${commenterId}, labelIds=${labelIds}, dueDate=${dueDate}, orderBy='createdDate', orderDir=${orderBy == 'createdDate' && orderDir == 'desc' ? 'asc' : 'desc'})}"
                                    th:class="${orderBy == 'createdDate'} ? 'filter active' : 'filter'">
                                     <i class="ico btn-gray-arrow" th:classappend="${orderBy == 'createdDate' && orderDir == 'desc'} ? 'down'"></i>
                                     <span th:text="#{common.order.date}">등록일순</span>
                                 </a>
-                                <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, orderBy='numOfComments', orderDir=${orderBy == 'numOfComments' && orderDir == 'desc' ? 'asc' : 'desc'})}"
+                                <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, state=${state}, filter=${filter}, literalFilter=true, titleHead=${titleHead}, authorId=${authorId}, assigneeId=${assigneeId}, milestoneId=${milestoneId}, commenterId=${commenterId}, labelIds=${labelIds}, dueDate=${dueDate}, orderBy='numOfComments', orderDir=${orderBy == 'numOfComments' && orderDir == 'desc' ? 'asc' : 'desc'})}"
                                    th:class="${orderBy == 'numOfComments'} ? 'filter active' : 'filter'">
                                     <i class="ico btn-gray-arrow" th:classappend="${orderBy == 'numOfComments' && orderDir == 'desc'} ? 'down'"></i>
                                     <span th:text="#{common.order.comments}">댓글순</span>
@@ -380,7 +388,7 @@
 
                         <!-- 엑셀 다운로드 버튼 -->
                         <div class="pull-left" style="padding:10px;">
-                            <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, format='xls', state=${state}, filter=${filter})}" class="ybtn small">
+                            <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, format='xls', state=${state}, filter=${filter}, literalFilter=true, titleHead=${titleHead}, authorId=${authorId}, assigneeId=${assigneeId}, milestoneId=${milestoneId}, commenterId=${commenterId}, labelIds=${labelIds}, dueDate=${dueDate})}" class="ybtn small">
                                 <i class="yobicon-file-excel"></i> [[#{issue.downloadAsExcel}]]
                             </a>
                         </div>

@@ -137,7 +137,8 @@ class IssueViewControllerSpec : DescribeSpec({
         accessControl,
         titleHeadService,
         issueEventRepository,
-        attachmentService
+        attachmentService,
+        com.github.yonaprojects.yona.domain.issue.IssueSearchService(issueRepository, issueCommentRepository, accessControl)
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(issueViewController)
         .setCustomArgumentResolvers(PageableHandlerMethodArgumentResolver())

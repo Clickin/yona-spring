@@ -27,12 +27,18 @@
                         <span class="weight-down-arrow" data-toggle="tooltip" data-placement="right" th:title="|#{issue.weight} ${issue.weight}|"><i class="yobicon-angle-circled-down"></i></span>
                     </th:block>
                     &nbsp;
-                    <span th:text="${templateHelper.showHeaderWordsInBracketsIfExist(issue.title)}" class="bracket-word"></span>
+                    <a th:each="head : ${T(com.github.yonaprojects.yona.domain.issue.TitleHeads).extract(issue.title)}"
+                       th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, titleHead=${head}, literalFilter=true, filter=${filter}, authorId=${authorId}, assigneeId=${assigneeId}, labelIds=${labelIds}, milestoneId=${milestoneId}, commenterId=${commenterId}, dueDate=${dueDate})}"
+                       th:text="'[' + ${head} + ']'" class="title-head-filter"></a>
                     <a th:href="${selected != null && selectionBaseUrl != null} ? ${selectionBaseUrl + 'selected=' + issue.number} : @{/{owner}/{projectName}/issue/{number}(owner=${project.owner}, projectName=${project.name}, number=${issue.number})}" class="title" th:text="${templateHelper.removeHeaderWords(issue.title)}"
                        th:data-selection-url="${selectionBaseUrl != null} ? ${selectionBaseUrl + 'selected=' + issue.number} : null"
                        th:data-detail-url="@{/{owner}/{projectName}/issue/{number}(owner=${project.owner}, projectName=${project.name}, number=${issue.number})}">
                         이슈 제목
                     </a>
+                </div>
+                <div th:if="${searchSnippets != null && searchSnippets[issue.id] != null}" th:with="snippet=${searchSnippets[issue.id]}">
+                    <a th:href="@{/{owner}/{projectName}/issue/{number}(owner=${project.owner}, projectName=${project.name}, number=${issue.number})} + ${snippet.commentId == null ? '' : '#comment-' + snippet.commentId}"
+                       th:utext="${snippet.html}"></a>
                 </div>
                 <div class="infos">
                     <a th:href="@{/{loginId}(loginId=${issue.authorLoginId})}" class="infos-item infos-link-item" data-toggle="tooltip" data-placement="bottom" th:title="${issue.authorLoginId}" th:text="${issue.authorName}">

@@ -13,6 +13,9 @@
           <div class="title_area">
             <h2 id="queue-heading" class="pull-left" th:text="#{queue.admin.title}"></h2>
           </div>
+          <form th:if="${searchIndexingEnabled == true}" method="post" th:action="@{/site/admin/queue/search/sync}" data-turbo="false">
+            <button type="submit" class="ybtn ybtn-small" th:text="#{search.index.sync}">이슈 검색 색인 동기화</button>
+          </form>
           <form th:if="${state != null or draft != null}" method="get" th:action="@{/site/admin/queue}"
                 class="queue-filters" data-turbo="false" th:with="f=${state != null ? state : draft}">
             <p th:if="${filterError}" class="queue-filter-error" th:text="#{queue.admin.filterError}"></p>

@@ -29,6 +29,15 @@ import com.github.yonaprojects.yona.domain.webhook.Webhook
 import com.github.yonaprojects.yona.domain.attachment.Attachment
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import org.springframework.data.jpa.domain.Specification
+import jakarta.persistence.criteria.Predicate
+import jakarta.persistence.criteria.JoinType
+import com.github.yonaprojects.yona.domain.project.ProjectScope
+import com.github.yonaprojects.yona.domain.project.ProjectUser
+import com.github.yonaprojects.yona.domain.organization.OrganizationUser
+import com.github.yonaprojects.yona.domain.role.Role
+import com.github.yonaprojects.yona.domain.issue.Assignee
+import com.github.yonaprojects.yona.domain.issue.IssueSharer
 
 // 리소스 타입은 JPA 엔티티라 다형성을 가질 수 없어, `isGlobalResourceAllowed`/`isProjectResourceAllowed`를
 // 리소스 타입별 `isAllowed(...)` 오버로드로 분리한다(설계 근거: docs/P1-85_PLAN.md).
@@ -315,6 +324,49 @@ class AccessControl(
         if (operation == Operation.READ) return true
         return isOrganizationAdmin(organization, user)
     }
+
+    /** SQL equivalent of issue READ below. Keep both paths covered by the same permission fixtures. */
+    fun readableIssues(user: User?): Specification<Issue> =
+        Specification { root, query, cb ->
+            if (isAnonymousNotAllowed() && user == null) return@Specification cb.disjunction()
+            if (user?.isSiteManager == true) return@Specification cb.conjunction()
+            val project = root.get<Project>("project")
+            val scope = project.get<ProjectScope>("projectScope")
+            val public = cb.equal(scope, ProjectScope.PUBLIC)
+            val grants = mutableListOf<Predicate>()
+            if (user?.isGuest != true) grants.add(public)
+            val userId = user?.id
+            if (userId != null) {
+                grants.add(cb.equal(root.get<Long>("authorId"), userId))
+                // Optional associations must not turn another permission's OR branch into an inner join.
+                val assignee = root.join<Issue, Assignee>(
+                    "assignee", JoinType.LEFT)
+                grants.add(cb.equal(assignee.get<User>("user").get<Long>("id"), userId))
+                val member = query.subquery(Long::class.java)
+                val membership = member.from(ProjectUser::class.java)
+                member.select(membership.get("id")).where(cb.equal(membership.get<User>("user").get<Long>("id"), userId),
+                    cb.equal(membership.get<Project>("project"), project))
+                grants.add(cb.exists(member)) // READ accepts every project membership role.
+                val org = query.subquery(Long::class.java)
+                val orgMember = org.from(OrganizationUser::class.java)
+                val role = orgMember.get<Role>("role").get<Long>("id")
+                org.select(orgMember.get("id")).where(
+                    cb.equal(orgMember.get<User>("user").get<Long>("id"), userId),
+                    cb.equal(orgMember.get<Organization>("organization"), project.get<Organization>("organization")),
+                    cb.or(cb.equal(role, RoleType.ORG_ADMIN.roleType), cb.and(
+                        cb.equal(role, RoleType.ORG_MEMBER.roleType), scope.`in`(
+                            ProjectScope.PUBLIC,
+                            ProjectScope.PROTECTED))))
+                grants.add(cb.exists(org))
+                val shared = query.subquery(Long::class.java)
+                val sharer = shared.from(IssueSharer::class.java)
+                val parent = root.join<Issue, Issue>("parent", JoinType.LEFT)
+                shared.select(sharer.get("id")).where(cb.equal(sharer.get<User>("user").get<Long>("id"), userId),
+                    cb.or(cb.equal(sharer.get<Issue>("issue"), root), cb.equal(sharer.get<Issue>("issue"), parent)))
+                grants.add(cb.exists(shared))
+            }
+            cb.or(*grants.toTypedArray())
+        }
 
     // isAllowedIfAuthor/isAllowedIfAssignee가 적용되는 리소스 타입 — 작성자 또는 담당자는 연산 종류와
     // 무관하게 항상 허용된다(legacy AccessControl.java:225-227).

@@ -1,5 +1,7 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.domain.issue.IssueSpecification
+import com.github.yonaprojects.yona.domain.issue.IssueSearchService
 import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.enumeration.State
 import com.github.yonaprojects.yona.domain.issue.Assignee
@@ -50,7 +52,8 @@ class IssueController(
     private val accessControl: AccessControl,
     private val titleHeadService: TitleHeadService,
     private val watchService: WatchService,
-    private val commentService: CommentService
+    private val commentService: CommentService,
+    private val issueSearchService: IssueSearchService
 ) {
 
     private fun getLoginUser(authentication: Authentication?): User? {
@@ -96,7 +99,13 @@ class IssueController(
         @RequestParam(required = false) label: String?,
         @RequestParam(required = false) author: String?,
         @PageableDefault(size = ITEMS_PER_PAGE) pageable: Pageable,
-        authentication: Authentication?
+        authentication: Authentication?,
+        @RequestParam(required = false) filter: String? = null,
+        @RequestParam(required = false) milestoneId: Long? = null,
+        @RequestParam(required = false) commenterId: Long? = null,
+        @RequestParam(required = false) labelIds: List<Long>? = null,
+        @RequestParam(required = false) dueDate: String? = null,
+        @RequestParam(required = false) titleHead: String? = null
     ): ResponseEntity<Page<IssueResponse>> {
         val project = projectRepository.findById(projectId).orElse(null)
             ?: return ResponseEntity.notFound().build()
@@ -112,7 +121,8 @@ class IssueController(
             pageable.sort
         )
 
-        if (assignee == null && label == null && author == null) {
+        if (assignee == null && label == null && author == null && filter.isNullOrBlank() &&
+            milestoneId == null && commenterId == null && labelIds.isNullOrEmpty() && dueDate.isNullOrBlank() && titleHead == null) {
             val page = if (state != null) {
                 issueRepository.findByProjectAndState(project, state, clampedPageable)
             } else {
@@ -123,8 +133,15 @@ class IssueController(
             return ResponseEntity.ok(page.map { it.toResponse() })
         }
 
-        val spec = buildIssueFilterSpecification(project, state, assignee, label, author)
-        return ResponseEntity.ok(issueRepository.findAll(spec, clampedPageable).map { it.toResponse() })
+        val spec = buildIssueFilterSpecification(project, state, assignee, label, author).and(
+            IssueSpecification.filterIssues(
+                project, state, null, null, null, milestoneId, commenterId, labelIds, dueDate
+            )
+        )
+        val found = issueSearchService.search(spec, filter, user, clampedPageable, titleHead?.takeIf { it.isNotBlank() })
+        val search = found as? com.github.yonaprojects.yona.domain.issue.IssueSearchPage
+        return ResponseEntity.ok().header("X-Yona-Search-Backend", search?.searchBackend ?: "db")
+            .body(found.map { it.toResponse().copy(searchSnippet = search?.snippets?.get(it.id)) })
     }
 
     // getIssues()의 assignee/label/author 필터 조합을 위한 동적 Specification. author는

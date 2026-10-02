@@ -33,7 +33,8 @@ class SearchServiceImpl(
     private val pullRequestRepository: PullRequestRepository,
     // yona controllers/Application.java의 HIDE_PROJECT_LISTING 대응.
     @Value("\${yona.application.hide-project-listing:false}")
-    private val hideProjectListing: Boolean = false
+    private val hideProjectListing: Boolean = false,
+    private val issueSearchService: com.github.yonaprojects.yona.domain.issue.IssueSearchService? = null
 ) : SearchService {
 
     // yona Search.projectsEL() 대응. HIDE_PROJECT_LISTING이 켜져 있으면 PUBLIC 프로젝트를
@@ -58,12 +59,12 @@ class SearchServiceImpl(
         }
 
         val processedKeyword = "%${keyword.lowercase()}%"
-        val result = getSearchResultCounts(keyword, allowedProjectIds, user?.id)
+        val result = getSearchResultCounts(keyword, allowedProjectIds, user)
         result.searchType = searchType
         result.updateSearchType()
 
         when (result.searchType) {
-            SearchType.ISSUE -> result.issues = issueRepository.searchIssues(allowedProjectIds, processedKeyword, user?.id, pageable)
+            SearchType.ISSUE -> result.issues = indexedIssues(keyword, allowedProjectIds, user, pageable) ?: issueRepository.searchIssues(allowedProjectIds, processedKeyword, user?.id, pageable)
             SearchType.USER -> result.users = userRepository.searchUsers(processedKeyword, pageable)
             SearchType.PROJECT -> result.projects = projectRepository.searchProjects(allowedProjectIds, processedKeyword, pageable)
             SearchType.POST -> result.posts = postingRepository.searchPostings(allowedProjectIds, processedKeyword, user?.id, pageable)
@@ -84,7 +85,7 @@ class SearchServiceImpl(
         val processedKeyword = "%${keyword.lowercase()}%"
         
         result.usersCount = userRepository.countSearchUsers(processedKeyword) // 유저는 전역 검색
-        result.issuesCount = issueRepository.countSearchIssuesInProject(project, processedKeyword)
+        result.issuesCount = indexedIssues(keyword, listOf(project.id!!), user, org.springframework.data.domain.PageRequest.of(0, 1))?.totalElements?.toInt() ?: issueRepository.countSearchIssuesInProject(project, processedKeyword)
         result.postsCount = postingRepository.countSearchPostingsInProject(project, processedKeyword)
         result.milestonesCount = milestoneRepository.countSearchMilestonesInProject(project, processedKeyword)
         result.issueCommentsCount = issueCommentRepository.countSearchIssueCommentsInProject(project, processedKeyword)
@@ -95,7 +96,7 @@ class SearchServiceImpl(
         result.updateSearchType()
 
         when (result.searchType) {
-            SearchType.ISSUE -> result.issues = issueRepository.searchIssuesInProject(project, processedKeyword, pageable)
+            SearchType.ISSUE -> result.issues = indexedIssues(keyword, listOf(project.id!!), user, pageable) ?: issueRepository.searchIssuesInProject(project, processedKeyword, pageable)
             SearchType.USER -> result.users = userRepository.searchUsers(processedKeyword, pageable)
             SearchType.POST -> result.posts = postingRepository.searchPostingsInProject(project, processedKeyword, pageable)
             SearchType.MILESTONE -> result.milestones = milestoneRepository.searchMilestonesInProject(project, processedKeyword, pageable)
@@ -120,12 +121,12 @@ class SearchServiceImpl(
         }
 
         val processedKeyword = "%${keyword.lowercase()}%"
-        val result = getSearchResultCounts(keyword, groupProjectIds, user?.id)
+        val result = getSearchResultCounts(keyword, groupProjectIds, user)
         result.searchType = searchType
         result.updateSearchType()
 
         when (result.searchType) {
-            SearchType.ISSUE -> result.issues = issueRepository.searchIssues(groupProjectIds, processedKeyword, user?.id, pageable)
+            SearchType.ISSUE -> result.issues = indexedIssues(keyword, groupProjectIds, user, pageable) ?: issueRepository.searchIssues(groupProjectIds, processedKeyword, user?.id, pageable)
             SearchType.USER -> result.users = userRepository.searchUsers(processedKeyword, pageable)
             SearchType.PROJECT -> result.projects = projectRepository.searchProjects(groupProjectIds, processedKeyword, pageable)
             SearchType.POST -> result.posts = postingRepository.searchPostings(groupProjectIds, processedKeyword, user?.id, pageable)
@@ -140,13 +141,22 @@ class SearchServiceImpl(
         return result
     }
 
-    private fun getSearchResultCounts(keyword: String, projectIds: List<Long>, userId: Long?): SearchResult {
+    private fun indexedIssues(keyword: String, projectIds: List<Long>, user: User?, pageable: Pageable): org.springframework.data.domain.Page<com.github.yonaprojects.yona.domain.issue.Issue>? {
+        val service = issueSearchService?.takeIf { it.backend == "lucene" } ?: return null
+        val spec = org.springframework.data.jpa.domain.Specification<com.github.yonaprojects.yona.domain.issue.Issue> { root, _, _ ->
+            root.get<Project>("project").get<Long>("id").`in`(projectIds)
+        }
+        return service.search(spec, keyword, user, pageable)
+    }
+
+    private fun getSearchResultCounts(keyword: String, projectIds: List<Long>, user: User?): SearchResult {
+        val userId = user?.id
         val processedKeyword = "%${keyword.lowercase()}%"
         return SearchResult(
             keyword = keyword,
             usersCount = userRepository.countSearchUsers(processedKeyword),
             projectsCount = projectRepository.countSearchProjects(projectIds, processedKeyword),
-            issuesCount = issueRepository.countSearchIssues(projectIds, processedKeyword, userId),
+            issuesCount = indexedIssues(keyword, projectIds, user, org.springframework.data.domain.PageRequest.of(0, 1))?.totalElements?.toInt() ?: issueRepository.countSearchIssues(projectIds, processedKeyword, userId),
             postsCount = postingRepository.countSearchPostings(projectIds, processedKeyword, userId),
             milestonesCount = milestoneRepository.countSearchMilestones(projectIds, processedKeyword),
             issueCommentsCount = issueCommentRepository.countSearchIssueComments(projectIds, processedKeyword, userId),

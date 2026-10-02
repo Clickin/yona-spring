@@ -40,6 +40,11 @@ class SearchResult(
     var pullRequests: Page<PullRequest> = Page.empty()
 ) {
 
+    val issueSearchFallback: Boolean
+        get() = (issues as? com.github.yonaprojects.yona.domain.issue.IssueSearchPage)?.searchBackend == "db"
+    val issueSearchSnippets: Map<Long, com.github.yonaprojects.yona.domain.issue.IssueSearchSnippet>
+        get() = (issues as? com.github.yonaprojects.yona.domain.issue.IssueSearchPage)?.snippets.orEmpty()
+
     fun makeSnippets(contents: String, threshold: Int): List<String> {
         val lowerCaseContents = contents.lowercase(Locale.getDefault())
         val lowerCaseKeyword = keyword.lowercase(Locale.getDefault())

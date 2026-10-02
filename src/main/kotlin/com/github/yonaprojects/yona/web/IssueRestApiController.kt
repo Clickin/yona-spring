@@ -57,11 +57,18 @@ class IssueRestApiController(
         @RequestParam(required = false) label: String?,
         @RequestParam(required = false) author: String?,
         @PageableDefault(size = IssueController.ITEMS_PER_PAGE) pageable: Pageable,
-        authentication: Authentication?
+        authentication: Authentication?,
+        @RequestParam(required = false) filter: String? = null,
+        @RequestParam(required = false) milestoneId: Long? = null,
+        @RequestParam(required = false) commenterId: Long? = null,
+        @RequestParam(required = false) labelIds: List<Long>? = null,
+        @RequestParam(required = false) dueDate: String? = null,
+        @RequestParam(required = false) titleHead: String? = null
     ): ResponseEntity<Page<IssueResponse>> {
         val found = projectRepository.findByOwnerAndName(owner, project).orElse(null)
             ?: return ResponseEntity.notFound().build()
-        return issueController.getIssues(found.id!!, state, assignee, label, author, pageable, authentication)
+        return issueController.getIssues(found.id!!, state, assignee, label, author, pageable, authentication,
+            filter, milestoneId, commenterId, labelIds, dueDate, titleHead)
     }
 
     @PostMapping

@@ -77,7 +77,12 @@ class DataBackupServiceImpl(
     @Value("\${yona.ldap.enabled:false}") private val ldapEnabled: Boolean = false,
     @Value("\${yona.ldap.fallback-to-local-login:false}") private val ldapFallback: Boolean = false,
     @Value("\${yona.svn.base-dir:/tmp/yona/svn}") private val svnBaseDir: File = File("/tmp/yona/svn"),
+    private val searchChanges: com.github.yonaprojects.yona.domain.issue.IssueSearchChanges? = null,
+    @Value("\${yona.search.index-dir:\${yona.data:data}/search/issues}") private val searchIndexDir: File = File(applicationDataDir, "search/issues"),
 ) : DataBackupService {
+
+    private fun isOperationalTable(name: String): Boolean = isQueueTable(name) ||
+        name.lowercase() in setOf("issue_search_pending", "issue_search_window")
 
     private val logger = LoggerFactory.getLogger(DataBackupServiceImpl::class.java)
     private val archiveJson = JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
@@ -108,7 +113,7 @@ class DataBackupServiceImpl(
             // 트랜잭션 안에서 읽어야 MariaDB/MySQL 드라이버가 fetchSize대로 커서 스트리밍한다.
             dataSource.connection.use { connection ->
                 connection.autoCommit = false
-                val tables = listTables(connection).filterNot { isQueueTable(it) }
+                val tables = listTables(connection).filterNot { isOperationalTable(it) }
                 for (table in tables) {
                     execution?.checkpoint()
                     val key = table.lowercase()
@@ -191,6 +196,7 @@ class DataBackupServiceImpl(
             val tables = archive.tables
             restoreTables(tables, archive.sequences, execution)
             swapInImportedFiles(archive, execution)
+            searchChanges?.requestRebuild()
             logger.info("사이트 전체 복원 완료: 테이블 ${tables.size}개")
         } finally {
             archive.tempRoot.deleteRecursively()
@@ -202,7 +208,7 @@ class DataBackupServiceImpl(
         val archive = readArchive(input, DataBackupService.SCOPE_PROJECT, execution)
         try {
             validateArchive(archive, execution)
-            val tables = archive.tables.filterKeys { !isQueueTable(it) }
+            val tables = archive.tables.filterKeys { !isOperationalTable(it) }
             val projectFile = tables["project"] ?: throw BadBackupArchiveException("프로젝트 백업에 project 행이 없습니다")
             val projectName = firstNdjsonRow(projectFile)?.value("name")?.toString()
                 ?: throw BadBackupArchiveException("프로젝트 백업의 project 행에 name이 없습니다")
@@ -354,6 +360,7 @@ class DataBackupServiceImpl(
                 }
             }
             swapInImportedFiles(archive, execution)
+            searchChanges?.requestRebuild()
             logger.info("프로젝트 가져오기 완료: 테이블 ${tables.size}개")
             return archive.project
         } finally {
@@ -420,7 +427,7 @@ class DataBackupServiceImpl(
                         name == "db/_sequences.json" && !entry.isDirectory -> File(tempRoot, "_sequences.json")
                         name.matches(Regex("db/[a-z][a-z0-9_]*\\.ndjson")) && !entry.isDirectory -> {
                             val table = name.removePrefix("db/").removeSuffix(".ndjson")
-                            if (isQueueTable(table)) throw BadBackupArchiveException("Queue tables are operational state")
+                            if (isOperationalTable(table)) throw BadBackupArchiveException("Queue tables are operational state")
                             File(tempRoot, name).also { tables[table] = it }
                         }
                         name.startsWith("files/") -> {
@@ -537,7 +544,7 @@ class DataBackupServiceImpl(
             val data = applicationDataDir.canonicalFile.toPath()
             val destination = data.resolve(child).normalize()
             val queue = queueDataDir.canonicalFile.toPath()
-            if (destination.startsWith(data.resolve("h2")) || destination.startsWith(queue)
+            if (destination.startsWith(data.resolve("h2")) || destination.startsWith(queue) || destination.startsWith(searchIndexDir.canonicalFile.toPath())
             ) throw BadBackupArchiveException("Protected operational file")
             if ((manifest["requiredCapabilities"] as List<*>).isNotEmpty()) throw BadBackupArchiveException("Migration cannot restore application data")
         }
@@ -571,7 +578,7 @@ class DataBackupServiceImpl(
         dataSource.connection.use { connection ->
             for (table in listTables(connection)) {
                 val name = table.lowercase()
-                if (isQueueTable(name) || name in migrationExcludedTables || name in setOf("n4user", "role")) continue
+                if (isOperationalTable(name) || name in migrationExcludedTables || name in setOf("n4user", "role")) continue
                 if (name in bootstrapSecurityTables) {
                     if ((jdbcTemplate.queryForObject("SELECT COUNT(*) FROM $table WHERE user_id<>? OR user_id IS NULL", Long::class.java, targetId) ?: 0L) != 0L) {
                         throw BadBackupArchiveException("Migration target contains another account's security records")
@@ -739,7 +746,7 @@ class DataBackupServiceImpl(
                 val names = listTables(target).associateBy { it.lowercase() }
                 val schema = archive.tables.keys.associateWith { table ->
                     val actual = names[table] ?: throw BadBackupArchiveException("Unknown database table")
-                    if (isQueueTable(table) || archive.migration && table in migrationExcludedTables ||
+                    if (isOperationalTable(table) || archive.migration && table in migrationExcludedTables ||
                         archive.scope == DataBackupService.SCOPE_PROJECT && table in terminalTables && table !in sharedReferenceTables
                     ) throw BadBackupArchiveException("Forbidden database table")
                     columns(target, actual)
@@ -827,7 +834,7 @@ class DataBackupServiceImpl(
         }
     }
     private fun validateRetainedReferences(target: Connection, staging: Connection, archive: Archive, names: Map<String, String>) {
-        val retained = names.keys.filter { it !in archive.tables && !isQueueTable(it) }
+        val retained = names.keys.filter { it !in archive.tables && !isOperationalTable(it) }
         val fks = foreignKeys(target.metaData, retained)
         for ((table, references) in fks) {
             for (fk in references.filter { it.pkTable in archive.tables }) {
@@ -885,7 +892,8 @@ class DataBackupServiceImpl(
         for ((name, root) in mapOf("git" to gitBaseDir, "svn" to svnBaseDir, "lfs" to lfsBaseDir, "uploads" to uploadBaseDir)) {
             if (!File(archive.tempRoot, name).exists()) continue
             val path = root.canonicalFile.toPath()
-            if (queue.startsWith(path) || path.startsWith(queue) || database.startsWith(path) || path.startsWith(database)) {
+            if (queue.startsWith(path) || path.startsWith(queue) || database.startsWith(path) || path.startsWith(database) ||
+                searchIndexDir.canonicalFile.toPath().startsWith(path) || path.startsWith(searchIndexDir.canonicalFile.toPath())) {
                 throw BadBackupArchiveException("Restore destination overlaps operational storage")
             }
         }
@@ -1014,6 +1022,10 @@ class DataBackupServiceImpl(
         val protectedRoots = mutableSetOf("h2") // The running H2 database is restored through logical table rows.
         if (queuePath != rootPath && queuePath.startsWith(rootPath)) {
             protectedRoots += rootPath.relativize(queuePath).getName(0).toString()
+        }
+        val indexPath = searchIndexDir.canonicalFile.toPath()
+        if (indexPath != rootPath && indexPath.startsWith(rootPath)) {
+            protectedRoots += rootPath.relativize(indexPath).getName(0).toString()
         }
         applicationDataDir.mkdirs()
         val incoming = source.listFiles().orEmpty().associateBy { it.name }
@@ -1171,7 +1183,7 @@ class DataBackupServiceImpl(
                 metadata.getImportedKeys(null, null, candidate).use { rs ->
                     while (rs.next()) {
                         val pkTable = rs.getString("PKTABLE_NAME")
-                        if (isQueueTable(pkTable)) continue
+                        if (isOperationalTable(pkTable)) continue
                         val name = rs.getString("FK_NAME") ?: "fk_${rs.getInt("KEY_SEQ")}"
                         grouped.getOrPut(table.lowercase()) { LinkedHashMap() }
                             .getOrPut("$candidate/$name") { mutableListOf() }
@@ -1196,7 +1208,7 @@ class DataBackupServiceImpl(
         execution: DataBackupExecution?,
     ): LinkedHashMap<String, File> {
         val metadata = connection.metaData
-        val allTables = listTables(connection).filterNot { isQueueTable(it) }
+        val allTables = listTables(connection).filterNot { isOperationalTable(it) }
         val tableNames = allTables.associateBy { it.lowercase() }
         val fks = foreignKeys(metadata, allTables)
         val files = LinkedHashMap<String, File>()
@@ -1510,6 +1522,8 @@ class DataBackupServiceImpl(
         val excluded = buildList {
             val queuePath = queueDataDir.canonicalFile.toPath()
             if (queuePath.startsWith(root)) add(queuePath)
+            val indexPath = searchIndexDir.canonicalFile.toPath()
+            if (indexPath.startsWith(root)) add(indexPath)
             val h2Path = File(applicationDataDir, "h2").canonicalFile.toPath()
             if (h2Path.startsWith(root)) add(h2Path)
         }

@@ -31,7 +31,9 @@
                 </a>
                 <div class="title-wrap">
                     <span class="post-id" th:text="${req.number}">1</span>
-                    <span class="title-prefix" th:text="${@templateHelper.showHeaderWordsInBracketsIfExist(req.title)}"></span>
+                    <a th:each="head : ${T(com.github.yonaprojects.yona.domain.issue.TitleHeads).extract(req.title)}"
+                       th:href="@{/{owner}/{projectName}/{route}(owner=${project.owner}, projectName=${project.name}, route=${requestType == 'sent' ? 'sentPullRequests' : (requestType == 'closed' ? 'closedPullRequests' : 'pulls')}, titleHead=${head}, literalFilter=true, filter=${filter}, contributorId=${contributorId})}"
+                       th:text="'[' + ${head} + ']'" class="title-head-filter"></a>
                     <a th:href="@{/{owner}/{projectName}/pull/{number}(owner=${req.toProject.owner}, projectName=${req.toProject.name}, number=${req.number})}"
                        class="title" th:classappend="${req.isConflict == true} ? 'conflict'"
                        th:text="${@templateHelper.removeHeaderWords(req.title)}">PR 제목</a>

@@ -74,6 +74,23 @@ class IssueRestApiControllerSpec : DescribeSpec({
             verify(exactly = 1) { issueController.getIssues(1L, null, null, null, null, any<Pageable>(), any()) }
         }
 
+        it("전문 검색어와 기존 조건을 한 요청으로 전달한다") {
+            every { projectRepository.findByOwnerAndName("yona", "yona") } returns Optional.of(project)
+            every {
+                issueController.getIssues(1L, null, "alice", "bug", "bob", any<Pageable>(), any(),
+                    "로그인 오류", 3L, 4L, listOf(5L), "2026-10-02")
+            } returns ResponseEntity.ok(PageImpl(emptyList<IssueResponse>(), PageRequest.of(0, 15), 0))
+            mockMvc.perform(get("/api/v1/projects/yona/yona/issues")
+                .param("filter", "로그인 오류").param("assignee", "alice").param("author", "bob")
+                .param("label", "bug").param("milestoneId", "3").param("commenterId", "4")
+                .param("labelIds", "5").param("dueDate", "2026-10-02"))
+                .andExpect(status().isOk)
+            verify(exactly = 1) {
+                issueController.getIssues(1L, null, "alice", "bug", "bob", any<Pageable>(), any(),
+                    "로그인 오류", 3L, 4L, listOf(5L), "2026-10-02")
+            }
+        }
+
         // gh issue list의 --assignee/--label/--author 필터에 대응.
         it("assignee/label/author 쿼리 파라미터를 IssueController.getIssues에 그대로 전달한다") {
             val issue = Issue(id = 5L, number = 5L, title = "제목", project = project)

@@ -26,6 +26,8 @@
               th:action="${requestType == 'closed'} ? @{/{owner}/{projectName}/closedPullRequests(owner=${project.owner}, projectName=${project.name})} : (${requestType == 'sent'} ? @{/{owner}/{projectName}/sentPullRequests(owner=${project.owner}, projectName=${project.name})} : @{/{owner}/{projectName}/pulls(owner=${project.owner}, projectName=${project.name}, state=${state})})">
             <div class="search">
                 <div class="search-bar">
+                    <input type="hidden" name="literalFilter" value="true">
+                    <label th:if="${titleHead != null}"><span th:text="#{search.titleHead}">머리말</span> <input name="titleHead" th:value="${titleHead}"></label>
                     <input name="filter" class="textbox full" type="text" th:value="${filter}">
                     <button type="submit" class="search-btn"><i class="yobicon-search"></i></button>
                 </div>

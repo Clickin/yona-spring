@@ -50,7 +50,9 @@ class SearchRestApiController(
         if (q.isBlank()) return ResponseEntity.badRequest().build()
         val user = getLoginUser(authentication)
         val result = searchService.searchInAll(q, SearchType.ISSUE, user, PageRequest.of(page, size))
-        return ResponseEntity.ok(result.issues.map { it.toResponse() })
+        val search = result.issues as? com.github.yonaprojects.yona.domain.issue.IssueSearchPage
+        return ResponseEntity.ok().header("X-Yona-Search-Backend", search?.searchBackend ?: "db")
+            .body(result.issues.map { it.toResponse().copy(searchSnippet = search?.snippets?.get(it.id)) })
     }
 
     // yona ProjectApi.createdProjectNode() 대응 — ProjectRestApiController.

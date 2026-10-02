@@ -80,7 +80,9 @@ class PullRequestViewController(
         @RequestParam(required = false) filter: String?,
         @RequestParam(required = false) contributorId: Long?,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        @RequestParam(required = false) titleHead: String? = null,
+        @RequestParam(defaultValue = "false") literalFilter: Boolean = false
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: return "error/404"
@@ -100,11 +102,16 @@ class PullRequestViewController(
         }
         val states = if (stateEnum == State.ALL) null else listOf(stateEnum)
 
+        val head = titleHead?.takeIf { it.isNotBlank() } ?: if (literalFilter) null else com.github.yonaprojects.yona.domain.issue.TitleHeads.legacy(filter)
+        val text = if (head != null && titleHead == null) null else filter
+        model.addAttribute("titleHead", head)
         val pageable = PageRequest.of(page, ITEMS_PER_PAGE, Sort.by(Sort.Direction.DESC, "id"))
-        val spec = buildPullRequestSpec(project, matchFromProject = false, states = states, filter = filter, contributorId = contributorId)
-        val prPage = pullRequestRepository.findAll(spec, pageable)
+        val spec = buildPullRequestSpec(project, matchFromProject = false, states = states, filter = text, contributorId = contributorId)
+        val prPage = if (head == null) pullRequestRepository.findAll(spec, pageable) else
+            com.github.yonaprojects.yona.domain.issue.TitleHeads.page(
+                pullRequestRepository, spec, head, pageable)
 
-        return renderList(model, project, loginUser, prPage, state, filter, contributorId)
+        return renderList(model, project, loginUser, prPage, state, text, contributorId)
     }
 
     // yona PullRequestApp.closedPullRequests 대응. CLOSED/MERGED 상태를 모두 "닫힌 PR"로 취급한다.
@@ -116,7 +123,9 @@ class PullRequestViewController(
         @RequestParam(required = false) filter: String?,
         @RequestParam(required = false) contributorId: Long?,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        @RequestParam(required = false) titleHead: String? = null,
+        @RequestParam(defaultValue = "false") literalFilter: Boolean = false
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: return "error/404"
@@ -126,11 +135,16 @@ class PullRequestViewController(
             return "error/forbidden"
         }
 
+        val head = titleHead?.takeIf { it.isNotBlank() } ?: if (literalFilter) null else com.github.yonaprojects.yona.domain.issue.TitleHeads.legacy(filter)
+        val text = if (head != null && titleHead == null) null else filter
+        model.addAttribute("titleHead", head)
         val pageable = PageRequest.of(page, ITEMS_PER_PAGE, Sort.by(Sort.Direction.DESC, "id"))
-        val spec = buildPullRequestSpec(project, matchFromProject = false, states = listOf(State.CLOSED, State.MERGED), filter = filter, contributorId = contributorId)
-        val prPage = pullRequestRepository.findAll(spec, pageable)
+        val spec = buildPullRequestSpec(project, matchFromProject = false, states = listOf(State.CLOSED, State.MERGED), filter = text, contributorId = contributorId)
+        val prPage = if (head == null) pullRequestRepository.findAll(spec, pageable) else
+            com.github.yonaprojects.yona.domain.issue.TitleHeads.page(
+                pullRequestRepository, spec, head, pageable)
 
-        return renderList(model, project, loginUser, prPage, "closed", filter, contributorId)
+        return renderList(model, project, loginUser, prPage, "closed", text, contributorId)
     }
 
     // yona PullRequestApp.sentPullRequests 대응. 이 프로젝트가 출발지(fromProject)인 PR 목록.
@@ -141,7 +155,9 @@ class PullRequestViewController(
         @RequestParam(required = false, defaultValue = "0") page: Int,
         @RequestParam(required = false) filter: String?,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        @RequestParam(required = false) titleHead: String? = null,
+        @RequestParam(defaultValue = "false") literalFilter: Boolean = false
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: return "error/404"
@@ -151,13 +167,18 @@ class PullRequestViewController(
             return "error/forbidden"
         }
 
+        val head = titleHead?.takeIf { it.isNotBlank() } ?: if (literalFilter) null else com.github.yonaprojects.yona.domain.issue.TitleHeads.legacy(filter)
+        val text = if (head != null && titleHead == null) null else filter
+        model.addAttribute("titleHead", head)
         val pageable = PageRequest.of(page, ITEMS_PER_PAGE, Sort.by(Sort.Direction.DESC, "id"))
         // legacy git/partial_search.scala.html: sent 탭은 상세검색(보낸이) 사이드바가 없어
         // contributorId 조건을 받지 않는다(검색창 filter는 계속 지원).
-        val spec = buildPullRequestSpec(project, matchFromProject = true, states = null, filter = filter, contributorId = null)
-        val prPage = pullRequestRepository.findAll(spec, pageable)
+        val spec = buildPullRequestSpec(project, matchFromProject = true, states = null, filter = text, contributorId = null)
+        val prPage = if (head == null) pullRequestRepository.findAll(spec, pageable) else
+            com.github.yonaprojects.yona.domain.issue.TitleHeads.page(
+                pullRequestRepository, spec, head, pageable)
 
-        return renderList(model, project, loginUser, prPage, "sent", filter, null)
+        return renderList(model, project, loginUser, prPage, "sent", text, null)
     }
 
     private fun checkMemberAccess(

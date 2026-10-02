@@ -10,7 +10,19 @@ import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 
 @Repository
-interface PostingRepository : JpaRepository<Posting, Long> {
+interface PostingRepository : JpaRepository<Posting, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<Posting> {
+    // Preserve native LIKE handling and label OR semantics while loading no candidate bodies.
+    @Query(value = """
+        SELECT p.id AS id, p.title AS title FROM posting p
+        WHERE p.project_id = :projectId AND p.notice = :isNotice
+          AND (:keyword IS NULL OR LOWER(p.title) LIKE LOWER(:keyword) OR LOWER(p.body) LIKE LOWER(:keyword))
+          AND (:labelCount = 0 OR EXISTS (
+              SELECT 1 FROM posting_issue_label pl WHERE pl.posting_id = p.id AND pl.issue_label_id IN :labelIds))
+    """, nativeQuery = true)
+    fun findHeadCandidates(@Param("projectId") projectId: Long, @Param("isNotice") isNotice: Boolean,
+        @Param("keyword") keyword: String?, @Param("labelCount") labelCount: Int, @Param("labelIds") labelIds: List<Long>
+    ): List<com.github.yonaprojects.yona.domain.issue.TitleHeadCandidate>
+
     fun findByProject(project: Project): List<Posting>
     fun countByProject(project: Project): Long
     fun findByProject(project: Project, pageable: Pageable): Page<Posting>

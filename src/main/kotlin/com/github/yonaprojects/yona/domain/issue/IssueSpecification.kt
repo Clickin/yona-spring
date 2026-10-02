@@ -13,7 +13,7 @@ import java.time.ZoneId
 object IssueSpecification {
     fun filterIssues(
         project: Project,
-        state: State,
+        state: State?,
         filter: String?,
         authorId: Long?,
         assigneeId: Long?,
@@ -29,7 +29,7 @@ object IssueSpecification {
             predicates.add(cb.equal(root.get<Project>("project"), project))
 
             // 2. 상태 조건
-            predicates.add(cb.equal(root.get<State>("state"), state))
+            state?.let { predicates.add(cb.equal(root.get<State>("state"), it)) }
 
             // 3. 작성자 조건
             if (authorId != null && authorId > 0) {
@@ -76,23 +76,7 @@ object IssueSpecification {
                 predicates.add(inClause)
             }
 
-            // 8. 검색어 조건 (filter)
-            if (!filter.isNullOrBlank()) {
-                val keyword = "%$filter%"
-                val titleLike = cb.like(root.get("title"), keyword)
-                val bodyLike = cb.like(root.get("body"), keyword)
-                
-                // 댓글 내용도 검색 대상에 포함
-                val subquery = query.subquery(Long::class.java)
-                val commentRoot = subquery.from(IssueComment::class.java)
-                subquery.select(commentRoot.get<Issue>("issue").get<Long>("id"))
-                subquery.where(cb.like(commentRoot.get("contents"), keyword))
-
-                val inClause = cb.`in`(root.get<Long>("id"))
-                inClause.value(subquery)
-
-                predicates.add(cb.or(titleLike, bodyLike, inClause))
-            }
+            textSearch(filter).toPredicate(root, query, cb)?.let(predicates::add)
 
             // 9. 마감일 조건 (dueDate)
             if (!dueDate.isNullOrBlank()) {
@@ -108,6 +92,20 @@ object IssueSpecification {
 
             cb.and(*predicates.toTypedArray())
         }
+    }
+
+    fun textSearch(filter: String?): Specification<Issue> = Specification { root, query, cb ->
+        if (filter.isNullOrBlank()) return@Specification cb.conjunction()
+        val keyword = "%$filter%"
+        val subquery = query.subquery(Long::class.java)
+        val comment = subquery.from(IssueComment::class.java)
+        subquery.select(comment.get<Issue>("issue").get<Long>("id"))
+        subquery.where(cb.like(comment.get("contents"), keyword))
+        cb.or(
+            cb.like(root.get("title"), keyword),
+            cb.like(root.get("body"), keyword),
+            root.get<Long>("id").`in`(subquery)
+        )
     }
 
     // yona organization/group_issue_search_partial.scala.html 대응. 프로젝트 그룹(#filterIssues)과
