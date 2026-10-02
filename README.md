@@ -1,88 +1,68 @@
 # Yona #843 Lucene 검색 PoC 기록
 
-[#843](https://github.com/yona-projects/yona/issues/843) 제안(이슈 전문 검색, 기본은 DB, 선택으로 Lucene)을 구현하고 측정한 기록이다. 구현 코드는 [`poc/issue-843-lucene-search`](https://github.com/Clickin/yona-spring/tree/poc/issue-843-lucene-search)에 있고, 이 브랜치에는 문서와 측정 도구만 둔다. upstream에 merge하지 않는다.
+[#843](https://github.com/yona-projects/yona/issues/843)의 이슈 전문 검색을 구현하고 측정했다. 기본 검색은 DB이며 Lucene은 선택 사항이다. 구현은 `poc/issue-843-lucene-search`, 문서와 측정 도구는 이 브랜치에 둔다.
 
-- 구현 커밋: [`923fd64`](https://github.com/Clickin/yona-spring/commit/923fd641106467f56d85bfecf9bca2da688a270c)
-- 테스트: H2 통합·회귀 500개 통과 (2026-10-03)
-- 측정 데이터: 평가 데이터. 이슈 4,882건, 댓글 6,335건, 검색 대상 텍스트 8.94 MiB
+- 구현: `1a85fc396` (로컬 커밋, push하지 않음)
+- 검증: H2 통합·회귀 505개 통과
+- 평가 규모: 이슈 4,882건과 댓글 6,335건
 
-## 결과 요약
+## 검색 품질
 
-### 검색 품질
+기존 검색어 1,731개에 식별자 검색어 1,640개를 추가했다. 같은 검색어로 수정 전후에 원래 이슈를 찾는 비율을 비교했다.
 
-이슈 300개를 뽑아 본문 문장을 바꿔 쓴 검색어 1,731개를 만들고, 원래 이슈를 찾는지 쟀다.
+| 검색어 | 건수 | LIKE | Lucene 전 | Lucene 후 |
+|---|---:|---:|---:|---:|
+| 기존 표본 | 1,731 | 17.79% | 95.32% | 95.78% |
+| 기존 식별자 일부 | 8 | 100% | 0% | 100% |
+| camel 뒷부분 | 300 | 100% | 24.67% | 86.33% |
+| camel 앞부분 | 300 | 100% | 32.00% | 94.67% |
+| 점·snake·kebab·슬래시 일부 | 1,040 | 100% | 100% | 100% |
+| **전체** | **3,371** | **57.79%** | **84.84%** | **96.14%** |
 
-| 검색어 | 현행 LIKE | 단어별 LIKE AND | Lucene |
-| --- | ---: | ---: | ---: |
-| 원문 그대로 두 단어 | 100% | 100% | 95.6% |
-| 떨어진 두 단어 | 0% | 100% | 96.5% |
-| 어순을 바꾼 두 단어 | 0% | 100% | 93.6% |
-| 활용형을 바꿈 (`배포했습니다` → `배포된`) | 0% | 1.2% | 97.5% |
-| 조사를 바꿈 (`오류가` → `오류를`) | 0% | 8.0% | 96.7% |
-| 띄어 쓴 단어를 붙임 (`권한 설정` → `권한설정`) | 0% | 0% | 93.0% |
-| 식별자 구분자를 공백으로 (`user_id` → `user id`) | 0% | 100% | 100% |
-| 식별자 일부 (`PointerException`, 8건) | 100% | 100% | 0% |
-| **전체** | 17.7% | 63.3% | **95.3%** |
+기존 식별자 8건은 기존 표본에 포함된다. 다른 검색 유형의 찾은 비율은 떨어지지 않았다. 기존에 찾던 이슈의 순위 하락도 없었다.
 
-Lucene의 약점은 두 가지다. 식별자 일부로는 찾지 못한다. 결과가 넓어서(중앙값 30건) 원래 이슈가 첫 페이지 20건 안에 드는 비율은 63.3%다.
+전체 검색어의 상위 5·10·20건 적중률은 각각 **47.88%, 56.75%, 66.00%**다. 수정 전에는 40.55%, 48.62%, 57.16%였다. 식별자 일부로 새로 찾은 결과는 기존 결과 뒤에 붙이고 스니펫은 생략한다.
 
-### 속도
+추가 식별자 표본에서는 57건을 놓쳤다. 약어의 대문자 경계와 한글에 바로 붙은 식별자를 충분히 나누지 못했다. 한국어 분석에서 놓치던 73건도 남아 있다.
 
-같은 검색어로 첫 페이지 20건을 가져오는 시간이다.
+## 속도와 크기
 
-| | 현행 LIKE | 단어별 LIKE AND | Lucene |
-| --- | ---: | ---: | ---: |
-| p50 | 29.48ms | 43.26ms | 5.16ms |
-| p95 | 48.37ms | 91.92ms | 21.93ms |
-| 결과 없는 검색 p50 | 28.58ms | 28.64ms | 0.22ms |
+전체 검색어로 첫 페이지 20건을 가져오는 시간이다. HTTP와 화면 렌더링은 제외했다.
 
-### 자원
+| 항목 | 전 | 후 |
+|---|---:|---:|
+| LIKE p50 / p95 | 60.07 / 119.57ms | 59.90 / 119.81ms |
+| Lucene p50 / p95 | 10.42 / 40.99ms | 10.59 / 42.35ms |
+| 색인 파일 | 2.81 MiB | 7.99 MiB |
 
-| 항목 | 값 |
-| --- | --- |
-| 초기 전체 색인 | 2.1–3.1초 |
-| 색인 파일 | 2.82 MiB |
-| 색인 후 heap 증가 | 약 17 MiB |
-| 배포 JAR 추가 | 13.92 MiB (`backend=db`여도 포함) |
-| 변경 없을 때 색인 작업 | 0건 (10초 관찰) |
-| 이슈 10건 수정 반영 | 작업 1개, 약 2.6초 |
-
-자원 수치는 관리자 권한, 단일 클라이언트로 잰 값이다. 운영 서버의 최소 RAM이나 동시 부하 성능을 나타내지 않는다.
+색인 크기는 2.84배가 됐다. 이전 기록의 2.82 MiB와 거의 같은 기준선에서 다시 측정했다. 관리자 권한·단일 클라이언트·MariaDB 10.11 환경이며, 동시 부하 성능을 나타내지는 않는다.
 
 ## 동작
 
-- 기본값은 DB 검색이다. `yona.search.backend=lucene`이면 Yona 프로세스 안의 Lucene 색인을 쓴다. 단일 노드 전용이다.
-- 모든 프로젝트의 이슈 제목·본문·댓글을 색인한다. 검색할 때 권한, 라벨, 담당자 같은 조건은 현재 DB로 확인한다.
-- 이슈나 댓글을 저장하면 같은 트랜잭션에 "이 이슈가 바뀌었다"는 기록을 남긴다. 첫 변경 후 2초가 지나면 기존 작업 큐가 모아서 한 번에 색인한다.
-- 수정 직후 몇 초 동안은 이전 내용으로 검색될 수 있다. 화면에 보이는 제목과 본문은 항상 DB 기준이다.
-- Lucene이 준비되지 않았거나 실패하면 DB 검색으로 돌아가고 화면에 표시한다.
-
-자세한 내용은 [동작 문서](docs/search-poc.md)에 있다.
+- `yona.search.backend=lucene`이면 제목·본문·댓글을 로컬 디스크에 색인한다. 단일 노드 전용이다.
+- 한국어 분석은 유지하고, 식별자의 원형과 부분을 보조 필드에 추가한다. 여러 부분은 같은 필드에 인접해야 한다. 큰따옴표 구문 검색은 기존대로다.
+- 접근 권한과 검색 조건은 현재 DB에서 확인한다. 변경은 기존 작업 큐를 통해 반영하므로 잠시 이전 내용으로 검색될 수 있다.
+- 이전 형식의 색인은 재시작 때 전체 재생성한다. 색인이 준비되지 않았거나 실패하면 DB 검색으로 돌아간다.
 
 ## 문서
 
-| 문서 | 내용 |
-| --- | --- |
-| [search-poc.md](docs/search-poc.md) | 검색 동작, 설정, 색인 운영, 페이징 |
-| [search-quality-measurement.md](docs/search-quality-measurement.md) | 검색 품질 측정 방법과 결과, 수정한 결함 |
-| [search-resource-measurement.md](docs/search-resource-measurement.md) | 속도·자원 측정, 최적화 단계별 수치 |
-| [search-indexing-policy-research.md](docs/search-indexing-policy-research.md) | Gitea, GitLab 등의 색인 갱신 방식 조사 |
-| [search-stale-document-research.md](docs/search-stale-document-research.md) | 색인과 DB 내용이 다를 때의 처리 방식 조사 |
-
-집계 수치는 `docs/*-results.json`에 있다. 검색어 원문, 이슈 본문, 사용자 정보는 넣지 않았다.
+- [검색 동작과 운영](docs/search-poc.md)
+- [검색 품질 측정과 전후 집계](docs/search-quality-measurement.md)
+- [이전 속도·자원 측정](docs/search-resource-measurement.md)
+- [색인 갱신 방식 조사](docs/search-indexing-policy-research.md)
+- [색인과 DB 내용이 다를 때의 처리](docs/search-stale-document-research.md)
 
 ## 재현
 
-구현 커밋을 임시 디렉터리에 열고 이 브랜치의 측정 파일을 가져와 실행한다. 빈 전용 DB가 필요하다. 환경변수는 각 측정 문서에 있다.
+구현 worktree에 이 브랜치의 도구를 가져와 실행한다. 환경변수와 빈 전용 DB 준비는 [측정 문서](docs/search-quality-measurement.md#재현)를 따른다.
 
 ```sh
-git fetch origin docs/issue-843-lucene-poc poc/issue-843-lucene-search
-git worktree add --detach /tmp/yona-search-benchmark 923fd641106467f56d85bfecf9bca2da688a270c
-git -C /tmp/yona-search-benchmark restore --source=origin/docs/issue-843-lucene-poc --worktree -- \
-  src/test/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchResourceProbe.kt \
+git worktree add --detach /tmp/yona-search-benchmark poc/issue-843-lucene-search
+git -C /tmp/yona-search-benchmark restore --source=docs/issue-843-lucene-poc --worktree -- \
   src/test/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchQualityProbe.kt \
   support-script/search-poc/resource-probe.gradle
 cd /tmp/yona-search-benchmark
-./gradlew searchQualityProbe --init-script support-script/search-poc/resource-probe.gradle   # 검색 품질
-./gradlew searchResourceProbe --init-script support-script/search-poc/resource-probe.gradle  # 속도·자원
+./gradlew searchQualityProbe --init-script support-script/search-poc/resource-probe.gradle
 ```
+
+검색어 원문과 개별 결과는 저장소에 넣지 않는다. 이번 측정용 컨테이너와 임시 복원본은 삭제했다. 평가 입력은 변경하지 않았다.

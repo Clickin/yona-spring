@@ -29,12 +29,15 @@ import kotlin.system.measureNanoTime
 object IssueSearchQualityProbe {
     data class Case(val type: String, val issueId: Long, val text: String)
 
+    val identifierTypes = listOf("identifierCamelSuffix", "identifierCamelPrefix", "identifierDotFinal",
+        "identifierSnakePart", "identifierKebabPart", "identifierSlashPart")
+
     /**
      * Rule order is the report order. `exact` and `identifierPart` are substrings, so LIKE finds them.
      * No word-splitting rule: halving a word without a dictionary produces queries nobody types (`업데 이트`).
      */
     val types = listOf("exact", "separated", "reordered", "inflected", "particle", "joined",
-        "identifierSplit", "identifierPart", "missing")
+        "identifierSplit", "identifierPart", "missing") + identifierTypes
 
     private val hangul = Regex("[가-힣]{2,}")
     private val verbEnding = Regex("^([가-힣]{2,})(하였습니다|했습니다|합니다|하였다|했다|한다|하는|하고|해서|하여|했고|하면|해야|" +
@@ -103,20 +106,79 @@ object IssueSearchQualityProbe {
         }
     }
 
+    private val identifier = Regex("(?<![A-Za-z0-9_./-])[A-Za-z][A-Za-z0-9]*(?:[_.\\-/][A-Za-z0-9]+)*(?![A-Za-z0-9_./-])")
+    private val camelBoundary = Regex("(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+    private val identifierUrl = Regex("https?://\\S+")
+    private val identifierSeparators = listOf('_' to "identifierSnakePart", '-' to "identifierKebabPart",
+        '/' to "identifierSlashPart")
+
+    /** Includes code blocks, unlike the unchanged prose rules above. One independent choice per issue/type. */
+    fun identifierCases(issueId: Long, fields: List<String>, seed: Long): List<Case> {
+        val candidates = linkedMapOf<String, MutableSet<String>>()
+        fun add(type: String, text: String) {
+            if (text.length >= 2) candidates.getOrPut(type) { linkedSetOf() }.add(text)
+        }
+        for (field in fields) for (match in identifier.findAll(field.replace(identifierUrl, " "))) {
+            val word = match.value
+            if (word.all { it.isLetterOrDigit() }) {
+                for (boundary in camelBoundary.findAll(word)) {
+                    add("identifierCamelSuffix", word.substring(boundary.range.first))
+                    add("identifierCamelPrefix", word.substring(0, boundary.range.first))
+                }
+            }
+            if ('.' in word) add("identifierDotFinal", word.substringAfterLast('.').substringBefore('/'))
+            for ((separator, type) in identifierSeparators) {
+                if (separator in word) word.split(separator).forEach { add(type, it) }
+            }
+        }
+        return candidates.map { (type, texts) ->
+            Case(type, issueId, texts.toList().random(Random(java.util.Objects.hash(seed, issueId, type))))
+        }
+    }
+
+    private fun selfCheck() {
+        val fields = listOf("오류 수정 NullPointerException user_id")
+        check(cases(1, fields, 843).associate { it.type to it.text } == mapOf(
+            "exact" to "오류 수정", "reordered" to "수정 오류", "joined" to "오류수정",
+            "identifierSplit" to "user id", "identifierPart" to "PointerException"))
+        val identifiers = listOf("```getHTTPResponse com.example.Widget user_id request-handler src/main```")
+        val selected = identifierCases(1, identifiers, 843).associate { it.type to it.text }
+        check(selected.keys == identifierTypes.toSet())
+        check(selected.getValue("identifierCamelSuffix") in setOf("HTTPResponse", "Response"))
+        check(selected.getValue("identifierCamelPrefix") in setOf("get", "getHTTP"))
+        check(selected.getValue("identifierDotFinal") == "Widget")
+        check(selected.getValue("identifierSnakePart") in setOf("user", "id"))
+        check(selected.getValue("identifierKebabPart") in setOf("request", "handler"))
+        check(selected.getValue("identifierSlashPart") in setOf("src", "main"))
+        check(identifierCases(1, identifiers, 843) == identifierCases(1, identifiers, 843))
+    }
+
+    /** Resolve symlinked parents too: private data must never be written into any Git worktree. */
+    private fun externalOutput(path: Path): Path {
+        val absolute = path.toAbsolutePath().normalize()
+        val parent = requireNotNull(absolute.parent).toRealPath()
+        require(generateSequence(parent) { it.parent }.none { Files.exists(it.resolve(".git")) }) {
+            "Probe output must be outside Git worktrees"
+        }
+        return parent.resolve(absolute.fileName)
+    }
+
     private fun nearest(values: List<Double>, p: Double) =
         values.sorted().let { if (it.isEmpty()) null else it[(Math.ceil(p * it.size).toInt() - 1).coerceIn(0, it.size - 1)] }
 
     @JvmStatic fun main(args: Array<String>) {
+        selfCheck()
+        if (args.contentEquals(arrayOf("--self-check"))) return
         val archive = Path.of(requireNotNull(System.getenv("YONA_PROBE_ARCHIVE"))).toAbsolutePath()
-        val root = Path.of(requireNotNull(System.getenv("YONA_PROBE_OUTPUT"))).toAbsolutePath()
+        val root = externalOutput(Path.of(requireNotNull(System.getenv("YONA_PROBE_OUTPUT"))))
         val jdbc = System.getenv("YONA_PROBE_JDBC")
         val sample = (System.getenv("YONA_PROBE_SAMPLE") ?: "300").toInt()
         val seed = (System.getenv("YONA_PROBE_SEED") ?: "843").toLong()
         val asLogin = System.getenv("YONA_PROBE_AS")
-        val casesOutput = System.getenv("YONA_PROBE_CASES_OUTPUT")?.let { Path.of(it) }
         require(sample > 0 && Files.isRegularFile(archive))
         Files.createDirectory(root, java.nio.file.attribute.PosixFilePermissions.asFileAttribute(
             java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"))) // Refuse reuse.
+        val casesOutput = System.getenv("YONA_PROBE_CASES_OUTPUT")?.let { externalOutput(Path.of(it)) }
         val context = SpringApplication.run(YonaApplication::class.java,
             "--spring.profiles.active=${if (jdbc == null) "h2" else "mariadb"}", "--server.address=127.0.0.1", "--server.port=0",
             "--yona.data=$root/data", "--spring.datasource.url=${jdbc ?: "jdbc:h2:file:$root/database;NON_KEYWORDS=VALUE"}",
@@ -176,6 +238,19 @@ object IssueSearchQualityProbe {
                 }.toList()
             }!! + List(20) { n -> Case("missing", 0, "zq" + List(10) { ('a' + random.nextInt(26)) }.joinToString("") + n) }
 
+            // A separate population per identifier type, not another draw from the 300 prose issues.
+            // Do not consume `random`: it defines the original sample and all 20 missing queries.
+            val identifierPool = tx.execute {
+                ids(readable, Sort.by("id")).flatMap { id ->
+                    val issue = issues.findById(id).get()
+                    val fields = listOf(issue.title, issue.body.orEmpty()) + comments.findForSearch(listOf(id)).map { it.contents }
+                    identifierCases(id, fields, seed)
+                }.groupBy { it.type }
+            }!!
+            val identifierSample = identifierTypes.flatMap { type ->
+                identifierPool[type].orEmpty().shuffled(Random(java.util.Objects.hash(seed, type, "identifierIssues"))).take(sample)
+            }
+
             // Ordered matches per engine: the full result list, not only the first page.
             val engines = linkedMapOf<String, (String) -> List<Long>>(
                 "like" to { text -> ids(readable.and(IssueSpecification.textSearch(text)), byDate) },
@@ -194,7 +269,7 @@ object IssueSearchQualityProbe {
                     as IssueSearchPage).searchBackend == "lucene") })
 
             data class Outcome(val rank: Int?, val hits: Int, val ms: Double)
-            val outcomes = cases.map { case ->
+            val outcomes = (cases + identifierSample).map { case ->
                 case to engines.mapValues { (name, engine) ->
                     val matched = tx.execute { engine(case.text) }!!
                     val page = pages.getValue(name)
@@ -209,8 +284,23 @@ object IssueSearchQualityProbe {
                 "user" to if (asLogin == null) "siteAdmin" else "archiveUser",
                 "issues" to tx.execute { em.createQuery("select count(i) from Issue i", Long::class.javaObjectType).singleResult },
                 "comments" to tx.execute { em.createQuery("select count(c) from IssueComment c", Long::class.javaObjectType).singleResult })
-            for (type in types + "all") {
-                val rows = outcomes.filter { if (type == "all") it.first.type != "missing" else it.first.type == type }
+            result["identifierSampling"] = identifierTypes.associateWith { type ->
+                mapOf("eligibleIssues" to identifierPool[type].orEmpty().size,
+                    "sampledIssues" to identifierSample.count { it.type == type })
+            }
+            val indexPath = root.resolve("data/search/issues")
+            result["indexBytes"] = Files.walk(indexPath).use { paths ->
+                paths.filter { Files.isRegularFile(it) }.mapToLong { Files.size(it) }.sum()
+            }
+            for (type in types + listOf("all", "legacyAll", "identifierAll")) {
+                val rows = outcomes.filter {
+                    when (type) {
+                        "all" -> it.first.type != "missing"
+                        "legacyAll" -> it.first.type != "missing" && it.first.type !in identifierTypes
+                        "identifierAll" -> it.first.type in identifierTypes
+                        else -> it.first.type == type
+                    }
+                }
                 if (rows.isEmpty()) continue
                 result[type] = linkedMapOf<String, Any?>("cases" to rows.size).apply {
                     if (type != "missing") {
@@ -221,6 +311,8 @@ object IssueSearchQualityProbe {
                         val list = rows.map { it.second.getValue(name) }
                         put(name, linkedMapOf(
                             "recall" to if (type == "missing") null else list.count { it.rank != null }.toDouble() / list.size,
+                            "recallAt5" to if (type == "missing") null else list.count { (it.rank ?: Int.MAX_VALUE) <= 5 }.toDouble() / list.size,
+                            "recallAt10" to if (type == "missing") null else list.count { (it.rank ?: Int.MAX_VALUE) <= 10 }.toDouble() / list.size,
                             "recallAt20" to if (type == "missing") null else list.count { (it.rank ?: Int.MAX_VALUE) <= 20 }.toDouble() / list.size,
                             "mrr" to if (type == "missing") null else list.sumOf { r -> r.rank?.let { 1.0 / it } ?: 0.0 } / list.size,
                             "hitsP50" to nearest(list.map { it.hits.toDouble() }, 0.5),
@@ -233,10 +325,16 @@ object IssueSearchQualityProbe {
             val json = JsonMapper.builder().build().writerWithDefaultPrettyPrinter()
             Files.writeString(root.resolve("quality.json"), json.writeValueAsString(result))
             casesOutput?.let { path ->
-                Files.writeString(path, json.writeValueAsString(outcomes.map { (case, by) ->
-                    mapOf("type" to case.type, "issueId" to case.issueId, "text" to case.text,
-                        "rank" to by.mapValues { it.value.rank }, "hits" to by.mapValues { it.value.hits })
-                }), StandardOpenOption.CREATE_NEW)
+                Files.newByteChannel(path, setOf(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE),
+                    java.nio.file.attribute.PosixFilePermissions.asFileAttribute(
+                        java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"))).use { channel ->
+                    java.nio.channels.Channels.newWriter(channel, Charsets.UTF_8).use { writer ->
+                        writer.write(json.writeValueAsString(outcomes.map { (case, by) ->
+                            mapOf("type" to case.type, "issueId" to case.issueId, "text" to case.text,
+                                "rank" to by.mapValues { it.value.rank }, "hits" to by.mapValues { it.value.hits })
+                        }))
+                    }
+                }
             }
             println("Search quality metrics: ${root.resolve("quality.json")}")
         } finally { context.close() }
