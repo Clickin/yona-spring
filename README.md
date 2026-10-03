@@ -2,7 +2,7 @@
 
 [#843](https://github.com/yona-projects/yona/issues/843)의 이슈 전문 검색을 구현하고 측정했다. 기본 검색은 DB이며 Lucene은 선택 사항이다. 구현은 `poc/issue-843-lucene-search`, 문서와 측정 도구는 이 브랜치에 둔다.
 
-- 구현: `1a85fc396` (로컬 커밋, push하지 않음)
+- 구현: `44647acf3` (로컬 커밋, push하지 않음)
 - 검증: H2 통합·회귀 505개 통과
 - 평가 규모: 이슈 4,882건과 댓글 6,335건
 

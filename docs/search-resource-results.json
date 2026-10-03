@@ -1,7 +1,7 @@
 {
   "date": "2026-10-02",
   "dataset": "Evaluation dataset; unexpanded",
-  "baseCommit": "8c6675e64",
+  "baseCommit": "1b0e519a8",
   "jvm": [
     "-Xms256m",
     "-Xmx512m",
