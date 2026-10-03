@@ -23,7 +23,7 @@ Content-Type: application/json
 
 해제는 `false`. 성공 시 `200 {"pinned":true|false}`. 미인증 `401`, 읽을 수 있는 프로젝트의 비매니저 `403`, 읽을 수 없거나 존재하지 않는 프로젝트/이슈 `404`, 초안 `400`. 기존 API 토큰의 이슈 쓰기 스코프를 사용한다. 일반 이슈 응답에도 `pinnedAt`이 추가된다. 웹 폼은 CSRF가 적용되는 `POST /{owner}/{project}/issue/{number}/pin`을 사용하고 성공 시 상세 화면으로 `303` 이동한다.
 
-새 고정 API는 인증된 세션으로 호출할 때 CSRF 토큰을 요구한다. 웹 폼에도 같은 세션 경계를 적용하여 가짜 `Yona-Token` 또는 `Authorization: token` 헤더가 CSRF 예외가 되지 않게 한다. 세션 없는 정상 PAT/OAuth Bearer 요청은 기존처럼 허용하고, 다른 기존 API의 CSRF 정책은 변경하지 않는다.
+선행 브랜치 `fix/session-api-csrf`가 고정 API를 포함한 모든 `/api/v1/**`의 인증된 세션 변경 요청에 CSRF를 요구한다. 기능별 API matcher를 덮어쓰지 않는다. 웹 고정 폼에도 같은 세션 경계를 적용하여 가짜 `Yona-Token` 또는 `Authorization: token` 헤더가 CSRF 예외가 되지 않게 한다. 세션 없는 PAT/OAuth 요청은 기존 인증 필터에서 검증한다.
 
 ### 스키마
 
