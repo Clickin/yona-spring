@@ -4,6 +4,7 @@ import com.github.yonaprojects.yona.domain.attachment.Attachment
 import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.issue.RecentIssueService
+import com.github.yonaprojects.yona.domain.issue.SavedIssueViewRepository
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectService
@@ -33,8 +34,9 @@ class SiteServiceSpec : DescribeSpec({
     val recentIssueService = mockk<RecentIssueService>()
     val attachmentRepository = mockk<AttachmentRepository>()
     val passwordEncodingService = PasswordEncodingService()
+    val savedIssueViewRepository = mockk<SavedIssueViewRepository>(relaxUnitFun = true)
 
-    val service = SiteService(userRepository, projectRepository, projectUserRepository, projectService, recentIssueService, attachmentRepository, passwordEncodingService)
+    val service = SiteService(userRepository, projectRepository, projectUserRepository, projectService, recentIssueService, attachmentRepository, passwordEncodingService, savedIssueViewRepository)
 
     val targetUser = User(id = 10L, loginId = "gildong", name = "홍길동", state = UserState.ACTIVE)
 

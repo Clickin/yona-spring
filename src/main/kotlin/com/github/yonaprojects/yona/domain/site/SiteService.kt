@@ -3,6 +3,7 @@ package com.github.yonaprojects.yona.domain.site
 import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.issue.RecentIssueService
+import com.github.yonaprojects.yona.domain.issue.SavedIssueViewRepository
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectService
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
@@ -24,7 +25,8 @@ class SiteService(
     private val projectService: ProjectService,
     private val recentIssueService: RecentIssueService,
     private val attachmentRepository: AttachmentRepository,
-    private val passwordEncodingService: PasswordEncodingService
+    private val passwordEncodingService: PasswordEncodingService,
+    private val savedIssueViewRepository: SavedIssueViewRepository
 ) {
 
     @Transactional
@@ -97,6 +99,7 @@ class SiteService(
 
         // yona RecentIssue.deleteAll(user) 대응.
         recentIssueService.deleteAll(targetUser)
+        savedIssueViewRepository.deleteByOwnerId(userId)
     }
 
     @Transactional
