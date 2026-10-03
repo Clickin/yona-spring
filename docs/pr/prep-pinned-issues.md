@@ -85,6 +85,7 @@ JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem \
 - 후속 다중 모델 리뷰에서 `/yona` 아래 고정 요청의 `303 Location`에 context path가 빠지는 결함을 재현했다. `pinWeb`은 이제 요청의 context path를 URI 앞에 붙이며 기존 303 상태를 유지한다.
 - 수정 후 `PinnedIssueSpec`, `PinnedIssueSecuritySpec`이 통과했다 (`BUILD SUCCESSFUL in 26s`). 루트 경로와 `/yona`의 고정·해제 Location 및 저장 상태를 검사한다.
 - 테스트와 별도로 기존 Java source-launcher를 실제 앱·보안 필터·MVC·H2에 다시 실행했다. 수정 전 `PIN_PROBE status=303 location=/review-owner/pin-probe/issue/1 persisted=true`였고, 수정 후 `PIN_PROBE status=303 location=/yona/review-owner/pin-probe/issue/1 persisted=true`였다.
+- 고정 리다이렉트 수정과 독립 저장 보기의 relevance 대체 정렬 수정을 조합 브랜치에 병합한 뒤 8개 spec, 31개 테스트가 실패·오류·skip 없이 통과했다 (`BUILD SUCCESSFUL in 40s`). 병합 시 Lucene 검색의 `Sort.unsorted()` 분기를 유지했다. DB 모드의 저장 보기 재열기와 Lucene의 고정 검색 결과를 함께 검사했다.
 
 ## 이슈 승인 후 PR 준비
 
