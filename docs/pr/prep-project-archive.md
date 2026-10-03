@@ -14,6 +14,7 @@ Proposal: `docs/technical/github-forgejo-feature-gaps-2026-10-02.md`, “종료 
 - Code, issues, comments, board posts, PRs, wiki pages, attachments, project settings, membership and repository administration remain readable under their existing access rules. Mutating controls are removed or disabled; existing settings read pages retain manager-only access. PR pages do not run the mutating merge preview when archived.
 - Git HTTP and SSH reject receive-pack while allowing upload-pack. A shared pre-receive hook rechecks the persisted archive state after authentication, protecting branches, tags, and other refs even with a writable deploy key. Git wiki HTTP and LFS object uploads follow the same project gate.
 - SVN DAV writes and Mercurial HTTP/SSH writes are also blocked. Their protocol reads are not inferred from HTTP POST alone: SVN REPORT/PROPFIND and Mercurial read commands retain their existing behavior.
+- MVC protocol and attachment paths exclude the servlet context path. A deployment under `/yona`, `/hg`, or `/svn` still blocks archived project-logo deletion through `/files/{id}`; the context prefix cannot grant a protocol exemption.
 
 ## Schema and deployment
 
@@ -25,7 +26,7 @@ Old backups without this column restore projects as active. New backups include 
 
 | Surface | Entrypoints / ownership | Enforcement |
 | --- | --- | --- |
-| Web and all project REST forms | `/{owner}/{projectName}`, `/projects/{owner}/{projectName}`, `/api/projects/{projectId}`, `/api/v1/projects/{owner}/{project}`, `/-_-api/v1/owners/{owner}/projects/{projectName}`, `/api/{ownerName}/{projectName}` | MVC route-variable resolution rejects non-read methods for archived projects, including old-name aliases. Read-only POST markdown/change-detection/receiver preview handlers are exempt. |
+| Web and all project REST forms | `/{owner}/{projectName}`, `/projects/{owner}/{projectName}`, `/api/projects/{projectId}`, `/api/v1/projects/{owner}/{project}`, `/-_-api/v1/owners/{owner}/projects/{projectName}`, `/api/{ownerName}/{projectName}` | MVC route-variable resolution rejects non-read methods for archived projects, including old-name aliases. Read-only POST exceptions are limited to `MarkdownController.render`, `IssueController.detectChange`, and `IssueController.commentNotiReceivers`; matching method names in other controllers are not exempt. |
 | Issues | IssueController, IssueRestApiController, IssueApiController, IssueViewController, IssueShareController | Creation, update, delete, state changes, publish, bulk update, labels, assignee/sharer changes, weights and votes use HTTP gate plus AccessControl. IssueService move checks both source and destination, and state changes guard the actual project. |
 | Comments and board | CommentController, BoardController, BoardRestApiController, BoardApiController, BoardViewController | HTTP gate and AccessControl; CommentService creation checks actual issue/post ownership. Author/sharer shortcuts cannot bypass archive. |
 | Milestones and labels | MilestoneController/Api/View, LabelRestApiController, ProjectViewController label/category/copy actions | HTTP gate and resource AccessControl. Copying labels requires writable destination; reading source is unchanged. |
@@ -51,12 +52,34 @@ Old backups without this column restore projects as active. New backups include 
 
 ## Decisions awaiting issue approval
 
-- Archive is stronger than “no content edits”: watches, favorites, enrollment, settings, fork creation, and deletion are frozen as well. To destroy an archived project, an authorized manager must explicitly unarchive it first.
+- Archive is stronger than “no content edits”: watch/unwatch, favorite/star toggles in either direction, enrollment, leaving project membership, settings, fork creation, and deletion are frozen as well, even when an action only affects the current user. These actions require unarchiving first; reads and the non-project housekeeping listed above retain their existing policy. This conservative policy is implemented, but still awaits product-scope approval.
 - Archive retains visibility, members, feature toggles, open issue/PR state, and existing data. Unarchive restores normal authorization without reconstructing those values.
 - No automatic replay of background work skipped during archive. No archive notification/webhook event is introduced.
 - Already admitted operations are not force-cancelled or distributed-locked. New HTTP/mail/MCP requests check archive; Git rechecks before ref update and Hg SSH rechecks commands. Archive is not a filesystem/DB transactional snapshot and is not a substitute for revoking OS/database access. Concurrent archive-versus-in-flight operations require an explicit stronger consistency decision if linearizable freezing is required.
 
 ## Verification status
+
+### 2026-10-03 pre-PR review fixes
+
+After the interceptor fixes and shared CSRF update were merged locally, `ProjectArchiveSpec` passed **11 tests, zero failures/errors/skips** with JDK 21.0.6. The Gradle invocation completed successfully in 1m 4s:
+
+```sh
+JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem \
+  ./gradlew test -Dyona.it.db=h2 --no-daemon --max-workers=1 \
+  -Pkotlin.daemon.jvmargs=-Xmx4g \
+  --tests com.github.yonaprojects.yona.config.ProjectArchiveSpec
+```
+
+A separate Java 21 source-mode smoke invoked the compiled `ProjectArchiveInterceptor.preHandle` directly with Spring servlet request/response objects and in-memory repository proxies. All **19 checks** passed:
+
+- Archived attachment POSTs returned 403 under the root, `/yona`, `/hg`, `/svn`, and `/files` contexts. Attachment GETs and unarchived POSTs passed the interceptor in all five contexts.
+- `/yona/hg/owner/repo` POST and `/yona/svn/owner/repo` REPORT/PROPFIND passed the MVC interceptor for protocol-filter classification.
+- An unrelated handler named `render` returned 403 instead of gaining the preview exemption.
+
+This smoke exercised the changed interceptor, not a live HTTP server, persistent attachment deletion, or the protocol filters themselves. The focused spec also covers the intended preview-controller exceptions and the watch/unwatch/star/leave/fork policy. Temporary smoke sources and extracted dependencies were removed; no service or database was started.
+
+### Earlier branch verification
+
 
 Verified locally on 2026-10-02 with JDK 21.0.6 and isolated H2. Production and test compilation succeeded. All 29 selected affected specs passed across the batches below; the final archive-policy/security rerun passed **15 tests, zero failures/errors/skips** in 31 seconds. Actual browser/API and Git HTTP/SSH/SVN/Mercurial smoke also passed as detailed below. This is verified local preparation, not issue approval or PR readiness.
 
