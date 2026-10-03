@@ -102,7 +102,7 @@ class SavedIssueViewService(
 
 // Only list conditions are stored. Pagination, detail selection, exports and redirect targets are not views.
 object IssueViewQuery {
-    private val keys = setOf("state", "filter", "authorId", "assigneeId", "milestoneId", "commenterId",
+    private val keys = setOf("state", "filter", "titleHead", "literalFilter", "authorId", "assigneeId", "milestoneId", "commenterId",
         "labelIds", "dueDate", "orderBy", "orderDir", "itemsPerPage")
 
     fun encode(parameters: Map<String, List<String>>): String {
@@ -120,8 +120,9 @@ object IssueViewQuery {
             parsed.forEach { value ->
                 val valid = when (key) {
                     "state" -> State.entries.any { it.state() == value }
-                    "filter" -> value.length <= 1000 && value.none(Char::isISOControl)
-                    "orderBy" -> value in setOf("createdDate", "updatedDate", "dueDate", "numOfComments")
+                    "filter", "titleHead" -> value.length <= 1000 && value.none(Char::isISOControl)
+                    "literalFilter" -> value == "true" || value == "false"
+                    "orderBy" -> value in setOf("createdDate", "updatedDate", "dueDate", "numOfComments", "relevance")
                     "orderDir" -> value in setOf("asc", "desc")
                     "itemsPerPage" -> value.toIntOrNull()?.let { it in 1..45 } == true
                     "dueDate" -> runCatching { LocalDate.parse(value) }.isSuccess

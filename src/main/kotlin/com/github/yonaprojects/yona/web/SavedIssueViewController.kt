@@ -7,6 +7,7 @@ import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
@@ -78,17 +79,18 @@ class SavedIssueViewController(
 
     @GetMapping("/api/v1/projects/{owner}/{projectName}/issues/saved-views")
     @ResponseBody
-    fun list(@PathVariable owner: String, @PathVariable projectName: String, authentication: Authentication?): List<SavedIssueViewService.View> {
+    fun list(@PathVariable owner: String, @PathVariable projectName: String, authentication: Authentication?,
+             request: HttpServletRequest): List<SavedIssueViewService.View> {
         val (project, user) = context(owner, projectName, authentication)
-        return service.list(project, user)
+        return service.list(project, user).map { it.withContextPath(request) }
     }
 
     @GetMapping("/api/v1/projects/{owner}/{projectName}/issues/saved-views/{id}")
     @ResponseBody
     fun get(@PathVariable owner: String, @PathVariable projectName: String, @PathVariable id: Long,
-            authentication: Authentication?): SavedIssueViewService.View {
+            authentication: Authentication?, request: HttpServletRequest): SavedIssueViewService.View {
         val (project, user) = context(owner, projectName, authentication)
-        return service.get(project, user, id)
+        return service.get(project, user, id).withContextPath(request)
     }
 
     data class CreateRequest(val name: String, val visibility: Visibility, val parameters: Map<String, List<String>> = emptyMap())
@@ -97,17 +99,20 @@ class SavedIssueViewController(
     @PostMapping("/api/v1/projects/{owner}/{projectName}/issues/saved-views")
     @ResponseBody
     fun create(@PathVariable owner: String, @PathVariable projectName: String,
-               @RequestBody request: CreateRequest, authentication: Authentication?): ResponseEntity<SavedIssueViewService.View> {
+               @RequestBody request: CreateRequest, authentication: Authentication?,
+               servletRequest: HttpServletRequest): ResponseEntity<SavedIssueViewService.View> {
         val (project, user) = context(owner, projectName, authentication)
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(project, user, request.name, request.visibility, request.parameters))
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+            service.create(project, user, request.name, request.visibility, request.parameters).withContextPath(servletRequest))
     }
 
     @PatchMapping("/api/v1/projects/{owner}/{projectName}/issues/saved-views/{id}")
     @ResponseBody
     fun rename(@PathVariable owner: String, @PathVariable projectName: String, @PathVariable id: Long,
-               @RequestBody request: RenameRequest, authentication: Authentication?): SavedIssueViewService.View {
+               @RequestBody request: RenameRequest, authentication: Authentication?,
+               servletRequest: HttpServletRequest): SavedIssueViewService.View {
         val (project, user) = context(owner, projectName, authentication)
-        return service.rename(project, user, id, request.name)
+        return service.rename(project, user, id, request.name).withContextPath(servletRequest)
     }
 
     @DeleteMapping("/api/v1/projects/{owner}/{projectName}/issues/saved-views/{id}")
@@ -118,4 +123,7 @@ class SavedIssueViewController(
         service.delete(project, user, id)
         return ResponseEntity.noContent().build()
     }
+
+    private fun SavedIssueViewService.View.withContextPath(request: HttpServletRequest): SavedIssueViewService.View =
+        if (request.contextPath.isEmpty()) this else copy(url = request.contextPath + url)
 }

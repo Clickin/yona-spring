@@ -11,11 +11,19 @@ import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import org.jsoup.Jsoup
+import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.mock.web.MockHttpServletResponse
+import org.springframework.mock.web.MockServletContext
 import org.springframework.http.MediaType
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.thymeleaf.context.WebContext
+import org.thymeleaf.spring6.SpringTemplateEngine
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver
+import org.thymeleaf.web.servlet.JakartaServletWebApplication
 import java.util.Optional
 
 class SavedIssueViewControllerSpec : DescribeSpec({
@@ -67,6 +75,82 @@ class SavedIssueViewControllerSpec : DescribeSpec({
         mvc.perform(get("$api/1").principal(aliceAuth)).andExpect(status().isNotFound)
     }
 
+    it("round trips Lucene list conditions through the page, form and open route") {
+        val params = mapOf("filter" to listOf("[literal] + 한글 & text"), "titleHead" to listOf("보안 + API"),
+            "literalFilter" to listOf("true"), "orderBy" to listOf("relevance"))
+        val encoded = IssueViewQuery.encode(params)
+        mvc.perform(get("/team/repo/issues/saved-views").principal(aliceAuth).apply {
+            params.forEach { (key, values) -> queryParam(key, *values.toTypedArray()) }
+        })
+            .andExpect(status().isOk).andExpect(model().attribute("viewParameters", params))
+        mvc.perform(post("/team/repo/issues/saved-views").principal(aliceAuth)
+            .param("name", "Lucene").param("visibility", "PERSONAL")
+            .param("filter", params.getValue("filter").single()).param("titleHead", params.getValue("titleHead").single())
+            .param("literalFilter", "true").param("orderBy", "relevance"))
+            .andExpect(redirectedUrl("/team/repo/issues/saved-views"))
+        mvc.perform(get("/team/repo/issues/saved-views/1/open").principal(aliceAuth))
+            .andExpect(redirectedUrl("/team/repo/issues?$encoded"))
+        IssueViewQuery.decode(views.getValue(1).queryParameters) shouldBe params
+        IssueViewQuery.decode(IssueViewQuery.encode(mapOf("literalFilter" to listOf("false")))) shouldBe
+            mapOf("literalFilter" to listOf("false"))
+    }
+
+    it("includes the context path in every API view URL and web redirect") {
+        val contextApi = "/yona$api"
+        val list = "/yona/team/repo/issues"
+        val page = "$list/saved-views"
+        mvc.perform(post(contextApi).contextPath("/yona").principal(aliceAuth).contentType(MediaType.APPLICATION_JSON)
+            .content("""{"name":"API","visibility":"PERSONAL","parameters":{"orderBy":["relevance"]}}"""))
+            .andExpect(status().isCreated).andExpect(jsonPath("$.url").value("$list?orderBy=relevance"))
+        mvc.perform(get(contextApi).contextPath("/yona").principal(aliceAuth))
+            .andExpect(jsonPath("$[0].url").value("$list?orderBy=relevance"))
+        mvc.perform(get("$contextApi/1").contextPath("/yona").principal(aliceAuth))
+            .andExpect(jsonPath("$.url").value("$list?orderBy=relevance"))
+        mvc.perform(patch("$contextApi/1").contextPath("/yona").principal(aliceAuth)
+            .contentType(MediaType.APPLICATION_JSON).content("""{"name":"Renamed"}"""))
+            .andExpect(jsonPath("$.url").value("$list?orderBy=relevance"))
+        mvc.perform(get("$contextApi/1/open").contextPath("/yona").principal(aliceAuth))
+            .andExpect(redirectedUrl("$list?orderBy=relevance"))
+        mvc.perform(get("$page/1/open").contextPath("/yona").principal(aliceAuth))
+            .andExpect(redirectedUrl("$list?orderBy=relevance"))
+        mvc.perform(post(page).contextPath("/yona").principal(aliceAuth)
+            .param("name", "Form").param("visibility", "PERSONAL"))
+            .andExpect(redirectedUrl(page))
+        mvc.perform(post("$page/2/rename").contextPath("/yona").principal(aliceAuth).param("name", "Renamed form"))
+            .andExpect(redirectedUrl(page))
+        mvc.perform(post("$page/2/delete").contextPath("/yona").principal(aliceAuth))
+            .andExpect(redirectedUrl(page))
+    }
+
+    it("renders every saved view action and link under the servlet context path") {
+        val saved = service.create(project, alice, "Mine", SavedIssueViewService.Visibility.PERSONAL, emptyMap())
+        val servletContext = MockServletContext()
+        val request = MockHttpServletRequest(servletContext).apply {
+            contextPath = "/yona"
+            requestURI = "/yona/team/repo/issues/saved-views"
+        }
+        val exchange = JakartaServletWebApplication.buildApplication(servletContext)
+            .buildExchange(request, MockHttpServletResponse())
+        val context = WebContext(exchange).apply {
+            setVariable("listPath", service.listPath(project))
+            setVariable("views", listOf(saved))
+            setVariable("viewParameters", emptyMap<String, List<String>>())
+            setVariable("canManageViews", true)
+        }
+        val engine = SpringTemplateEngine().apply {
+            setTemplateResolver(ClassLoaderTemplateResolver().apply {
+                prefix = "templates/"
+                suffix = ".html"
+            })
+        }
+        val doc = Jsoup.parse(engine.process("issue/saved_views", setOf(".project-page-wrap"), context))
+        doc.select("form").map { it.attr("action") } shouldBe listOf(
+            "/yona/team/repo/issues/saved-views", "/yona/team/repo/issues/saved-views/1/rename",
+            "/yona/team/repo/issues/saved-views/1/delete")
+        doc.select("a").map { it.attr("href") } shouldBe listOf(
+            "/yona/team/repo/issues/saved-views/1/open", "/yona/team/repo/issues")
+    }
+
     it("keeps personal views private even from another project manager") {
         service.create(project, alice, "Private", SavedIssueViewService.Visibility.PERSONAL, emptyMap())
         every { access.isAllowed(bob, project, Operation.UPDATE) } returns true
@@ -98,7 +182,9 @@ class SavedIssueViewControllerSpec : DescribeSpec({
         listOf(""""url":["https://evil.example"]""", """"format":["xls"]""",
             """"selected":["42"]""", """"orderBy":["project.owner"]""",
             """"itemsPerPage":["0"]""", """"state":["open","closed"]""",
-            """"dueDate":["2026-99-99"]""").forEach { parameter ->
+            """"dueDate":["2026-99-99"]""", """"literalFilter":["yes"]""", """"literalFilter":["TRUE"]""",
+            """"literalFilter":["true","false"]""", """"titleHead":["one","two"]""",
+            """"titleHead":["bad\nhead"]""", """"titleHead":["${"x".repeat(1001)}"]""").forEach { parameter ->
             mvc.perform(post(api).principal(aliceAuth).contentType(MediaType.APPLICATION_JSON)
                 .content("""{"name":"Bad","visibility":"PERSONAL","parameters":{$parameter}}"""))
                 .andExpect(status().isBadRequest)

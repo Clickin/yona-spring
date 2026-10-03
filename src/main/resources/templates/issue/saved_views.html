@@ -10,7 +10,7 @@
         <div class="project-page-wrap">
             <h2 th:text="#{issue.savedViews}">Saved issue views</h2>
             <p th:text="#{issue.savedViews.description}">Save filters and sort order. Views open on the first page.</p>
-            <form th:action="${listPath + '/saved-views'}" method="post">
+            <form th:action="@{${listPath + '/saved-views'}}" method="post">
                 <th:block th:each="parameter : ${viewParameters}">
                     <input th:each="value : ${parameter.value}" type="hidden" th:name="${parameter.key}" th:value="${value}">
                 </th:block>
@@ -25,21 +25,21 @@
             </form>
             <ul class="unstyled">
                 <li th:each="view : ${views}">
-                    <a th:href="${listPath + '/saved-views/' + view.id + '/open'}" th:text="${view.name}">View</a>
+                    <a th:href="@{${listPath + '/saved-views/' + view.id + '/open'}}" th:text="${view.name}">View</a>
                     <span th:text="${view.visibility.name() == 'PERSONAL'} ? #{issue.savedViews.personal} : #{issue.savedViews.project}"></span>
                     <th:block th:if="${view.editable}">
-                        <form th:action="${listPath + '/saved-views/' + view.id + '/rename'}" method="post" class="form-inline">
+                        <form th:action="@{${listPath + '/saved-views/' + view.id + '/rename'}}" method="post" class="form-inline">
                             <label th:for="${'rename-view-' + view.id}" th:text="#{issue.savedViews.name}">Name</label>
                             <input th:id="${'rename-view-' + view.id}" name="name" th:value="${view.name}" required maxlength="100">
                             <button type="submit" class="ybtn small" th:text="#{issue.savedViews.rename}">Rename</button>
                         </form>
-                        <form th:action="${listPath + '/saved-views/' + view.id + '/delete'}" method="post">
+                        <form th:action="@{${listPath + '/saved-views/' + view.id + '/delete'}}" method="post">
                             <button type="submit" class="ybtn small" th:text="#{issue.savedViews.delete}">Delete</button>
                         </form>
                     </th:block>
                 </li>
             </ul>
-            <a th:href="${listPath}" th:text="#{menu.issue}">Issues</a>
+            <a th:href="@{${listPath}}" th:text="#{menu.issue}">Issues</a>
         </div>
     </div>
 </div>
