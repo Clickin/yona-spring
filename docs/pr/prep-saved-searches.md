@@ -9,6 +9,7 @@ Status: implemented locally on 2026-10-02 and review fixes verified on 2026-10-0
 - Issue-list link carries the current supported filters, sort and page size to a server-rendered saved-views page. Native forms create, rename and delete; opening rechecks authorization before returning to the project issue list.
 - `PERSONAL` views belong only to their owner. `PROJECT` views are shared with signed-in users who can read that project; project managers and the existing organization/site administrator overrides may modify shared views.
 - Supported parameters: `state`, `filter`, `titleHead`, `literalFilter`, `authorId`, `assigneeId`, `milestoneId`, `commenterId`, repeated/comma-separated `labelIds`, `dueDate`, `orderBy`, `orderDir`, `itemsPerPage`. Sort fields are `createdDate`, `updatedDate`, `dueDate`, `numOfComments`, and Lucene's `relevance`. `literalFilter` accepts exactly `true` or `false`. Reopening starts at page one; pagination, selected details and export format are not saved.
+- On this standalone DB-backed branch, `orderBy=relevance` uses `createdDate DESC`, matching the Lucene controller's DB/no-search fallback regardless of `orderDir`. The stored parameters, redirect and list model retain `relevance`; merging Lucene must keep its existing `Sort.unsorted()` path for nonblank Lucene searches.
 - Inputs are validated and encoded as query parameters, never stored as a URL. URL-shaped search text remains search text. Links use the current project identity, supporting project renames/transfers. Every management-page form/link and API response URL respects the servlet context path. Unknown parameter names and invalid bounds are rejected.
 - New `saved_issue_view` entity/table follows the existing Hibernate `ddl-auto: update` schema convention. Indexed project/owner references have database delete cascades. Soft user deletion explicitly removes personal views; shared views have no user owner and remain with the project.
 - REST API at `/api/v1/projects/{owner}/{projectName}/issues/saved-views`: GET list, POST create, GET `/{id}`, PATCH `/{id}` rename, DELETE `/{id}`, GET `/{id}/open` redirect. Existing issues token scopes and session CSRF protection apply. Web mutations are POST forms with Thymeleaf CSRF support.
@@ -79,6 +80,28 @@ JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem ./gradlew --no-da
 - Raw session POST/PATCH/DELETE without a CSRF token each returned 403. Page `fetch` is automatically CSRF-decorated, so the negative check deliberately used an out-of-page HTTP client rather than that wrapper.
 
 Limits: this branch accepts/preserves Lucene parameters; Lucene result execution belongs to the separate Lucene worktree and was not exercised here. The initial administrator was created using the same isolated H2 database without a context path because the existing bootstrap redirect drops `/yona`. Existing context-unsafe static assets and login redirect also required native form submission/direct navigation during setup; those unrelated paths were not changed. Runtime evidence is DOM/HTTP, not visual parity. The pre-existing H2 `property.value` DDL warning remained. Owned smoke services and browser tab were closed after verification.
+
+### Standalone relevance regression — 2026-10-04
+
+Fixed the saved-view open target passing `relevance` to JPA as if it were an `Issue` property. The correction is only in the issue-list DB sort; the saved-view codec still accepts and preserves relevance.
+
+Passed 11 tests across `SavedIssueViewControllerSpec`, `SavedIssueViewRepositorySpec` and `SavedIssueViewSecuritySpec`, with zero failures/errors/skips (`BUILD SUCCESSFUL in 27s`). The new H2 integration regression creates saved views through the secured API, opens them and follows the redirect through the real controller and Thymeleaf renderer. It asserts the DOM's newest/middle/oldest order using fixed creation timestamps deliberately different from insertion order, both without search text and with `filter=Needle`, including `orderDir=asc`. Stored parameters, redirect and rendered model retain `orderBy=relevance`.
+
+Exact Gradle invocation (`SMOKE_INIT` was a temporary external init script registering `savedSmokeClasspath` to write `sourceSets.test.runtimeClasspath.asPath` to `build/saved-smoke-classpath.txt`):
+
+```sh
+JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem ./gradlew --no-daemon --max-workers=1 -Pkotlin.daemon.jvmargs=-Xmx4g -I "$SMOKE_INIT" -Dyona.it.db=h2 test --tests com.github.yonaprojects.yona.web.SavedIssueViewControllerSpec --tests com.github.yonaprojects.yona.domain.issue.SavedIssueViewRepositorySpec --tests com.github.yonaprojects.yona.config.SavedIssueViewSecuritySpec savedSmokeClasspath
+```
+
+Replayed the unchanged standalone `SavedRelevanceProbe.java` against the freshly compiled application, not a mocked repository or existing jar:
+
+```sh
+/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem/bin/java -cp "$(cat build/saved-smoke-classpath.txt)" "$SAVED_PROBE" --spring.profiles.active=h2 --server.port=0 '--spring.datasource.url=jdbc:h2:mem:saved-relevance-fixed;DB_CLOSE_DELAY=-1;NON_KEYWORDS=VALUE' --spring.jpa.show-sql=false --yona.data=/tmp/yona-saved-relevance-fixed-20261004 --yona.git.base-dir=/tmp/yona-saved-relevance-fixed-20261004/git --yona.svn.base-dir=/tmp/yona-saved-relevance-fixed-20261004/svn --yona.hg.base-dir=/tmp/yona-saved-relevance-fixed-20261004/hg --yona.ssh.relay.enabled=false --logging.level.root=ERROR
+```
+
+`SAVED_PROBE` names the original external repro source. Observed: `create=201`, `open=302 target=/review-owner/saved-probe/issues?orderBy=relevance`, `followed=200`; process exit 0. Before the correction, this same follow threw `PropertyReferenceException: No property 'relevance' found for type 'Issue'`. The Spring context/server closed on completion. `NON_KEYWORDS=VALUE` avoids the unrelated H2 reserved-column warning.
+
+Limits: only the scoped H2 tests and standalone actual-path smoke ran; Lucene ranking and non-H2 databases were not executed in this worktree. The combined controller's existing Lucene dispatch remains a merge requirement, not code to replace with the standalone fallback.
 
 ## Before any PR
 
