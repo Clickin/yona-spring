@@ -720,6 +720,9 @@ class IssueControllerSpec : DescribeSpec({
             // yona AccessControl.java:244-248 isAllowedIfAssignee() 대응 (P2-12). 담당자는
             // isManagerOrAuthor 여부와 무관하게 author와 동급 쓰기 권한을 가진다.
             it("작성자도 관리자도 아니지만 담당자면 이슈를 수정할 수 있어야 한다") {
+                val otherUser = User(id = 30L, loginId = "otheruser", name = "담당자").apply {
+                    projectUsers.add(ProjectUser(user = this, project = project, role = memberRole))
+                }
                 val assigneeIssue = Issue(
                     id = 6L, number = 6L, title = "담당 이슈", body = "본문", project = project,
                     authorId = user.id, state = State.OPEN, assignees = mutableSetOf(otherUser)
@@ -925,6 +928,10 @@ class IssueControllerSpec : DescribeSpec({
             // yona AccessControl.java:244-248 isAllowedIfAssignee() 대응 (P2-12)
             it("작성자도 관리자도 아니지만 담당자면 이슈를 이동시킬 수 있어야 한다") {
                 val targetProject = Project(id = 3L, name = "TargetProject", projectScope = ProjectScope.PUBLIC)
+                val otherUser = User(id = 30L, loginId = "otheruser", name = "담당자").apply {
+                    projectUsers.add(ProjectUser(user = this, project = project, role = memberRole))
+                    projectUsers.add(ProjectUser(user = this, project = targetProject, role = memberRole))
+                }
                 val assigneeIssue = Issue(
                     id = 6L, number = 6L, title = "담당 이슈", body = "본문", project = project,
                     authorId = user.id, state = State.OPEN, assignees = mutableSetOf(otherUser)
@@ -1037,6 +1044,9 @@ class IssueControllerSpec : DescribeSpec({
 
             // yona AccessControl.java:244-248 isAllowedIfAssignee() 대응 (P2-12)
             it("작성자도 관리자도 아니지만 담당자면 초안을 발행할 수 있어야 한다") {
+                val otherUser = User(id = 30L, loginId = "otheruser", name = "담당자").apply {
+                    projectUsers.add(ProjectUser(user = this, project = project, role = memberRole))
+                }
                 val draftIssue = Issue(
                     id = 6L, number = 6L, title = "담당 초안", body = "본문", project = project,
                     authorId = user.id, state = State.DRAFT, assignees = mutableSetOf(otherUser)
@@ -1086,6 +1096,9 @@ class IssueControllerSpec : DescribeSpec({
 
             // yona AccessControl.java:244-248 isAllowedIfAssignee() 대응 (P2-12)
             it("작성자도 관리자도 아니지만 담당자면 이슈를 삭제할 수 있어야 한다") {
+                val otherUser = User(id = 30L, loginId = "otheruser", name = "담당자").apply {
+                    projectUsers.add(ProjectUser(user = this, project = project, role = memberRole))
+                }
                 val assigneeIssue = Issue(
                     id = 6L, number = 6L, title = "담당 이슈", body = "본문", project = project,
                     authorId = user.id, state = State.OPEN, assignees = mutableSetOf(otherUser)

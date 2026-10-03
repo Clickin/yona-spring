@@ -18,6 +18,7 @@ import com.github.yonaprojects.yona.domain.milestone.Milestone
 import com.github.yonaprojects.yona.domain.milestone.MilestoneRepository
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
+import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.project.ProjectUser
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.role.Role
@@ -70,6 +71,63 @@ class LegacyIssueResponseIntegrationSpec @Autowired constructor(
 
     init {
         describe("legacy issue response contract") {
+            it("persists singular REST assignments, plural precedence and rejects foreign private-project targets") {
+                val mockMvc = MockMvcBuilders.webAppContextSetup(wac)
+                    .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
+                    .build()
+                val mapper = ObjectMapper()
+                val owner = userRepository.save(User(loginId = "assignment-smoke-owner", name = "Owner"))
+                val member = userRepository.save(User(loginId = "assignment-smoke-member", name = "Member"))
+                val outsider = userRepository.save(User(loginId = "assignment-smoke-outsider", name = "Outsider"))
+                val project = projectRepository.save(Project(
+                    owner = owner.loginId, name = "assignment-smoke", projectScope = ProjectScope.PRIVATE
+                ))
+                val role = roleRepository.findById(RoleType.MANAGER.roleType).orElseGet {
+                    roleRepository.save(Role(id = RoleType.MANAGER.roleType, name = "MANAGER"))
+                }
+                projectUserRepository.save(ProjectUser(user = owner, project = project, role = role))
+                projectUserRepository.save(ProjectUser(user = member, project = project, role = role))
+                entityManager.flush()
+                entityManager.clear()
+                val details = YonaUserDetails(
+                    id = owner.id!!, loginId = owner.loginId, passwordVal = "hashed", passwordSalt = "salt",
+                    authoritiesVal = AuthorityUtils.createAuthorityList("ROLE_ACTIVE")
+                )
+                val path = "/api/projects/${project.id}/issues"
+                fun request(builder: MockHttpServletRequestBuilder, fields: String, expectedStatus: Int) =
+                    mockMvc.perform(builder.with(user(details)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"title":"Assignment smoke","body":"Body"$fields}"""))
+                        .andReturn().response.also { it.status shouldBe expectedStatus }
+                fun persistedIds(id: Long): Set<Long?> {
+                    entityManager.flush()
+                    entityManager.clear()
+                    return issueRepository.findById(id).orElseThrow().assignees.map { it.id }.toSet()
+                }
+
+                val singular = mapper.readTree(request(post(path), ""","assigneeId":${member.id}""", 201).contentAsString)
+                val issueId = singular.path("id").asLong()
+                val number = singular.path("number").asLong()
+                singular.path("assignee") shouldBe singular.path("assignees").first()
+                persistedIds(issueId) shouldBe setOf(member.id)
+
+                val plural = mapper.readTree(request(
+                    post(path), ""","assigneeId":${outsider.id},"assigneeIds":[${owner.id},${member.id}]""", 201
+                ).contentAsString)
+                persistedIds(plural.path("id").asLong()) shouldBe setOf(owner.id, member.id)
+                request(put("$path/$number"), "", 200)
+                persistedIds(issueId) shouldBe setOf(member.id)
+                request(put("$path/$number"), ""","assigneeId":${outsider.id},"assigneeIds":[]""", 200)
+                persistedIds(issueId) shouldBe emptySet()
+                request(put("$path/$number"), ""","assigneeId":${member.id}""", 200)
+                persistedIds(issueId) shouldBe setOf(member.id)
+
+                val before = issueRepository.count()
+                request(post(path), ""","assigneeId":${outsider.id}""", 403)
+                request(put("$path/$number"), ""","assigneeIds":[${outsider.id}]""", 403)
+                issueRepository.count() shouldBe before
+                persistedIds(issueId) shouldBe setOf(member.id)
+            }
+
             it("GET, PUT and state PATCH return mapped results and persisted events without user secrets") {
                 val mockMvc = MockMvcBuilders.webAppContextSetup(wac)
                     .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
