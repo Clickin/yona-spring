@@ -1,7 +1,7 @@
 {
   "measuredAt": "2026-10-03",
-  "baselineCommit": "8457928da",
-  "experimentCommit": "96cc6cc8c",
+  "baselineCommit": "4206cdb49",
+  "experimentCommit": "0525383d8",
   "decision": "reverted",
   "reason": "Small MRR gains did not justify public Yona recallAt20 regression; no retuning against validation corpora",
   "selectedTrainingCoefficient": 0.5,

@@ -26,37 +26,37 @@
   ],
   "configurations": {
     "baseline-843": {
-      "source": "1a85fc396",
+      "source": "44647acf3",
       "decision": "baseline"
     },
     "stage1-843": {
-      "source": "9644755c3",
+      "source": "8d5a5306e",
       "decision": "reverted",
       "reason": "overall MRR and recallAt5 decreased"
     },
     "proximity-a-843": {
-      "source": "1a85fc396 + proximity",
+      "source": "44647acf3 + proximity",
       "exactBoost": 3,
       "nearSlop": 4,
       "nearBoost": 1,
       "decision": "not selected"
     },
     "proximity-b-843": {
-      "source": "1a85fc396 + proximity",
+      "source": "44647acf3 + proximity",
       "exactBoost": 5,
       "nearSlop": 3,
       "nearBoost": 1,
       "decision": "selected"
     },
     "proximity-b-844": {
-      "source": "1a85fc396 + proximity",
+      "source": "44647acf3 + proximity",
       "exactBoost": 5,
       "nearSlop": 3,
       "nearBoost": 1,
       "decision": "holdout validation"
     },
     "baseline-844": {
-      "source": "1a85fc396",
+      "source": "44647acf3",
       "decision": "holdout baseline"
     },
     "stage3-843": {
