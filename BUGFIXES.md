@@ -1,6 +1,6 @@
 # yona product bug fixes — TDD tracking
 
-## 2026-10-03 — Session-authenticated REST API CSRF
+## 2026-10-04 — Session-authenticated REST API CSRF
 
 - All `/api/v1/**` mutations carrying an authenticated browser session require CSRF, regardless of token-shaped headers. Stateless PAT/OAuth requests remain delegated to their authentication filters; safe methods remain unchanged.
 - Uses the existing cookie repository and SPA/form token handler. Feature branches no longer maintain competing endpoint allowlists in `ResourceServerConfig`.

@@ -23,7 +23,7 @@ Content-Type: application/json
 
 해제는 `false`. 성공 시 `200 {"pinned":true|false}`. 미인증 `401`, 읽을 수 있는 프로젝트의 비매니저 `403`, 읽을 수 없거나 존재하지 않는 프로젝트/이슈 `404`, 초안 `400`. 기존 API 토큰의 이슈 쓰기 스코프를 사용한다. 일반 이슈 응답에도 `pinnedAt`이 추가된다. 웹 폼은 CSRF가 적용되는 `POST /{owner}/{project}/issue/{number}/pin`을 사용하고 성공 시 상세 화면으로 `303` 이동한다.
 
-새 고정 API는 인증된 세션으로 호출할 때 CSRF 토큰을 요구한다. 웹 폼에도 같은 세션 경계를 적용하여 가짜 `Yona-Token` 또는 `Authorization: token` 헤더가 CSRF 예외가 되지 않게 한다. 세션 없는 정상 PAT/OAuth Bearer 요청은 기존처럼 허용하고, 다른 기존 API의 CSRF 정책은 변경하지 않는다.
+선행 브랜치 `fix/session-api-csrf`가 고정 API를 포함한 모든 `/api/v1/**`의 인증된 세션 변경 요청에 CSRF를 요구한다. 기능별 API matcher를 덮어쓰지 않는다. 웹 고정 폼에도 같은 세션 경계를 적용하여 가짜 `Yona-Token` 또는 `Authorization: token` 헤더가 CSRF 예외가 되지 않게 한다. 세션 없는 PAT/OAuth 요청은 기존 인증 필터에서 검증한다.
 
 ### 스키마
 
@@ -73,6 +73,16 @@ JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem \
 
 화면의 실제 DOM, 접근성 관찰 및 폼 클릭/페이지 이동으로 확인했다. 다른 준비 브랜치들에서 반복 확인된 screenshot 도구 timeout은 재시도하지 않았으므로 픽셀 이미지 기반 시각 검증은 수행하지 않았다. 기존 데이터베이스 업그레이드와 H2 외 DB 검증은 미실행이다.
 
+## 2026-10-04 자체 리뷰 수정 및 조합 검증
+
+- 공용 CSRF 통합 후 독립 브랜치의 `PinnedIssueSpec`, `PinnedIssueSecuritySpec`이 통과했다 (`BUILD SUCCESSFUL in 1m 4s`).
+- `review/search-feature-compatibility`는 Lucene·복수 담당자·고정 이슈·저장된 보기를 합친 검증용 브랜치다. 개별 PR에 다른 기능 전체가 섞이지 않도록 제출 브랜치는 별도로 유지한다.
+- Lucene 병합 시 `IssueViewController`의 고정 목록과 일반 목록 모두 `IssueSearchService.search`를 사용해야 한다. 같은 `searchText`, `titleHead`, 사용자, 필터를 전달하고 `pinned(true/false)`만 분리한다. 고정 목록을 `issueRepository.findAll`에 남기는 병합은 금지한다. 해당 병합 해결은 조합 브랜치 커밋 `6da3110c1`에 보존했다.
+- 조합 브랜치에서 7개 spec, 29개 테스트가 모두 통과했다. `PinnedLuceneCompatibilitySpec`은 댓글에서만 일치하는 고정 이슈 포함, 무관한 고정 이슈 제외, 일반 페이지 중복 제외, 관련도/생성일 정렬 및 비공개 프로젝트 외부 담당자 차단을 실제 JPA/Lucene/MVC로 검사한다. 복수 담당자 백업 검증도 queue 스택의 ZIP API로 맞추어 통과했다.
+- 실제 앱(격리 H2, `18109`, Lucene 활성화)에서 댓글만 `needle`과 일치하는 고정 `#1`, 무관한 고정 `#2`, 일반 결과 `#3`을 생성했다. 관련도/생성일 정렬 모두 고정 영역에는 `#1`만, 일반 영역에는 `#3`만 표시됐다. API는 `X-Yona-Search-Backend: lucene`, 전체 2건을 반환했다.
+- 해당 목록에서 저장된 보기로 이동·저장·다시 열기가 성공했고 `filter=needle&literalFilter=true&orderBy=relevance`와 고정/일반 결과가 유지됐다. 실제 API 생성/재조회에서 `assigneeId=1`은 담당자를 보존했고 `assigneeIds=[]`는 단일 필드보다 우선했다.
+- 브라우저 DOM/입력/이동과 HTTP 응답은 검증했다. screenshot helper와 raw Chromium screenshot은 모두 timeout으로 이미지 증거를 남기지 못했다. 비-H2 DB 및 전체 테스트 묶음은 이번에 실행하지 않았다.
+
 ## 이슈 승인 후 PR 준비
 
 승인 당시의 최신 upstream/next에 다시 맞춘다. 이 문서의 기준 커밋을 최신이라고 가정하지 않는다.
@@ -82,4 +92,4 @@ git fetch upstream next
 git rebase upstream/next
 ```
 
-충돌을 해결한 후 위 회귀 검증과 실제 웹 smoke를 다시 실행하고, 당시 변경된 권한·스키마·API 계약도 확인한다. 검증 결과를 이 문서에 기록한 뒤 커밋 및 PR 준비를 진행한다. 지금은 push, PR, 이슈 댓글을 작성하지 않는다.
+충돌을 해결한 후 위 회귀 검증과 실제 웹 smoke를 다시 실행하고, 당시 변경된 권한·스키마·API 계약도 확인한다. 현재 원격 반영은 origin에만 허용하며, upstream PR 생성은 별도 승인 전 금지한다.
