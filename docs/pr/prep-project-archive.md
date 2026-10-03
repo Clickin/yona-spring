@@ -59,7 +59,7 @@ Old backups without this column restore projects as active. New backups include 
 
 ## Verification status
 
-### 2026-10-03 pre-PR review fixes
+### 2026-10-04 pre-PR review fixes
 
 After the interceptor fixes and shared CSRF update were merged locally, `ProjectArchiveSpec` passed **11 tests, zero failures/errors/skips** with JDK 21.0.6. The Gradle invocation completed successfully in 1m 4s:
 
