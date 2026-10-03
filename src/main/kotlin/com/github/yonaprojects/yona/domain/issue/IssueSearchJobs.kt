@@ -45,12 +45,13 @@ class IssueSearchTasks(private val index: IssueSearchIndex, private val em: Enti
         resourceKeys = { listOf("search:issues") }, replaySafe = true, laneLimit = 1,
         handler = { context, _ ->
             val batch = changes.snapshot()
+            val rebuild = batch.rebuild || !index.status.ready
             val progress: (Long) -> Unit = { count ->
                 context.checkpoint()
-                context.progress(if (batch.rebuildGeneration > 0) "search.rebuild" else "search.update", mapOf("scanned" to count))
+                context.progress(if (rebuild) "search.rebuild" else "search.update", mapOf("scanned" to count))
             }
-            if (batch.rebuildGeneration > 0) index.synchronize(::batch, progress)
-            else if (batch.versions.isNotEmpty()) index.update(batch.versions.keys.toList(), ::load, progress)
+            if (rebuild) index.synchronize(::batch, progress)
+            else if (batch.issueIds.isNotEmpty()) index.update(batch.issueIds, ::load, progress)
             context.checkpoint()
             changes.acknowledge(batch)
         }
@@ -59,7 +60,7 @@ class IssueSearchTasks(private val index: IssueSearchIndex, private val em: Enti
     companion object { const val TYPE = "search.issues.sync" }
 }
 
-/** One global fixed window starting at the first pending change. Idle polls read one window row only. */
+/** One fixed window from the oldest committed pending event; idle polls never scan issue content. */
 @Service
 @ConditionalOnProperty(name = ["yona.search.backend"], havingValue = "lucene")
 class IssueSearchJobs(private val queue: Queue, private val em: EntityManager,

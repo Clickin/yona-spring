@@ -347,10 +347,16 @@ class AccessControl(
             val userId = user?.id
             if (userId != null) {
                 grants.add(cb.equal(root.get<Long>("authorId"), userId))
-                // Optional associations must not turn another permission's OR branch into an inner join.
-                val assignee = root.join<Issue, Assignee>(
-                    "assignee", JoinType.LEFT)
-                grants.add(cb.equal(assignee.get<User>("user").get<Long>("id"), userId))
+                // Legacy scalar assignment grants READ. Plural assignments require project eligibility,
+                // already covered by membership/admin grants below; stale external assignees add no grant.
+                if (root.model.attributes.none { it.name == "assignees" }) {
+                    val assigned = query.subquery(Long::class.java)
+                    val assignedIssue = assigned.from(Issue::class.java)
+                    val assignee = assignedIssue.join<Issue, Assignee>("assignee")
+                    assigned.select(assignedIssue.get("id")).where(cb.equal(assignedIssue, root),
+                        cb.equal(assignee.get<User>("user").get<Long>("id"), userId))
+                    grants.add(cb.exists(assigned))
+                }
                 val member = query.subquery(Long::class.java)
                 val membership = member.from(ProjectUser::class.java)
                 member.select(membership.get("id")).where(cb.equal(membership.get<User>("user").get<Long>("id"), userId),

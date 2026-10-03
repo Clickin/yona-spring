@@ -24,8 +24,17 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.web.context.WebApplicationContext
 import java.time.Instant
 
+class IssueSearchSqlInspector : org.hibernate.resource.jdbc.spi.StatementInspector {
+    companion object { val captured = ThreadLocal<MutableList<String>>() }
+    override fun inspect(sql: String): String {
+        captured.get()?.add(sql)
+        return sql
+    }
+}
+
 @Transactional
-@TestPropertySource(properties = ["yona.search.backend=lucene"])
+@TestPropertySource(properties = ["yona.search.backend=lucene",
+    "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.github.yonaprojects.yona.domain.issue.IssueSearchSqlInspector"])
 class IssueSearchServiceSpec @Autowired constructor(
     private val issues: IssueRepository,
     private val comments: IssueCommentRepository,
@@ -199,6 +208,8 @@ class IssueSearchServiceSpec @Autowired constructor(
             val commentQuery = "select c from IssueComment c where c.issue.id in :issueIds order by c.id"
             val before = statistics.getQueryStatistics(commentQuery).executionCount
             val issueLoads = statistics.getEntityStatistics(Issue::class.java.name).loadCount
+            val statements = mutableListOf<String>()
+            IssueSearchSqlInspector.captured.set(statements)
             try {
                 val result = lucene.search(spec, "bulkneedle", null,
                     PageRequest.of(1, 20, Sort.by(Sort.Direction.DESC, "number"))) as IssueSearchPage
@@ -214,13 +225,22 @@ class IssueSearchServiceSpec @Autowired constructor(
                 relevance.totalElements shouldBe 2105
                 relevance.content.map { it.id } shouldBe index.search("bulkneedle").drop(20).take(20).map { it.id }
                 (statistics.getEntityStatistics(Issue::class.java.name).loadCount - beforeRelevance) shouldBe 20L
+                val idLists = statements.flatMap { sql ->
+                    Regex("""\bin\s*\(([^()]*)\)""", RegexOption.IGNORE_CASE).findAll(sql)
+                        .map { it.groupValues[1] }.filter { !it.contains("select", ignoreCase = true) }.toList()
+                }
+                idLists.isNotEmpty() shouldBe true
+                idLists.all { it.split(',').size <= IssueIndexSearch.BATCH_SIZE } shouldBe true
                 // Strict repositories keep this assertion independent of background queue SQL.
                 val unusedIssues = io.mockk.mockk<IssueRepository>()
                 val unusedComments = io.mockk.mockk<IssueCommentRepository>()
                 val emptySearch = IssueSearchService(unusedIssues, unusedComments, accessControl, "lucene", index)
                 emptySearch.search(spec, "missingneedle", null, PageRequest.of(0, 20)).totalElements shouldBe 0
                 io.mockk.confirmVerified(unusedIssues, unusedComments)
-            } finally { statistics.isStatisticsEnabled = enabled }
+            } finally {
+                IssueSearchSqlInspector.captured.remove()
+                statistics.isStatisticsEnabled = enabled
+            }
         }
 
         it("머리말 검색의 다음 페이지와 마지막 페이지에서 해당 이슈 본문만 읽는다") {

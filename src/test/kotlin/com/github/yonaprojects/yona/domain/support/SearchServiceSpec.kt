@@ -47,6 +47,31 @@ class SearchServiceSpec : DescribeSpec({
         pullRequestRepository
     )
 
+    it("Lucene 통합검색의 건수와 표시 페이지는 같은 검색 결과를 재사용한다") {
+        val indexed = mockk<com.github.yonaprojects.yona.domain.issue.IssueSearchService>()
+        val projects = mockk<ProjectRepository>(relaxed = true)
+        val service = SearchServiceImpl(mockk(relaxed = true), projects, mockk(relaxed = true),
+            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
+            mockk(relaxed = true), mockk(relaxed = true), issueSearchService = indexed)
+        val organization = Organization(id = 9L, name = "search-group")
+        val project = Project(id = 1L, name = "search-project", owner = "owner", organization = organization)
+        val pageable = PageRequest.of(2, 1)
+        val page = PageImpl(listOf(Issue(id = 3L, project = project, title = "needle")), pageable, 7)
+        every { indexed.backend } returns "lucene"
+        every { indexed.search(any(), "needle", null, pageable, null) } returns page
+        every { projects.findPublicProjectIds() } returns listOf(1L)
+        every { projects.findAllById(listOf(1L)) } returns listOf(project)
+        val results = listOf(
+            service.searchInAll("needle", SearchType.ISSUE, null, pageable),
+            service.searchInAProject("needle", SearchType.ISSUE, null, project, pageable),
+            service.searchInAGroup("needle", SearchType.ISSUE, null, organization, pageable))
+        results.forEach { result ->
+            result.issuesCount shouldBe 7
+            result.issues shouldBe page
+        }
+        io.mockk.verify(exactly = 3) { indexed.search(any(), "needle", null, pageable, null) }
+    }
+
     describe("SearchService 비즈니스 로직 테스트") {
         val loginUser = User(id = 10L, loginId = "testuser", name = "테스트유저")
         val pageable = PageRequest.of(0, 20)

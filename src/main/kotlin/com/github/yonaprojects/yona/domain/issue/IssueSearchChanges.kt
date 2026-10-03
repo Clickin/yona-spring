@@ -11,31 +11,23 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import java.sql.Connection
+import java.util.UUID
 
 @Entity
-@Table(name = "issue_search_pending")
-class IssueSearchPending(
-    @Id @Column(name = "issue_id") var issueId: Long = 0,
-    @Column(nullable = false) var generation: Long = 0
+@Table(name = "issue_search_change", indexes = [Index(name = "ix_issue_search_change_time", columnList = "changed_at")])
+class IssueSearchChange(
+    @Id @Column(length = 36) var id: String = "",
+    @Column(name = "issue_id") var issueId: Long? = null,
+    @Column(name = "changed_at", nullable = false) var changedAt: Long = 0
 )
 
-@Entity
-@Table(name = "issue_search_window")
-class IssueSearchWindow(
-    @Id var id: Int = 1,
-    @Column(nullable = false) var generation: Long = 0,
-    @Column(name = "rebuild_generation", nullable = false) var rebuildGeneration: Long = 0,
-    @Column(name = "first_change") var firstChange: Long? = null,
-    @Column(name = "last_change") var lastChange: Long? = null
-)
-
-data class SearchChangeBatch(val versions: Map<Long, Long>, val rebuildGeneration: Long, val startedAt: Long)
+data class SearchChangeBatch(val eventIds: List<String>, val issueIds: List<Long>, val rebuild: Boolean)
 data class SearchChangeWindow(val first: Long?, val last: Long?) {
     fun due(now: Long, windowMillis: Long): Boolean =
         first != null && now - first >= windowMillis
 }
 
-/** Durable dirty-ID set and ONE global fixed batch window, committed with the source mutation. */
+/** Append-only events commit with the source mutation, without locking any shared bookkeeping row. */
 @Component
 @ConditionalOnProperty(name = ["yona.search.backend"], havingValue = "lucene")
 class IssueSearchChanges(private val em: EntityManager, private val emf: EntityManagerFactory,
@@ -44,9 +36,6 @@ class IssueSearchChanges(private val em: EntityManager, private val emf: EntityM
     private val transaction = TransactionTemplate(transactions)
 
     override fun afterSingletonsInstantiated() {
-        transaction.executeWithoutResult {
-            if (em.find(IssueSearchWindow::class.java, 1) == null) em.persist(IssueSearchWindow())
-        }
         val registry = emf.unwrap(SessionFactoryImplementor::class.java).serviceRegistry
             .getService(EventListenerRegistry::class.java)!!
         registry.appendListeners(EventType.POST_INSERT, this)
@@ -65,36 +54,22 @@ class IssueSearchChanges(private val em: EntityManager, private val emf: EntityM
             else -> null
         } ?: return
         // Use the flush's JDBC connection. Calling repository.save here would recursively flush JPA.
-        session.doWork { connection: Connection -> mark(connection, id, System.currentTimeMillis()) }
+        session.doWork { connection: Connection -> mark(connection, id) }
     }
 
-    private fun mark(connection: Connection, issueId: Long?, now: Long) {
-        // This short global row serializes marks/upserts and acknowledgements on all six DBs.
-        connection.prepareStatement("update issue_search_window set generation = generation + 1, first_change = coalesce(first_change, ?), last_change = ? where id = 1").use {
-            it.setLong(1, now); it.setLong(2, now)
-            check(it.executeUpdate() == 1) { "Search batch window is missing" }
-        }
-        val generation = connection.prepareStatement("select generation from issue_search_window where id = 1").use {
-            it.executeQuery().use { result -> check(result.next()); result.getLong(1) }
-        }
-        if (issueId == null) {
-            connection.prepareStatement("update issue_search_window set rebuild_generation = ? where id = 1").use {
-                it.setLong(1, generation); it.executeUpdate()
-            }
-        } else {
-            val updated = connection.prepareStatement("update issue_search_pending set generation = ? where issue_id = ?").use {
-                it.setLong(1, generation); it.setLong(2, issueId); it.executeUpdate()
-            }
-            if (updated == 0) connection.prepareStatement("insert into issue_search_pending (issue_id, generation) values (?, ?)").use {
-                it.setLong(1, issueId); it.setLong(2, generation); it.executeUpdate()
-            }
+    private fun mark(connection: Connection, issueId: Long?) {
+        connection.prepareStatement("insert into issue_search_change (id, issue_id, changed_at) values (?, ?, ?)").use {
+            it.setString(1, UUID.randomUUID().toString())
+            if (issueId == null) it.setNull(2, java.sql.Types.BIGINT) else it.setLong(2, issueId)
+            it.setLong(3, System.currentTimeMillis())
+            it.executeUpdate()
         }
     }
 
-    fun requestRebuild() = jdbc { mark(it, null, System.currentTimeMillis()) }
+    fun requestRebuild() = jdbc { mark(it, null) }
 
     fun window(): SearchChangeWindow = jdbc { connection ->
-        connection.prepareStatement("select first_change, last_change from issue_search_window where id = 1").use {
+        connection.prepareStatement("select min(changed_at), max(changed_at) from issue_search_change").use {
             it.executeQuery().use { rows ->
                 check(rows.next())
                 val first = rows.getLong(1).let { value -> if (rows.wasNull()) null else value }
@@ -105,42 +80,28 @@ class IssueSearchChanges(private val em: EntityManager, private val emf: EntityM
     }
 
     fun snapshot(): SearchChangeBatch = jdbc { connection ->
-        lock(connection)
-        val versions = linkedMapOf<Long, Long>()
-        connection.prepareStatement("select issue_id, generation from issue_search_pending order by issue_id").use {
-            it.executeQuery().use { rows -> while (rows.next()) versions[rows.getLong(1)] = rows.getLong(2) }
+        val events = mutableListOf<String>()
+        val issues = linkedSetOf<Long>()
+        var rebuild = false
+        connection.prepareStatement("select id, issue_id from issue_search_change order by changed_at, id").use {
+            it.maxRows = 1000
+            it.executeQuery().use { rows ->
+                while (rows.next()) {
+                    events.add(rows.getString(1))
+                    val issueId = rows.getLong(2)
+                    if (rows.wasNull()) rebuild = true else issues.add(issueId)
+                }
+            }
         }
-        val rebuild = connection.prepareStatement("select rebuild_generation from issue_search_window where id = 1").use {
-            it.executeQuery().use { rows -> check(rows.next()); rows.getLong(1) }
-        }
-        SearchChangeBatch(versions, rebuild, System.currentTimeMillis())
+        SearchChangeBatch(events, issues.toList(), rebuild)
     }
 
     fun acknowledge(batch: SearchChangeBatch) = jdbc { connection ->
-        lock(connection)
-        connection.prepareStatement("delete from issue_search_pending where issue_id = ? and generation = ?").use {
-            batch.versions.forEach { (id, version) -> it.setLong(1, id); it.setLong(2, version); it.addBatch() }
+        // No timestamp/sequence high-watermark: a transaction that started earlier can commit later.
+        // Delete only events actually visible to this pass, and only after the index was published.
+        connection.prepareStatement("delete from issue_search_change where id = ?").use {
+            batch.eventIds.forEach { id -> it.setString(1, id); it.addBatch() }
             it.executeBatch()
-        }
-        connection.prepareStatement("update issue_search_window set rebuild_generation = 0 where id = 1 and rebuild_generation = ?").use {
-            it.setLong(1, batch.rebuildGeneration); it.executeUpdate()
-        }
-        val remains = connection.prepareStatement("select count(*) from issue_search_pending").use {
-            it.executeQuery().use { rows -> rows.next(); rows.getLong(1) > 0 }
-        }
-        val rebuild = connection.prepareStatement("select rebuild_generation from issue_search_window where id = 1").use {
-            it.executeQuery().use { rows -> rows.next(); rows.getLong(1) > 0 }
-        }
-        if (!remains && !rebuild) connection.prepareStatement("update issue_search_window set first_change = null, last_change = null where id = 1").use { it.executeUpdate() }
-        else connection.prepareStatement("update issue_search_window set first_change = ? where id = 1").use {
-            // Surviving versions arrived after this snapshot; start the next global window at the batch boundary.
-            it.setLong(1, batch.startedAt); it.executeUpdate()
-        }
-    }
-
-    private fun lock(connection: Connection) {
-        connection.prepareStatement("update issue_search_window set generation = generation where id = 1").use {
-            check(it.executeUpdate() == 1)
         }
     }
 
