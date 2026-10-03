@@ -2,17 +2,17 @@
 
 Branch: `prep/saved-searches`. Base: upstream `next` at `6dae7982a242f672d3132feeeb32a369d21e8d1f`.
 
-Status: implemented and verified locally on 2026-10-02; prepared for issue discussion, not approved for PR. Local preparation commit only; no push, PR or issue comments.
+Status: implemented locally on 2026-10-02 and review fixes verified on 2026-10-04; prepared for issue discussion, not approved for PR. Local preparation commits only; no push, PR or issue comments.
 
 ## Implemented scope
 
 - Issue-list link carries the current supported filters, sort and page size to a server-rendered saved-views page. Native forms create, rename and delete; opening rechecks authorization before returning to the project issue list.
 - `PERSONAL` views belong only to their owner. `PROJECT` views are shared with signed-in users who can read that project; project managers and the existing organization/site administrator overrides may modify shared views.
-- Supported parameters: `state`, `filter`, `authorId`, `assigneeId`, `milestoneId`, `commenterId`, repeated/comma-separated `labelIds`, `dueDate`, `orderBy`, `orderDir`, `itemsPerPage`. Sort fields are the four existing UI choices (`createdDate`, `updatedDate`, `dueDate`, `numOfComments`). Reopening starts at page one; pagination, selected details and export format are not saved.
-- Inputs are validated and encoded as query parameters, never stored as a URL. URL-shaped search text remains search text. Links use the current project identity, supporting project renames/transfers. Unknown parameter names and invalid bounds are rejected.
+- Supported parameters: `state`, `filter`, `titleHead`, `literalFilter`, `authorId`, `assigneeId`, `milestoneId`, `commenterId`, repeated/comma-separated `labelIds`, `dueDate`, `orderBy`, `orderDir`, `itemsPerPage`. Sort fields are `createdDate`, `updatedDate`, `dueDate`, `numOfComments`, and Lucene's `relevance`. `literalFilter` accepts exactly `true` or `false`. Reopening starts at page one; pagination, selected details and export format are not saved.
+- Inputs are validated and encoded as query parameters, never stored as a URL. URL-shaped search text remains search text. Links use the current project identity, supporting project renames/transfers. Every management-page form/link and API response URL respects the servlet context path. Unknown parameter names and invalid bounds are rejected.
 - New `saved_issue_view` entity/table follows the existing Hibernate `ddl-auto: update` schema convention. Indexed project/owner references have database delete cascades. Soft user deletion explicitly removes personal views; shared views have no user owner and remain with the project.
 - REST API at `/api/v1/projects/{owner}/{projectName}/issues/saved-views`: GET list, POST create, GET `/{id}`, PATCH `/{id}` rename, DELETE `/{id}`, GET `/{id}/open` redirect. Existing issues token scopes and session CSRF protection apply. Web mutations are POST forms with Thymeleaf CSRF support.
-- Browser smoke exposed that the existing REST security chain globally disabled CSRF despite accepting sessions. Saved-view mutations now specifically require CSRF for ambient sessions using the existing cookie/SPA handler and decoded `PathPatternRequestMatcher`; other REST routes are unchanged. Stateless scoped PAT clients remain supported. Invalid bearer credentials fail authentication rather than gaining a session-header exemption.
+- Prerequisite `fix/session-api-csrf` protects all ambient-session mutations under `/api/v1/**` using the shared cookie/SPA handler; there is no feature-specific endpoint matcher. Stateless scoped PAT clients remain supported. Invalid bearer credentials fail authentication rather than gaining a session-header exemption.
 
 Create example:
 
@@ -24,9 +24,11 @@ Rename body: `{"name":"New name"}`. API responses include visibility, normalized
 
 ## Decisions requiring issue approval
 
-Both visibility levels are included, independently. Shared visibility follows project read permission, including signed-in readers of public projects, rather than limiting shared views to direct project membership. Anonymous users cannot browse saved views. Visibility is immutable; create another view to change it. Names need not be unique and are limited to 100 characters. Search text is limited to 1,000 characters and encoded parameter storage to 4,096 characters. Page size retains the existing maximum of 45. No query DSL, cross-project views or frontend architecture change.
+Both visibility levels are included, independently. Shared visibility follows project read permission, including signed-in readers of public projects, rather than limiting shared views to direct project membership. Anonymous users cannot browse saved views. Visibility is immutable; create another view to change it. Names need not be unique and are limited to 100 characters. Search text and title heads are each limited to 1,000 characters with control characters rejected; encoded parameter storage is limited to 4,096 characters. Page size retains the existing maximum of 45. No query DSL, cross-project views or frontend architecture change.
 
 ## Verification
+
+### Initial verification — 2026-10-02
 
 Passed: production/test compilation and 40 tests across four scoped specs (0 failures/errors/skips; final run `BUILD SUCCESSFUL in 27s`). H2 integration tests exercised actual visibility queries, user soft-delete cleanup and project FK cascades.
 
@@ -54,6 +56,29 @@ Observed browser/runtime smoke on port 18105 with isolated file-backed H2 and VC
 - Raw HTTP requests carrying the actual browser session but no CSRF token now return 403 for POST/PATCH/DELETE (before the scoped fix, POST returned 201). A spoofed `Yona-Token` returned 403; malformed Bearer returned 401; valid session CSRF PATCH returned 200.
 
 Limits: browser evidence is DOM interaction/navigation, not screenshot/pixel verification (the supervising session reported screenshot-tool timeouts and accepted DOM proof). Non-H2 database backends and the project-wide suite were not run. The pre-existing H2 `property.value` DDL warning appeared at startup; it did not block saved-view schema creation or the exercised flows.
+
+### Review-fix verification — 2026-10-04
+
+Passed 10 tests across the controller, repository and security specs, with zero failures/errors/skips (`BUILD SUCCESSFUL in 53s`):
+
+```sh
+JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem ./gradlew --no-daemon --max-workers=1 -Pkotlin.daemon.jvmargs=-Xmx4g test -Dyona.it.db=h2 --tests com.github.yonaprojects.yona.web.SavedIssueViewControllerSpec --tests com.github.yonaprojects.yona.domain.issue.SavedIssueViewRepositorySpec --tests com.github.yonaprojects.yona.config.SavedIssueViewSecuritySpec
+```
+
+Added regression coverage for every management-page action/link under `/yona`, context-prefixed API URLs and redirects, Lucene parameter round trips, and invalid boolean/title-head values.
+
+Runtime command (current-source `bootRun`, not an existing jar):
+
+```sh
+JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem ./gradlew --no-daemon --max-workers=1 -Pkotlin.daemon.jvmargs=-Xmx4g bootRun --args='--spring.profiles.active=h2 --server.port=18105 --server.servlet.context-path=/yona --spring.jpa.show-sql=false --yona.data=/tmp/yona-review-saved-context-20261003-repair --yona.git.base-dir=/tmp/yona-review-saved-context-20261003-repair/git --yona.svn.base-dir=/tmp/yona-review-saved-context-20261003-repair/svn --yona.hg.base-dir=/tmp/yona-review-saved-context-20261003-repair/hg --yona.ssh.relay.enabled=false --logging.level.root=ERROR'
+```
+
+- Browser DOM/native-form smoke created, renamed and deleted a personal view carrying `filter`, `titleHead`, `literalFilter=true` and `orderBy=relevance`. All three forms included CSRF inputs and `/yona` actions; open/back links retained the prefix.
+- A second view with `orderBy=updatedDate` opened the rendered issue list with its saved filter intact. The issue-list save link returned to management successfully; the management back link returned to `/yona/admin/saved-context/issues`.
+- Raw HTTP using the browser session exercised API create (201), get/list (200), rename (200), open (302), and delete (204). Unicode, literal brackets, plus signs and ampersands survived parameter storage; the open `Location` and every response URL included `/yona` exactly once. Invalid `literalFilter=yes` returned 400.
+- Raw session POST/PATCH/DELETE without a CSRF token each returned 403. Page `fetch` is automatically CSRF-decorated, so the negative check deliberately used an out-of-page HTTP client rather than that wrapper.
+
+Limits: this branch accepts/preserves Lucene parameters; Lucene result execution belongs to the separate Lucene worktree and was not exercised here. The initial administrator was created using the same isolated H2 database without a context path because the existing bootstrap redirect drops `/yona`. Existing context-unsafe static assets and login redirect also required native form submission/direct navigation during setup; those unrelated paths were not changed. Runtime evidence is DOM/HTTP, not visual parity. The pre-existing H2 `property.value` DDL warning remained. Owned smoke services and browser tab were closed after verification.
 
 ## Before any PR
 
