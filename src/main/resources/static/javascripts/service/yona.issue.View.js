@@ -175,10 +175,6 @@
             // 델리게이트가 못 잡아 이슈 인라인 수정(담당자/마일스톤/라벨)이 조용히 멈춘다.
             _delegate(elements.issueInfoWrap, "change", "[data-toggle=tomselect]", _onChangeIssueInfo);
             _delegate(elements.issueInfoWrap, "change", "[data-toggle=calendar]", _onChangeDueDate);
-            // "select2-selecting"은 Select2 v3 전용 커스텀 이벤트라 Tom Select가 절대 발생시키지
-            // 않는다 - 이 바인딩과 아래 _onSelectingAssignee는 도달 불가능한 죽은 코드다.
-            // 삭제하지 않고 문법만 그대로 vanilla로 옮긴다(issue.Write.js도 동일).
-            _delegate(elements.issueInfoWrap, "select2-selecting", '[name="assignee.user.id"]', _onSelectingAssignee);
 
             // Detect textarea events for autoUpdate timeline
             if(elements.textarea){
@@ -228,33 +224,6 @@
             return params;
         }
 
-        /**
-         * 도달 불가능한 죽은 핸들러(위 _attachEvent 주석 참고) - Tom Select가
-         * "select2-selecting"을 발생시키지 않아 실제로는 절대 호출되지 않는다. 문법만
-         * vanilla로 옮기고 로직은 그대로 보존한다.
-         *
-         * @private
-         */
-        function _onSelectingAssignee(evt){
-            var targetElement = this;
-            var selectedElement = targetElement.querySelector("option:checked");
-            var isValueNotChanged = (targetElement.value === evt.val);
-            // forceChange/nonMember는 어느 템플릿/JS도 설정한 적 없는 죽은 참조라 항상
-            // undefined다 - window.jQuery.data() 정적 접근자를 expando 프로퍼티 읽기로
-            // 바꿔도 도달 불가능한 분기라 완전 동치.
-            var isForceChange = evt.object.element._forceChange;
-            var isNonMember = selectedElement ? selectedElement._nonMember : undefined;
-
-            if (isNonMember && !isValueNotChanged) {
-                if(selectedElement){
-                    selectedElement.remove();
-                }
-            }
-
-            if(isForceChange && isValueNotChanged){
-                targetElement.dispatchEvent(new Event("change", {"bubbles": true}));
-            }
-        }
 
         /**
          * on change dueDate input field
@@ -303,7 +272,7 @@
 
         /**
          * Send request to update issue info
-         * like as assignee.id, milestone.id and labelIds.
+         * like milestone.id and labelIds.
          *
          * @param evt
          * @param callback

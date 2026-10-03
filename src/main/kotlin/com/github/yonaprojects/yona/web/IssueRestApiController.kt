@@ -112,6 +112,44 @@ class IssueRestApiController(
         return issueController.updateIssue(found.id!!, number, request, authentication)
     }
 
+    @PostMapping("/{number}/assignees/{userId}")
+    fun addAssignee(
+        @PathVariable owner: String,
+        @PathVariable project: String,
+        @PathVariable number: Long,
+        @PathVariable userId: Long,
+        authentication: Authentication?
+    ): ResponseEntity<Any> {
+        val found = projectRepository.findByOwnerAndName(owner, project).orElse(null)
+            ?: return ResponseEntity.notFound().build()
+        return issueController.addAssignee(found.id!!, number, userId, authentication)
+    }
+
+    @DeleteMapping("/{number}/assignees/{userId}")
+    fun removeAssignee(
+        @PathVariable owner: String,
+        @PathVariable project: String,
+        @PathVariable number: Long,
+        @PathVariable userId: Long,
+        authentication: Authentication?
+    ): ResponseEntity<Any> {
+        val found = projectRepository.findByOwnerAndName(owner, project).orElse(null)
+            ?: return ResponseEntity.notFound().build()
+        return issueController.removeAssignee(found.id!!, number, userId, authentication)
+    }
+
+    @DeleteMapping("/{number}/assignees")
+    fun clearAssignees(
+        @PathVariable owner: String,
+        @PathVariable project: String,
+        @PathVariable number: Long,
+        authentication: Authentication?
+    ): ResponseEntity<Any> {
+        val found = projectRepository.findByOwnerAndName(owner, project).orElse(null)
+            ?: return ResponseEntity.notFound().build()
+        return issueController.clearAssignees(found.id!!, number, authentication)
+    }
+
     @DeleteMapping("/{number}")
     fun delete(
         @PathVariable owner: String,

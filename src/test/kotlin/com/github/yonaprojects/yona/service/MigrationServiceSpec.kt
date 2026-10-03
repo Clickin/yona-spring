@@ -8,7 +8,6 @@ import com.github.yonaprojects.yona.domain.board.PostingCommentRepository
 import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.enumeration.State
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueComment
 import com.github.yonaprojects.yona.domain.issue.IssueCommentRepository
@@ -476,13 +475,12 @@ class MigrationServiceSpec : DescribeSpec({
             val project = Project(id = 1L, owner = "alice", name = "demo")
             val milestone = Milestone(id = 5L, title = "1.0", project = project)
             val assigneeUser = User(id = 9L, loginId = "assignee-login", name = "담당자")
-            val assignee = Assignee(id = 1L, user = assigneeUser, project = project)
             val createdAt = Instant.parse("2026-01-01T00:00:00Z")
             val bodyText = "이슈 본문 <img src='/uploads/img.png'> 그리고 [문서](/wiki/abc)"
             val issue = Issue(
                 id = 100L, title = "버그입니다", body = bodyText, project = project, number = 7L,
                 authorLoginId = "author1", authorName = "작성자", createdDate = createdAt,
-                assignee = assignee, milestone = milestone, state = State.CLOSED
+                assignees = mutableSetOf(assigneeUser, User(id = 10L, loginId = "second-assignee", name = "두번째 담당자")), milestone = milestone, state = State.CLOSED
             )
 
             val commentCreatedAt = Instant.parse("2026-01-02T00:00:00Z")
@@ -515,7 +513,7 @@ class MigrationServiceSpec : DescribeSpec({
             body shouldContain "[spec.pdf](/files/900)"
             body shouldContain "[diagram.png](/files/901)"
             node["created_at"] shouldBe formatter.format(createdAt)
-            node["assignee"] shouldBe "assignee-login"
+            node["assignees"] shouldBe listOf(mapOf("loginId" to "assignee-login"), mapOf("loginId" to "second-assignee"))
             node["milestone"] shouldBe "1.0"
             node["milestoneId"] shouldBe 5L
             node["closed"] shouldBe true
@@ -537,7 +535,7 @@ class MigrationServiceSpec : DescribeSpec({
             val issue = Issue(
                 id = 300L, title = "빈 이슈", body = null, project = project, number = 1L,
                 authorLoginId = null, authorName = null, createdDate = null,
-                assignee = null, milestone = null, state = State.OPEN
+                milestone = null, state = State.OPEN
             )
             val comment = IssueComment(
                 id = 700L, contents = "", createdDate = null,
@@ -555,7 +553,7 @@ class MigrationServiceSpec : DescribeSpec({
             val body = node["body"] as String
             body shouldContain "@ () 님이 작성한 [이슈](/carol/emptyproj/issue/1)입니다."
             node.containsKey("created_at") shouldBe false
-            node["assignee"].shouldBeNull()
+            node["assignees"] shouldBe emptyList<Map<String, Any?>>()
             node["milestone"].shouldBeNull()
             node["milestoneId"].shouldBeNull()
             node["closed"] shouldBe false
@@ -569,13 +567,12 @@ class MigrationServiceSpec : DescribeSpec({
             val project = Project(id = 2L, owner = "bob", name = "wikiproj")
             val milestone = Milestone(id = 6L, title = "2.0", project = project)
             val assigneeUser = User(id = 19L, loginId = "wiki-assignee", name = "위키담당자")
-            val assignee = Assignee(id = 2L, user = assigneeUser, project = project)
             val createdAt = Instant.parse("2026-02-01T00:00:00Z")
             val bodyText = "위키 본문 <img src='/uploads/wiki.png'> 그리고 [문서](/wiki/abc)"
             val issue = Issue(
                 id = 200L, title = "위키 이슈", body = bodyText, project = project, number = 3L,
                 authorLoginId = "wiki-author", authorName = "위키작성자", createdDate = createdAt,
-                assignee = assignee, milestone = milestone, state = State.OPEN
+                assignees = mutableSetOf(assigneeUser), milestone = milestone, state = State.OPEN
             )
 
             val commentCreatedAt = Instant.parse("2026-02-02T00:00:00Z")
@@ -609,7 +606,7 @@ class MigrationServiceSpec : DescribeSpec({
             cBody shouldContain "[댓글링크](../wiki/c/1/$commentBody)"
             cBody shouldContain "--- attachments ---"
             cBody shouldContain "[파일#1.png](../wiki/files/950/파일%231.png)"
-            node["assignee"] shouldBe "wiki-assignee"
+            node["assignees"] shouldBe listOf(mapOf("loginId" to "wiki-assignee"))
             node["milestone"] shouldBe "2.0"
             node["closed"] shouldBe false
         }
@@ -619,7 +616,7 @@ class MigrationServiceSpec : DescribeSpec({
             val issue = Issue(
                 id = 400L, title = "빈 위키 이슈", body = null, project = project, number = 2L,
                 authorLoginId = null, authorName = null, createdDate = null,
-                assignee = null, milestone = null, state = State.OPEN
+                milestone = null, state = State.OPEN
             )
             val comment = IssueComment(
                 id = 800L, contents = "", createdDate = null,
@@ -637,7 +634,7 @@ class MigrationServiceSpec : DescribeSpec({
             val body = node["body"] as String
             body shouldContain "@ () 님이 작성한 [이슈](/dave/wikiempty/issue/2)입니다."
             node.containsKey("created_at") shouldBe false
-            node["assignee"].shouldBeNull()
+            node["assignees"] shouldBe emptyList<Map<String, Any?>>()
             node["milestone"].shouldBeNull()
         }
     }

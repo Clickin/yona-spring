@@ -69,27 +69,19 @@ class IssueShareServiceImpl(
         if (query.isBlank()) {
             val issueAuthor = issue.authorId?.let { userRepository.findById(it).orElse(null) }
 
-            if (issue.assignee != null) {
-                if (currentUser.id != issue.assignee?.user?.id) {
-                    users.add(mapUser(currentUser, "나에게 지정"))
-                }
-                if (issueAuthor != null && issueAuthor.id != currentUser.id && issueAuthor.id != issue.assignee?.user?.id) {
-                    users.add(mapUser(issueAuthor, "작성자에게 지정"))
-                }
-                users.add(mapUserAnonymous("담당자 해제"))
-                users.add(mapUser(issue.assignee!!.user))
-            } else {
+            if (!issue.hasAssignee(currentUser.id)) {
                 users.add(mapUser(currentUser, "나에게 지정"))
-                if (issueAuthor != null && issueAuthor.id != currentUser.id) {
-                    users.add(mapUser(issueAuthor, "작성자에게 지정"))
-                }
             }
+            if (issueAuthor != null && issueAuthor.id != currentUser.id && !issue.hasAssignee(issueAuthor.id)) {
+                users.add(mapUser(issueAuthor, "작성자에게 지정"))
+            }
+            issue.assignees.forEach { users.add(mapUser(it)) }
 
             val assignable = getAssignableUsersOfProjectInternal(project, currentUser)
             for (u in assignable) {
                 users.add(mapUser(u))
             }
-            return users
+            return users.distinctBy { it["loginId"] }
         }
 
         val processedQuery = "%${query.lowercase()}%"
@@ -299,14 +291,6 @@ class IssueShareServiceImpl(
         )
     }
 
-    private fun mapUserAnonymous(customName: String): Map<String, Any> {
-        return mapOf(
-            "loginId" to "anonymous",
-            "name" to customName,
-            "avatarUrl" to "",
-            "type" to "user"
-        )
-    }
 
     private fun mapProject(project: Project): Map<String, Any> {
         return mapOf(

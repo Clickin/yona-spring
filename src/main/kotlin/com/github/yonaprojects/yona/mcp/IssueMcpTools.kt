@@ -69,7 +69,9 @@ class IssueMcpTools(
         @ToolParam(description = "저장소 소유자") owner: String,
         @ToolParam(description = "저장소 이름") project: String,
         @ToolParam(description = "이슈 제목") title: String,
-        @ToolParam(description = "이슈 본문(마크다운)", required = false) body: String?
+        @ToolParam(description = "이슈 본문(마크다운)", required = false) body: String?,
+        @ToolParam(description = "담당자 사용자 ID 목록, assigneeId보다 우선", required = false) assigneeIds: List<Long>? = null,
+        @ToolParam(description = "단일 담당자 사용자 ID (이전 클라이언트 호환)", required = false) assigneeId: Long? = null
     ): Any {
         val found = findProject(owner, project)
         scopeGuard.require(currentAuth(), ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, found)
@@ -77,11 +79,50 @@ class IssueMcpTools(
             title = title,
             body = body,
             milestoneId = null,
-            assigneeId = null,
-            labelIds = null
+            assigneeIds = assigneeIds,
+            labelIds = null,
+            assigneeId = assigneeId
         )
         // IssueController.createIssue()가 이미 IssueResponse를 반환한다.
         return issueController.createIssue(found.id!!, request, currentAuth()).unwrapForMcp()
+    }
+
+    @Tool(description = "기존 담당자를 유지하면서 이슈 담당자를 추가합니다.")
+    fun add_issue_assignee(
+        @ToolParam(description = "저장소 소유자") owner: String,
+        @ToolParam(description = "저장소 이름") project: String,
+        @ToolParam(description = "이슈 번호") number: Long,
+        @ToolParam(description = "추가할 담당자 사용자 ID") userId: Long
+    ): Any {
+        val found = findProject(owner, project)
+        scopeGuard.require(currentAuth(), ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, found)
+        return issueController.addAssignee(found.id!!, number, userId, currentAuth())
+            .unwrapForMcp("이슈 #$number 를 찾을 수 없습니다.")
+    }
+
+    @Tool(description = "다른 담당자를 유지하면서 이슈 담당자 한 명을 해제합니다.")
+    fun remove_issue_assignee(
+        @ToolParam(description = "저장소 소유자") owner: String,
+        @ToolParam(description = "저장소 이름") project: String,
+        @ToolParam(description = "이슈 번호") number: Long,
+        @ToolParam(description = "해제할 담당자 사용자 ID") userId: Long
+    ): Any {
+        val found = findProject(owner, project)
+        scopeGuard.require(currentAuth(), ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, found)
+        return issueController.removeAssignee(found.id!!, number, userId, currentAuth())
+            .unwrapForMcp("이슈 #$number 를 찾을 수 없습니다.")
+    }
+
+    @Tool(description = "이슈의 모든 담당자를 해제합니다.")
+    fun clear_issue_assignees(
+        @ToolParam(description = "저장소 소유자") owner: String,
+        @ToolParam(description = "저장소 이름") project: String,
+        @ToolParam(description = "이슈 번호") number: Long
+    ): Any {
+        val found = findProject(owner, project)
+        scopeGuard.require(currentAuth(), ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, found)
+        return issueController.clearAssignees(found.id!!, number, currentAuth())
+            .unwrapForMcp("이슈 #$number 를 찾을 수 없습니다.")
     }
 
     @Tool(description = "이슈에 코멘트를 답니다.")

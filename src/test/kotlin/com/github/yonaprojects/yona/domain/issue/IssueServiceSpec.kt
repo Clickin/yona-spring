@@ -141,7 +141,7 @@ class IssueServiceSpec @Autowired constructor(
                 )
                 val savedIssue = issueRepository.save(issue)
 
-                issueService.changeAssignee(savedIssue.id!!, assignee, "tester2")
+                issueService.changeAssignees(savedIssue.id!!, listOfNotNull(assignee), "tester2")
 
                 val issueEvents = issueEventRepository.findByIssueOrderByCreatedAsc(savedIssue)
                 issueEvents.size shouldBe 1
@@ -186,7 +186,7 @@ class IssueServiceSpec @Autowired constructor(
                     title = savedIssue.title,
                     body = "변경된 본문",
                     updater = author,
-                    assigneeUser = null,
+                    assigneeUsers = null,
                     milestoneId = null,
                     labelIds = null
                 )
@@ -214,7 +214,7 @@ class IssueServiceSpec @Autowired constructor(
                     title = savedIssue.title,
                     body = "변경된 본문",
                     updater = author,
-                    assigneeUser = null,
+                    assigneeUsers = null,
                     milestoneId = null,
                     labelIds = null
                 )
@@ -239,7 +239,7 @@ class IssueServiceSpec @Autowired constructor(
                     title = savedIssue.title,
                     body = "동일 본문",
                     updater = author,
-                    assigneeUser = null,
+                    assigneeUsers = null,
                     milestoneId = null,
                     labelIds = null
                 )
@@ -268,7 +268,7 @@ class IssueServiceSpec @Autowired constructor(
                     title = savedIssue.title,
                     body = savedIssue.body ?: "",
                     updater = author,
-                    assigneeUser = null,
+                    assigneeUsers = null,
                     milestoneId = null,
                     labelIds = listOf(bugLabel.id!!)
                 )
@@ -305,7 +305,7 @@ class IssueServiceSpec @Autowired constructor(
                         title = savedIssue.title,
                         body = savedIssue.body ?: "",
                         updater = author,
-                        assigneeUser = null,
+                        assigneeUsers = null,
                         milestoneId = null,
                         labelIds = listOf(highLabel.id!!, lowLabel.id!!)
                     )
@@ -339,7 +339,7 @@ class IssueServiceSpec @Autowired constructor(
                     title = savedIssue.title,
                     body = savedIssue.body ?: "",
                     updater = author,
-                    assigneeUser = null,
+                    assigneeUsers = null,
                     milestoneId = null,
                     labelIds = listOf(highLabel.id!!, bugLabel.id!!)
                 )
@@ -405,19 +405,19 @@ class IssueServiceSpec @Autowired constructor(
                 // 1) 라벨 없음 -> [버그]
                 issueService.updateIssue(
                     issueId = savedIssue.id!!, title = savedIssue.title, body = savedIssue.body ?: "",
-                    updater = author, assigneeUser = null, milestoneId = null,
+                    updater = author, assigneeUsers = null, milestoneId = null,
                     labelIds = listOf(bugLabel.id!!)
                 )
                 // 2) [버그] -> [버그, 기능] (중간 지점, 되돌리는 게 아니므로 남아야 함)
                 issueService.updateIssue(
                     issueId = savedIssue.id!!, title = savedIssue.title, body = savedIssue.body ?: "",
-                    updater = author, assigneeUser = null, milestoneId = null,
+                    updater = author, assigneeUsers = null, milestoneId = null,
                     labelIds = listOf(bugLabel.id!!, featureLabel.id!!)
                 )
                 // 3) [버그, 기능] -> [버그] (2번을 정확히 되돌림 -> 2, 3번 모두 상쇄)
                 issueService.updateIssue(
                     issueId = savedIssue.id!!, title = savedIssue.title, body = savedIssue.body ?: "",
-                    updater = author, assigneeUser = null, milestoneId = null,
+                    updater = author, assigneeUsers = null, milestoneId = null,
                     labelIds = listOf(bugLabel.id!!)
                 )
 
@@ -1101,7 +1101,7 @@ class IssueServiceSpec @Autowired constructor(
 
                     val assignedIssue = issueService.createIssue(
                         Issue(title = "담당 이슈", project = project, authorId = otherUser.id, authorLoginId = otherUser.loginId),
-                        otherUser, assigneeUser = user
+                        otherUser, assigneeUsers = listOf(user)
                     )
                     issueService.createIssue(
                         Issue(title = "담당 아닌 이슈", project = project, authorId = otherUser.id, authorLoginId = otherUser.loginId),
@@ -1178,7 +1178,7 @@ class IssueServiceSpec @Autowired constructor(
                     )
                     val assignedIssue = issueService.createIssue(
                         Issue(title = "담당 이슈", project = project, authorId = other.id, authorLoginId = other.loginId),
-                        other, assigneeUser = user
+                        other, assigneeUsers = listOf(user)
                     )
                     val mentionedIssue = issueService.createIssue(
                         Issue(title = "멘션 이슈", body = "@filter-all-user 확인", project = project, authorId = other.id, authorLoginId = other.loginId),
@@ -1191,7 +1191,7 @@ class IssueServiceSpec @Autowired constructor(
                     // 작성자이면서 동시에 담당자이기도 한 이슈 — ALL 결과에 한 번만 나와야 한다(중복 제거).
                     val bothCreatedAndAssigned = issueService.createIssue(
                         Issue(title = "작성+담당 겹침 이슈", project = project, authorId = user.id, authorLoginId = user.loginId),
-                        user, assigneeUser = user
+                        user, assigneeUsers = listOf(user)
                     )
                     issueService.createIssue(
                         Issue(title = "무관한 이슈", project = project, authorId = other.id, authorLoginId = other.loginId), other

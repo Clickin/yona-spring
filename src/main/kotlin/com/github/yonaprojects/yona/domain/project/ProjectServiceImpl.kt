@@ -227,8 +227,7 @@ class ProjectServiceImpl(
             issueLabelService.deleteCategory(category.id!!)
         }
 
-        // yona Project.delete()의 assignees 루프 대응 — Issue.assignee의 cascade=ALL로 대부분
-        // 이미 삭제되지만, 어떤 이슈에도 연결되지 않은 잔여 Assignee가 있을 경우를 대비한 방어적 정리.
+        // PR 담당자와 이전 단일 이슈 담당자에서 남은 프로젝트별 Assignee 레코드를 정리한다.
         assigneeRepository.deleteAll(assigneeRepository.findByProjectId(projectId))
 
         // yona Project.delete()의 webhooks 루프 대응 — WebhookThread.webhook_id FK가

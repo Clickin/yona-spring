@@ -56,7 +56,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import com.github.yonaprojects.yona.domain.vcs.Commit
 import com.github.yonaprojects.yona.domain.issue.Issue
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.IssueLabel
 import com.github.yonaprojects.yona.domain.issue.IssueLabelCategory
 import com.github.yonaprojects.yona.domain.pullrequest.PullRequest
@@ -949,14 +948,14 @@ class ProjectViewControllerSpec : DescribeSpec({
 
             val issue1 = Issue(
                 id = 1L, title = "이슈1", project = project, number = 1L, state = State.OPEN,
-                assignee = Assignee(user = userB, project = project), milestone = milestone1, labels = mutableSetOf(label1)
+                assignees = mutableSetOf(userB, memberA), milestone = milestone1, labels = mutableSetOf(label1)
             )
             val issue2 = Issue(
                 id = 2L, title = "이슈2(미배정)", project = project, number = 2L, state = State.OPEN
             )
             val issue3 = Issue(
                 id = 3L, title = "이슈3", project = project, number = 3L, state = State.OPEN,
-                assignee = Assignee(user = userB, project = project), milestone = milestone1, labels = mutableSetOf(label1, label2)
+                assignees = mutableSetOf(userB), milestone = milestone1, labels = mutableSetOf(label1, label2)
             )
             // milestone3에 배정된 이슈지만 findByProject(전체 이슈) 조회 결과에는 포함되지 않아
             // totalInMilestone==0 방어분기(0으로 나누기 가드)를 검증하기 위한 데이터.
@@ -996,10 +995,13 @@ class ProjectViewControllerSpec : DescribeSpec({
 
             @Suppress("UNCHECKED_CAST")
             val assigneeList = model.getAttribute("assigneeList") as List<ProjectViewController.AssigneeDashboardDto>
-            assigneeList.size shouldBe 1
+            assigneeList.size shouldBe 2
             assigneeList[0].user shouldBe userB
             assigneeList[0].count shouldBe 2
             assigneeList[0].percent shouldBe 50
+            assigneeList[1].user shouldBe memberA
+            assigneeList[1].count shouldBe 1
+            assigneeList[1].percent shouldBe 25
 
             @Suppress("UNCHECKED_CAST")
             val milestoneList = model.getAttribute("milestoneList") as List<ProjectViewController.MilestoneDashboardDto>

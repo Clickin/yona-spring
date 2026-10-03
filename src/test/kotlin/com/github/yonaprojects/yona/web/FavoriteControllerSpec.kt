@@ -1,7 +1,6 @@
 package com.github.yonaprojects.yona.web
 
 import com.github.yonaprojects.yona.domain.enumeration.State
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueFilterType
 import com.github.yonaprojects.yona.domain.issue.IssueService
@@ -173,11 +172,10 @@ class FavoriteControllerSpec : DescribeSpec({
         describe("GET /-_-api/v1/user/issues") {
             it("filter=assigned로 요청하면 담당 이슈 목록을 legacy와 동일한 JSON 형식으로 반환해야 한다") {
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
-                val assignee = Assignee(id = 40L, user = user, project = project)
                 val assignedIssue = Issue(
                     id = 32L, number = 7L, title = "담당이슈", project = project, state = State.OPEN,
                     authorId = 99L, authorLoginId = "author99", authorName = "작성자99",
-                    assignee = assignee, createdDate = Instant.parse("2026-01-01T00:00:00Z"),
+                    assignees = mutableSetOf(user), createdDate = Instant.parse("2026-01-01T00:00:00Z"),
                     updatedDate = Instant.parse("2026-01-02T00:00:00Z")
                 )
                 every { issueService.getIssuesByFilter(IssueFilterType.ASSIGNED, user) } returns listOf(assignedIssue)
@@ -190,22 +188,22 @@ class FavoriteControllerSpec : DescribeSpec({
                     .andExpect(jsonPath("$.result[0].title").value("담당이슈"))
                     .andExpect(jsonPath("$.result[0].author.id").value(99))
                     .andExpect(jsonPath("$.result[0].author.loginId").value("author99"))
-                    .andExpect(jsonPath("$.result[0].assignee.id").value(40))
-                    .andExpect(jsonPath("$.result[0].assignee.loginId").value("testuser"))
+                    .andExpect(jsonPath("$.result[0].assignees[0].id").value(user.id!!.toInt()))
+                    .andExpect(jsonPath("$.result[0].assignees[0].loginId").value("testuser"))
                     .andExpect(jsonPath("$.result[0].project.id").value(10))
                     .andExpect(jsonPath("$.result[0].project.name").value("testproject"))
                     .andExpect(jsonPath("$.result[0].owner").value("testowner"))
                     .andExpect(jsonPath("$.result[0].refUrl").value("https://yona.example.com/testowner/testproject/issue/7"))
             }
 
-            it("담당자가 없으면 assignee는 빈 객체여야 한다") {
+            it("담당자가 없으면 assignees는 빈 배열이어야 한다") {
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 val noAssigneeIssue = Issue(id = 33L, number = 8L, title = "담당자없음", project = project)
                 every { issueService.getIssuesByFilter(IssueFilterType.CREATED, user) } returns listOf(noAssigneeIssue)
 
                 mockMvc.perform(get("/-_-api/v1/user/issues").param("filter", "created").principal(auth))
                     .andExpect(status().isOk)
-                    .andExpect(jsonPath("$.result[0].assignee").isEmpty)
+                    .andExpect(jsonPath("$.result[0].assignees").isEmpty)
             }
 
             it("filter 기본값은 assigned여야 한다") {

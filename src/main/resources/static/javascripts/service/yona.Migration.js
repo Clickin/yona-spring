@@ -476,6 +476,9 @@ function MigrationController($log, $timeout, $scope, migrationService, USER, WOR
             systemMessage("읽어 들인 이슈를 Github으로 보내는중입니다.");
             systemMessage("(실제 최종 데이터가 보이려면 작업 이후에도 시간이 좀 더 걸릴 수 있습니다)");
             systemMessage("진행바가 끝까지 진행된 이후에는 브라우저를 닫으셔도 이슈 이전작업에 영향을 주지 않습니다");
+        }, function(error){
+            loadingBar.end();
+            systemMessage(error.message);
         });
         migrationService.logToIssue(vm.source, vm.destination, "이슈", vm.yonaUser, vm.source.issueCount);
     }
@@ -997,8 +1000,10 @@ function migrationService($http, $log, CONFIG, USER, WORKER) {
         }).then(function success(response) {
             var counter = 0;  // for request limit per min
 
-            response.data.issues.forEach(function (data) {
-                var issueData = preprocessIssueData(data, destination, issueLabelMap);
+            var issues = response.data.issues.map(function(data){
+                return preprocessIssueData(data, destination, issueLabelMap);
+            });
+            issues.forEach(function (issueData) {
 
                 setTimeout(function(){
                     $http({
@@ -1029,12 +1034,13 @@ function migrationService($http, $log, CONFIG, USER, WORKER) {
 
     function preprocessIssueData(data, destination, issueLabelMap) {
         var projectName = destination.projectName;
-        // assignee mapping
-        if(destination.assignees && destination.assignees[data.issue.assignee]){
-            data.issue.assignee = destination.assignees[data.issue.assignee].login;
-        } else {
-            delete data.issue.assignee;
-        }
+        data.issue.assignees = (data.issue.assignees || []).map(function(assignee){
+            var mapped = destination.assignees && destination.assignees[assignee.loginId];
+            if(!mapped || !mapped.login || !mapped.confirmed){
+                throw new Error("Missing confirmed assignee mapping: " + assignee.loginId);
+            }
+            return mapped.login;
+        });
 
         // issue label mapping
         data.issue.labels = issueLabelMap[data.issue.id];

@@ -54,7 +54,7 @@ class IssueServiceImpl(
     override fun getIssuesByFilter(filter: IssueFilterType, user: User): List<Issue> {
         val userId = user.id!!
         return when (filter) {
-            IssueFilterType.ASSIGNED -> issueRepository.findByAssignee_UserId(userId)
+            IssueFilterType.ASSIGNED -> issueRepository.findByAssignees_Id(userId)
                 .sortedByDescending { it.updatedDate }
             IssueFilterType.CREATED -> issueRepository.findByAuthorId(userId)
                 .sortedByDescending { it.updatedDate }
@@ -63,7 +63,7 @@ class IssueServiceImpl(
             IssueFilterType.FAVORITE -> favoriteIssueRepository.findByUserId(userId).map { it.issue }
                 .sortedByDescending { it.updatedDate }
             IssueFilterType.ALL -> {
-                val assigned = issueRepository.findByAssignee_UserId(userId)
+                val assigned = issueRepository.findByAssignees_Id(userId)
                 val created = issueRepository.findByAuthorId(userId)
                 val mentioned = issueRepository.findAllById(mentionService.getMentioningIssueIds(userId))
                 val favorite = favoriteIssueRepository.findByUserId(userId).map { it.issue }
@@ -102,7 +102,7 @@ class IssueServiceImpl(
     override fun createIssue(
         issue: Issue,
         author: User,
-        assigneeUser: User?,
+        assigneeUsers: List<User>,
         milestoneId: Long?,
         labelIds: List<Long>?,
         isDraft: Boolean,
@@ -126,9 +126,7 @@ class IssueServiceImpl(
         issue.isDraft = isDraft
         issue.state = if (isDraft) State.DRAFT else State.OPEN
 
-        if (assigneeUser != null) {
-            issue.assignee = Assignee(user = assigneeUser, project = project)
-        }
+        issue.assignees.addAll(assigneeUsers.distinctBy { it.id })
 
         if (milestoneId != null) {
             // id로만 조회하고 그 마일스톤이 이 이슈의 project 소속인지 검증하지 않으면(IDOR), REST
@@ -148,6 +146,9 @@ class IssueServiceImpl(
         }
 
         val savedIssue = issueRepository.save(issue)
+        savedIssue.assignees.forEach {
+            recordAssignmentEvent(savedIssue, author.loginId, null, it)
+        }
 
         // 초안 여부와 무관하게 저장할 때마다 항상 멘션 인덱스를 동기화한다(알림 발송 여부와는 별개).
         mentionService.update(ResourceType.ISSUE_POST, savedIssue.id.toString(), commentService.extractMentionedUsers(savedIssue.body ?: ""))
@@ -202,7 +203,7 @@ class IssueServiceImpl(
         )
 
         val receivers = watchService.findActualWatchers(
-            baseWatchers = setOf(sender),
+            baseWatchers = issue.assignees + sender,
             resourceType = ResourceType.ISSUE_POST,
             resourceId = issue.id.toString(),
             projectId = issue.project.id,
@@ -221,7 +222,7 @@ class IssueServiceImpl(
         title: String,
         body: String,
         updater: User,
-        assigneeUser: User?,
+        assigneeUsers: List<User>?,
         milestoneId: Long?,
         labelIds: List<Long>?
     ): Issue {
@@ -250,10 +251,8 @@ class IssueServiceImpl(
             )
         }
 
-        if (assigneeUser != null) {
-            issue.assignee = Assignee(user = assigneeUser, project = issue.project)
-        } else {
-            issue.assignee = null
+        if (assigneeUsers != null) {
+            replaceAssignees(issue, assigneeUsers, updater.loginId)
         }
 
         if (milestoneId != null) {
@@ -307,7 +306,7 @@ class IssueServiceImpl(
                 newValue = body
             )
             val bodyChangedReceivers = watchService.findActualWatchers(
-                baseWatchers = setOf(updater),
+                baseWatchers = savedIssue.assignees + updater,
                 resourceType = ResourceType.ISSUE_POST,
                 resourceId = savedIssue.id.toString(),
                 projectId = savedIssue.project.id,
@@ -360,7 +359,7 @@ class IssueServiceImpl(
 
         // 감시자(Watch) 추가
         val authorUser = issue.authorId?.let { userRepository.findById(it).orElse(null) }
-        val baseWatchers = if (authorUser != null) setOf(authorUser) else emptySet()
+        val baseWatchers = issue.assignees + listOfNotNull(authorUser)
         val receivers = watchService.findActualWatchers(
             baseWatchers = baseWatchers,
             resourceType = ResourceType.ISSUE_POST,
@@ -380,54 +379,63 @@ class IssueServiceImpl(
         return savedIssue
     }
 
-    override fun changeAssignee(issueId: Long, newAssigneeUser: User?, updaterLoginId: String): Issue {
+    override fun changeAssignees(issueId: Long, newAssigneeUsers: List<User>, updaterLoginId: String): Issue {
         val issue = issueRepository.findById(issueId).orElseThrow { IllegalArgumentException("Issue not found") }
-        val oldAssignee = issue.assignee?.user
-        if (oldAssignee?.id == newAssigneeUser?.id) {
-            return issue
-        }
+        replaceAssignees(issue, newAssigneeUsers, updaterLoginId)
+        return issueRepository.save(issue)
+    }
 
-        if (newAssigneeUser == null) {
-            issue.assignee = null
-        } else {
-            issue.assignee = Assignee(user = newAssigneeUser, project = issue.project)
-        }
+    private fun replaceAssignees(issue: Issue, users: List<User>, updaterLoginId: String) {
+        val previous = issue.assignees.associateBy { it.id }
+        val requested = users.associateBy { it.id }
+        val removed = previous.filterKeys { it !in requested }.values
+        val added = requested.filterKeys { it !in previous }.values
+        if (removed.isEmpty() && added.isEmpty()) return
+        issue.assignees.removeIf { it.id !in requested }
+        issue.assignees.addAll(added)
         issue.updatedDate = Instant.now()
-        val savedIssue = issueRepository.save(issue)
-
         val updater = userRepository.findByLoginId(updaterLoginId).orElse(null)
-        val title = "[${issue.project.name}] 이슈 #${issue.number} 담당자 변경"
-        val notificationEvent = NotificationEvent(
-            title = title,
-            senderId = updater?.id,
-            created = Instant.now(),
-            resourceType = ResourceType.ISSUE_ASSIGNEE,
-            resourceId = savedIssue.id.toString(),
-            eventType = EventType.ISSUE_ASSIGNEE_CHANGED,
-            oldValue = oldAssignee?.name,
-            newValue = newAssigneeUser?.name
-        )
-
-        // 감시자(Watch) 추가
-        val authorUser = issue.authorId?.let { userRepository.findById(it).orElse(null) }
-        val baseWatchers = if (authorUser != null) setOf(authorUser) else emptySet()
-        val receivers = watchService.findActualWatchers(
-            baseWatchers = baseWatchers,
-            resourceType = ResourceType.ISSUE_POST,
-            resourceId = savedIssue.id.toString(),
-            projectId = issue.project.id,
-            eventType = notificationEvent.eventType
-        ).toMutableSet()
-        if (updater != null) {
-            receivers.removeIf { it.id == updater.id }
+        val author = issue.authorId?.let { userRepository.findById(it).orElse(null) }
+        for ((oldUser, newUser) in removed.map { it to null } + added.map { null to it }) {
+            recordAssignmentEvent(issue, updaterLoginId, oldUser, newUser)
+            if (issue.isDraft) continue
+            val event = NotificationEvent(
+                title = "[${issue.project.name}] 이슈 #${issue.number} 담당자 변경",
+                senderId = updater?.id,
+                created = Instant.now(),
+                resourceType = ResourceType.ISSUE_ASSIGNEE,
+                resourceId = issue.id.toString(),
+                eventType = EventType.ISSUE_ASSIGNEE_CHANGED,
+                oldValue = oldUser?.name,
+                newValue = newUser?.name
+            )
+            event.receivers = watchService.findActualWatchers(
+                baseWatchers = (issue.assignees + listOfNotNull(author, oldUser, newUser)).toSet(),
+                resourceType = ResourceType.ISSUE_POST,
+                resourceId = issue.id.toString(),
+                projectId = issue.project.id,
+                eventType = event.eventType
+            ).filterNot { it.id == updater?.id }.distinctBy { it.id }.toMutableSet()
+            if (oldUser != null && oldUser.id != updater?.id &&
+                (!issue.project.isPrivate || oldUser.isSiteManager || oldUser.isMemberOf(issue.project)) &&
+                watchService.findUnwatchers(ResourceType.ISSUE_POST, issue.id.toString()).none { it.id == oldUser.id }) {
+                event.receivers.add(oldUser)
+            }
+            notificationEventRecorder.record(event)?.let { eventPublisher.publishEvent(it) }
         }
-        notificationEvent.receivers = receivers
+    }
 
-        notificationEventRecorder.record(notificationEvent)?.let { eventPublisher.publishEvent(it) }
-
-        recordIssueEvent(savedIssue, EventType.ISSUE_ASSIGNEE_CHANGED, updaterLoginId, oldAssignee?.name, newAssigneeUser?.name)
-
-        return savedIssue
+    private fun recordAssignmentEvent(issue: Issue, sender: String, oldUser: User?, newUser: User?) {
+        // Each person is a separate delta; draft coalescing would discard adjacent additions.
+        issueEventRepository.save(IssueEvent(
+            issue = issue,
+            senderLoginId = sender,
+            senderEmail = userRepository.findByLoginId(sender).map { it.email }.orElse(null),
+            oldValue = oldUser?.name,
+            newValue = newUser?.name,
+            created = Instant.now(),
+            eventType = EventType.ISSUE_ASSIGNEE_CHANGED
+        ))
     }
 
     override fun changeMilestone(issueId: Long, newMilestoneId: Long?, updaterLoginId: String): Issue {
@@ -502,7 +510,7 @@ class IssueServiceImpl(
         // 뮤트/권한 설정을 기준으로 잘못 계산되므로 반드시 이동 직전에 캡처해야 한다.
         val baseWatchers = mutableSetOf<User>()
         issue.authorId?.let { authorId -> userRepository.findById(authorId).ifPresent { baseWatchers.add(it) } }
-        issue.assignee?.user?.let { baseWatchers.add(it) }
+        baseWatchers.addAll(issue.assignees)
         baseWatchers.addAll(issue.voters)
         val fromWatchers = watchService.findActualWatchers(
             baseWatchers = baseWatchers,
@@ -661,8 +669,8 @@ class IssueServiceImpl(
 
 
     // IssueComment/IssueEvent/FavoriteIssue는 issue FK가 nullable=false라 반드시 먼저 삭제해야
-    // issueRepository.delete(issue)가 FK 제약 위반 없이 성공한다(assignee/sharers/labels/voters는
-    // Issue 엔티티 자체의 cascade로 처리됨).
+    // issueRepository.delete(issue)가 FK 제약 위반 없이 성공한다. 담당자 연결 행은 지우되
+    // 사용자 자체는 삭제하지 않는다(sharers/labels/voters는 엔티티 매핑으로 처리됨).
     override fun deleteIssueCascade(issue: Issue) {
         val comments = issueCommentRepository.findByIssueIdOrderByCreatedDateAsc(issue.id!!)
         for (comment in comments) {

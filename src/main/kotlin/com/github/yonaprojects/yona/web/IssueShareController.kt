@@ -1,5 +1,7 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.config.security.AccessControl
+import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.issue.IssueService
 import com.github.yonaprojects.yona.domain.issue.IssueShareService
@@ -17,7 +19,8 @@ class IssueShareController(
     private val projectRepository: ProjectRepository,
     private val issueRepository: IssueRepository,
     private val userRepository: UserRepository,
-    private val issueService: IssueService
+    private val issueService: IssueService,
+    private val accessControl: AccessControl
 ) {
 
     @GetMapping("/-_-api/v1/owners/{owner}/projects/{projectName}/assignableUsers")
@@ -67,28 +70,33 @@ class IssueShareController(
         val issue = issueRepository.findByProjectAndNumber(project, number)
             ?: return ResponseEntity.notFound().build()
 
-        val assigneesList = body["assignees"] as? List<*> ?: return ResponseEntity.badRequest().build()
-        if (assigneesList.isEmpty()) {
-            return ResponseEntity.badRequest().body(mapOf("message" to "No assignee"))
+        if (!accessControl.isAllowed(currentUser, project, issue, Operation.UPDATE)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
-
-        val assigneeLoginId = assigneesList[0].toString()
-        val targetUser = userRepository.findByLoginId(assigneeLoginId).orElse(null)
-
-        val updatedIssue = issueService.changeAssignee(issue.id!!, targetUser, currentUser.loginId)
-
-        val result = mutableMapOf<String, Any>()
-        val assigneeNode = mutableMapOf<String, Any>()
-        assigneeNode["loginId"] = assigneeLoginId
-        if (targetUser == null) {
-            assigneeNode["name"] = "지정 안 됨"
-        } else {
-            assigneeNode["name"] = targetUser.getDisplayName()
+        val loginIds = body["assignees"] as? List<*> ?: return ResponseEntity.badRequest().build()
+        val targets = loginIds.map { value ->
+            val loginId = value as? String ?: return ResponseEntity.badRequest().build()
+            userRepository.findByLoginId(loginId).orElse(null) ?: return ResponseEntity.badRequest().build()
         }
-        result["assignee"] = assigneeNode
-        result["issue"] = "/api/projects/${project.id}/issues/${updatedIssue.id}"
-
-        return ResponseEntity.ok(result)
+        val assignees = when (body["action"] ?: "replace") {
+            "replace" -> targets
+            "clear" -> emptyList()
+            "toggle" -> {
+                if (targets.size != 1) return ResponseEntity.badRequest().build()
+                val target = targets.single()
+                if (issue.hasAssignee(target.id)) issue.assignees.filterNot { it.id == target.id }
+                else issue.assignees.toList() + target
+            }
+            else -> return ResponseEntity.badRequest().build()
+        }
+        accessControl.requireIssueAssignment(currentUser, project, assignees)
+        val updatedIssue = issueService.changeAssignees(issue.id!!, assignees, currentUser.loginId!!)
+        return ResponseEntity.ok(mapOf(
+            "assignees" to updatedIssue.assignees.map {
+                mapOf("id" to it.id, "loginId" to it.loginId, "name" to it.getDisplayName())
+            },
+            "issue" to "/api/projects/${project.id}/issues/${updatedIssue.id}"
+        ))
     }
 
     @GetMapping("/-_-api/v1/owners/{owner}/projects/{projectName}/issues/{number}/findSharer")

@@ -144,7 +144,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
         it("연관 스레드가 없으면 새 이슈를 생성해야 한다") {
             every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
             val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-            every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+            every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
             every { originalEmailRepository.save(any()) } returnsArgument 0
 
             val result = service.process(baseMessage())
@@ -255,7 +255,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
             it("새 이슈 생성 시 메일에 첨부된 파일을 이슈에 연결해야 한다") {
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val attachment = InboundAttachment(fileName = "screenshot.png", contentType = "image/png", bytes = byteArrayOf(1, 2, 3))
@@ -292,7 +292,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
             it("첨부파일이 없으면 AttachmentService를 호출하지 않아야 한다") {
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 service.process(baseMessage())
@@ -306,7 +306,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val htmlBody = "<p>사진: <img src=\"cid:image1\"></p>"
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = htmlBody, project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
                 every { issueRepository.findById(100L) } returns Optional.of(savedIssue)
                 every { issueRepository.save(any()) } returnsArgument 0
@@ -334,7 +334,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val htmlBody = "<p>서식 있는 본문</p>"
                 val savedIssue = Issue(id = 101L, title = "메일로 만든 이슈", body = htmlBody, project = project, number = 2L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
                 every { issueRepository.findById(101L) } returns Optional.of(savedIssue)
 
@@ -352,7 +352,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val htmlBody = "<p>제목</p>\n<p>본문</p>"
                 val savedIssue = Issue(id = 103L, title = "메일로 만든 이슈", body = htmlBody, project = project, number = 7L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
                 every { issueRepository.findById(103L) } returns Optional.of(savedIssue)
                 every { issueRepository.save(any()) } returnsArgument 0
@@ -564,7 +564,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { originalEmailRepository.findByMessageId("<user@yona.example.com>") } returns Optional.empty()
                 val savedIssue = Issue(id = 102L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 6L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<user@yona.example.com>"))
@@ -613,7 +613,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
             it("정상적으로 이슈가 생성되면 회신 메일을 보내지 않아야 한다") {
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 service.process(baseMessage())
@@ -643,7 +643,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 val issueInOtherProject = Issue(id = 60L, title = "다른 프로젝트 이슈", body = "...", project = otherProject, number = 1L)
                 every { issueRepository.findById(60L) } returns Optional.of(issueInOtherProject)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/issue_post/60@example.com")))
@@ -654,7 +654,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
             it("알 수 없는 리소스 타입 세그먼트는 무시하고 일반 새 이슈 생성으로 처리해야 한다") {
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/unknown_type/99@example.com")))
@@ -671,7 +671,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val htmlBody = "<p>본문</p>"
                 val savedIssue = Issue(id = 105L, title = "메일로 만든 이슈", body = htmlBody, project = project, number = 9L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
                 every { issueRepository.findById(105L) } returns Optional.empty()
 
@@ -891,7 +891,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val htmlBody = "<p><img src=\"cid:img1\"><a href=\"https://example.com\">link</a><a href=\"cid:missing\">no attachment</a></p>"
                 val savedIssue = Issue(id = 104L, title = "메일로 만든 이슈", body = htmlBody, project = project, number = 8L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
                 every { issueRepository.findById(104L) } returns Optional.of(savedIssue)
                 every { issueRepository.save(any()) } returnsArgument 0
@@ -935,7 +935,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val htmlBody = "<img src=\"cid:good\"><img src=\"cid:bad\">"
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = htmlBody, project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
                 every { issueRepository.findById(100L) } returns Optional.of(savedIssue)
                 every { issueRepository.save(any()) } returnsArgument 0
@@ -995,7 +995,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { originalEmailRepository.findByMessageId("<malformed>") } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<malformed>"))
@@ -1007,7 +1007,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { originalEmailRepository.findByMessageId("<issue_post@yona.example.com>") } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<issue_post@yona.example.com>"))
@@ -1022,7 +1022,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { originalEmailRepository.findByMessageId("<bogus_type/5@yona.example.com>") } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<bogus_type/5@yona.example.com>"))
@@ -1083,7 +1083,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { originalEmailRepository.findByMessageId("<milestone/5@yona.example.com>") } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<milestone/5@yona.example.com>"))
@@ -1095,7 +1095,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { originalEmailRepository.findByMessageId("<review_comment/abc@yona.example.com>") } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<review_comment/abc@yona.example.com>"))
@@ -1109,7 +1109,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { originalEmailRepository.findByMessageId("<review_comment/999@yona.example.com>") } returns Optional.empty()
                 every { reviewCommentRepository.findById(999L) } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<review_comment/999@yona.example.com>"))
@@ -1123,7 +1123,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 val orphanComment = ReviewComment(id = 901L, contents = "UI로 작성한 댓글", author = UserIdent(sender), thread = null)
                 every { reviewCommentRepository.findById(901L) } returns Optional.of(orphanComment)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<review_comment/901@yona.example.com>"))
@@ -1139,7 +1139,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
             it("직접 명시한 resourceId가 숫자가 아니면 무시하고 새 이슈로 처리해야 한다") {
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/issue_post/abc@example.com")))
@@ -1150,7 +1150,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
             it("직접 명시한 리소스 타입이 스레드로 지원하지 않는 타입(milestone)이면 무시하고 새 이슈로 처리해야 한다") {
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/milestone/5@example.com")))
@@ -1162,7 +1162,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { issueRepository.findById(999L) } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/issue_post/999@example.com")))
@@ -1174,7 +1174,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { postingRepository.findById(999L) } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/board_post/999@example.com")))
@@ -1186,7 +1186,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { commentThreadRepository.findById(999L) } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/comment_thread/999@example.com")))
@@ -1199,7 +1199,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 val orphanThread = CodeCommentThread(id = 60L, project = null, codeRange = CodeRange(path = "a.kt", startLine = 1))
                 every { commentThreadRepository.findById(60L) } returns Optional.of(orphanThread)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/comment_thread/60@example.com")))
@@ -1211,7 +1211,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 every { commitCommentRepository.findById(999L) } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/code_comment/999@example.com")))
@@ -1226,7 +1226,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 )
                 every { commitCommentRepository.findById(80L) } returns Optional.of(orphanCommitComment)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(recipients = listOf("yona+dlab/hive/code_comment/80@example.com")))
@@ -1375,7 +1375,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { originalEmailRepository.findByMessageId("<deleted@mail.example.com>") } returns Optional.of(originalIssueEmail)
                 every { issueRepository.findById(999L) } returns Optional.empty()
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<deleted@mail.example.com>"))
@@ -1400,7 +1400,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val htmlBody = "<img src=\"cid:\">"
                 val savedIssue = Issue(id = 106L, title = "메일로 만든 이슈", body = htmlBody, project = project, number = 10L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
                 every { issueRepository.findById(106L) } returns Optional.of(savedIssue)
 
@@ -1422,7 +1422,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val htmlBody = "<img src=\"cid:%20%20\">"
                 val savedIssue = Issue(id = 108L, title = "메일로 만든 이슈", body = htmlBody, project = project, number = 12L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
                 every { issueRepository.findById(108L) } returns Optional.of(savedIssue)
 
@@ -1543,7 +1543,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
             it("이슈 본문(body)이 null이면 빈 문자열로 취급해 예외 없이 HTML 후처리를 진행해야 한다") {
                 every { projectRepository.findByOwnerAndName("dlab", "hive") } returns Optional.of(project)
                 val savedIssue = Issue(id = 107L, title = "메일로 만든 이슈", body = null, project = project, number = 11L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
                 every { issueRepository.findById(107L) } returns Optional.of(savedIssue)
 
@@ -1567,7 +1567,7 @@ class IncomingMailProcessingServiceSpec : DescribeSpec({
                 val orphanComment = ReviewComment(id = 902L, contents = "UI로 작성한 댓글", author = UserIdent(sender), thread = threadWithoutId)
                 every { reviewCommentRepository.findById(902L) } returns Optional.of(orphanComment)
                 val savedIssue = Issue(id = 100L, title = "메일로 만든 이슈", body = "메일 본문 내용", project = project, number = 1L)
-                every { issueService.createIssue(any(), sender, null, null, null) } returns savedIssue
+                every { issueService.createIssue(any(), sender, emptyList(), null, null) } returns savedIssue
                 every { originalEmailRepository.save(any()) } returnsArgument 0
 
                 val result = service.process(baseMessage(inReplyTo = "<review_comment/902@yona.example.com>"))

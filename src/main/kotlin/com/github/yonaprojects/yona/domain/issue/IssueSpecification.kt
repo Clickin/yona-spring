@@ -47,9 +47,10 @@ object IssueSpecification {
             // 4. 담당자 조건
             if (assigneeId != null) {
                 if (assigneeId == -1L) {
-                    predicates.add(cb.isNull(root.get<Assignee>("assignee")))
+                    predicates.add(cb.isEmpty(root.get<Set<User>>("assignees")))
                 } else if (assigneeId > 0) {
-                    predicates.add(cb.equal(root.join<Issue, Assignee>("assignee").get<User>("user").get<Long>("id"), assigneeId))
+                    query.distinct(true)
+                    predicates.add(cb.equal(root.join<Issue, User>("assignees").get<Long>("id"), assigneeId))
                 }
             }
 
@@ -144,7 +145,8 @@ object IssueSpecification {
             }
 
             if (assigneeId != null && assigneeId > 0) {
-                predicates.add(cb.equal(root.join<Issue, Assignee>("assignee").get<User>("user").get<Long>("id"), assigneeId))
+                query.distinct(true)
+                predicates.add(cb.equal(root.join<Issue, User>("assignees").get<Long>("id"), assigneeId))
             }
 
             if (mentionedIssueIds != null) {

@@ -664,7 +664,7 @@ class IssueViewController(
         @RequestParam body: String,
         @RequestParam(required = false) parentIssueId: Long?,
         @RequestParam(required = false) targetProjectId: Long?,
-        @RequestParam(required = false) assigneeLoginId: String?,
+        @RequestParam(required = false) assigneeLoginIds: List<String>?,
         @RequestParam(required = false) milestoneId: Long?,
         @RequestParam(required = false) dueDate: String?,
         @RequestParam(required = false) labelIds: List<Long>?,
@@ -707,12 +707,16 @@ class IssueViewController(
             } catch (e: Exception) {}
         }
 
-        val assigneeUser = assigneeLoginId?.let { userRepository.findByLoginId(it).orElse(null) }
+        val assigneeUsers = assigneeLoginIds.orEmpty().map { loginId ->
+            userRepository.findByLoginId(loginId).orElse(null)
+                ?: throw org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown assignee")
+        }
+        if (assigneeUsers.isNotEmpty()) accessControl.requireIssueAssignment(loginUser, project, assigneeUsers)
 
         val saved = issueService.createIssue(
             issue = issue,
             author = loginUser,
-            assigneeUser = assigneeUser,
+            assigneeUsers = assigneeUsers,
             milestoneId = milestoneId,
             labelIds = labelIds
         )
@@ -866,6 +870,11 @@ class IssueViewController(
         var firstUpdatedIssue: Issue? = null
         var updatedItems = 0
         var rejectedByPermission = 0
+        val assigneeUsers = form.assigneeIds?.map { id ->
+            userRepository.findById(id).orElse(null)
+                ?: throw org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown assignee")
+        }
+        assigneeUsers?.let { accessControl.requireIssueAssignment(loginUser, project, it) }
         val issueIds = form.issues.mapNotNull { it.id }
         if (issueIds.isNotEmpty()) {
             val issuesToUpdate = issueRepository.findAllById(issueIds)
@@ -901,16 +910,8 @@ class IssueViewController(
                 }
 
                 // 3. 담당자 변경
-                if (form.assignee != null) {
-                    val assigneeUserId = form.assignee?.id
-                    if (assigneeUserId == null || assigneeUserId == -1L) {
-                        issueService.changeAssignee(issue.id!!, null, loginUser.loginId)
-                    } else {
-                        val assigneeUser = userRepository.findById(assigneeUserId).orElse(null)
-                        if (assigneeUser != null) {
-                            issueService.changeAssignee(issue.id!!, assigneeUser, loginUser.loginId)
-                        }
-                    }
+                if (assigneeUsers != null) {
+                    issueService.changeAssignees(issue.id!!, assigneeUsers, loginUser.loginId!!)
                 }
 
                 // 4. 마일스톤 변경
@@ -1025,6 +1026,11 @@ class IssueViewController(
             model.addAttribute("project", project)
             return "error/forbidden"
         }
+        val assigneeUsers = request.assigneeLoginIds?.map { loginId ->
+            userRepository.findByLoginId(loginId).orElse(null)
+                ?: throw org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown assignee")
+        }
+        assigneeUsers?.let { accessControl.requireIssueAssignment(loginUser, project, it) }
 
         // yona editIssue()의 hasTargetProject()/isRequestedToOtherProject()/moveIssueToOtherProject()
         // 대응 — issue/edit.html의 targetProjectId select(다른 프로젝트로 이동)가 이 필드가 없어 실제로는
@@ -1042,13 +1048,12 @@ class IssueViewController(
                 model.addAttribute("project", targetProject)
                 return "error/forbidden"
             }
+            val movedAssignees = assigneeUsers ?: issue.assignees
+            if (movedAssignees.isNotEmpty()) accessControl.requireIssueAssignment(loginUser, targetProject, movedAssignees)
             issueService.moveIssue(issue.id!!, targetProject.id!!, loginUser)
             redirectProject = targetProject
         }
 
-        val assigneeUser = request.assigneeLoginId?.let {
-            if (it.isNotBlank()) userRepository.findByLoginId(it).orElse(null) else null
-        }
 
         issue.title = request.title
         issue.body = request.body ?: ""
@@ -1073,7 +1078,7 @@ class IssueViewController(
             title = request.title,
             body = request.body ?: "",
             updater = loginUser,
-            assigneeUser = assigneeUser,
+            assigneeUsers = assigneeUsers,
             milestoneId = request.milestoneId,
             labelIds = request.labelIds
         )
@@ -1092,17 +1097,13 @@ class IssueViewController(
 class IssueMassUpdateForm {
     var issues: List<IssueIdForm> = mutableListOf()
     var state: String? = null
-    var assignee: AssigneeIdForm? = null
+    var assigneeIds: List<Long>? = null
     var milestone: MilestoneIdForm? = null
     var attachingLabelIds: List<Long> = mutableListOf()
     var detachingLabelIds: List<Long> = mutableListOf()
 }
 
 class IssueIdForm {
-    var id: Long? = null
-}
-
-class AssigneeIdForm {
     var id: Long? = null
 }
 
@@ -1113,7 +1114,7 @@ class MilestoneIdForm {
 data class IssueForm(
     var title: String = "",
     var body: String? = "",
-    var assigneeLoginId: String? = null,
+    var assigneeLoginIds: List<String>? = null,
     var milestoneId: Long? = null,
     var dueDate: String? = null,
     var labelIds: List<Long>? = null,

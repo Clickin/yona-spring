@@ -188,7 +188,7 @@ class CommentServiceImpl(
 
         // 감시자(Watch) 추가
         val authorUser = issue.authorId?.let { userRepository.findById(it).orElse(null) }
-        val baseWatchers = if (authorUser != null) setOf(authorUser) else emptySet()
+        val baseWatchers = issue.assignees + listOfNotNull(authorUser)
         val receivers = watchService.findActualWatchers(
             baseWatchers = baseWatchers,
             resourceType = ResourceType.ISSUE_POST,
@@ -340,7 +340,7 @@ class CommentServiceImpl(
                 newValue = contents
             )
             val authorUser = issue.authorId?.let { userRepository.findById(it).orElse(null) }
-            val baseWatchers = if (authorUser != null) setOf(authorUser) else emptySet()
+            val baseWatchers = issue.assignees + listOfNotNull(authorUser)
             val receivers = watchService.findActualWatchers(
                 baseWatchers = baseWatchers,
                 resourceType = ResourceType.ISSUE_POST,

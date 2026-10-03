@@ -114,7 +114,7 @@
                                                 <span class="item-name">
                                                     <span class="number" th:text="'#' + ${issue.number}">#1</span>
                                                     <span th:text="${issue.title}">이슈 제목</span>
-                                                    <span th:if="${issue.assignee != null}" th:text="' - ' + ${issue.assignee.user.name}"> - 담당자</span>
+                                                    <span th:each="assignee : ${issue.assignees}" th:text="' - ' + ${assignee.name}"> - 담당자</span>
                                                     <th:block th:each="label : ${issue.labels}">
                                                         <a href="#" class="label issue-label list-label active" th:data-category-id="${label.category.id}" th:data-label-id="${label.id}" th:text="${label.name}">라벨명</a>
                                                     </th:block>
@@ -133,7 +133,7 @@
                                                 <span class="item-name">
                                                     <span class="number" th:text="'#' + ${issue.number}">#1</span>
                                                     <span th:text="${issue.title}">이슈 제목</span>
-                                                    <span th:if="${issue.assignee != null}" th:text="' - ' + ${issue.assignee.user.name}"> - 담당자</span>
+                                                    <span th:each="assignee : ${issue.assignees}" th:text="' - ' + ${assignee.name}"> - 담당자</span>
                                                     <th:block th:each="label : ${issue.labels}">
                                                         <a href="#" class="label issue-label list-label active" th:data-category-id="${label.category.id}" th:data-label-id="${label.id}" th:text="${label.name}">라벨명</a>
                                                     </th:block>

@@ -20,7 +20,7 @@
                 <a th:href="@{/{owner}/{projectName}/issue/{number}(owner=${trueParentIssue.project.owner}, projectName=${trueParentIssue.project.name}, number=${trueParentIssue.number})}"
                    th:classappend="${trueParentIssue.id == issue.id} ? 'bold' : ''">
                     #<span th:text="${trueParentIssue.number}">1</span> <span th:text="${trueParentIssue.title}">부모 이슈 제목</span>
-                    <span th:if="${trueParentIssue.assignee != null}" th:text="'- ' + ${trueParentIssue.assignee.user.getPureNameOnly()}">- 담당자</span>
+                    <span th:each="assignee : ${trueParentIssue.assignees}" th:text="'- ' + ${assignee.getPureNameOnly()}">- 담당자</span>
                 </a>
                 <div class="upload-progress" th:classappend="${percentStr == '100'} ? 'done-outline' : 'red-outline'">
                     <div class="bar" th:classappend="${percentStr == '100'} ? 'done' : 'red'" th:style="'width: ' + ${percentStr} + '%;'" title="Subtask"></div>

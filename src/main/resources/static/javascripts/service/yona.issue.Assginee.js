@@ -13,15 +13,16 @@ function yonaAssgineeModule(findAssignableUsersApiUrl, updateAssgineesApiUrl, me
   var resultCache = {};
 
   function formatter(data, escape){
+    var name = data.name || data.text || data.loginId;
     if(!data.avatarUrl){
-      return "<div>" + escape(data.text) + "</div>";
+      return "<div>" + escape(name) + "</div>";
     }
 
     var loginId = data.loginId ? "@" + data.loginId : "";
 
-    return '<div class="usf-group" title="' + escape(data.text) + ' ' + escape(loginId) + '">' +
+    return '<div class="usf-group" title="' + escape(name) + ' ' + escape(loginId) + '">' +
       '<span class="avatar-wrap smaller"><img src="' + escape(data.avatarUrl) + '" width="20" height="20"></span>' +
-      '<strong class="name">' + escape(data.text) + '</strong>' +
+      '<strong class="name">' + escape(name) + '</strong>' +
       '<span class="loginid">' + escape(loginId) + '</span>' +
       '</div>';
   }
@@ -29,7 +30,7 @@ function yonaAssgineeModule(findAssignableUsersApiUrl, updateAssgineesApiUrl, me
   function score(search){
     var term = search.toLowerCase();
     return function(item){
-      var text = (item.text || "").toString().toLowerCase();
+      var text = (item.name || item.text || "").toString().toLowerCase();
       var loginId = (item.loginId || "").toString().toLowerCase();
       return (loginId.indexOf(term) > -1 || text.indexOf(term) > -1) ? 1 : 0;
     };
@@ -41,6 +42,8 @@ function yonaAssgineeModule(findAssignableUsersApiUrl, updateAssgineesApiUrl, me
     valueField: "loginId",
     labelField: "name",
     searchField: ["name", "loginId"],
+    maxItems: null,
+    plugins: ['remove_button'],
     highlight: false,
     score: score,
     loadThrottle: 300, // select2 ajax.quietMillis:300 대응
@@ -83,55 +86,58 @@ function yonaAssgineeModule(findAssignableUsersApiUrl, updateAssgineesApiUrl, me
 
   yona.ui.TomSelect.bridgeChangeEvent(tomSelectInstance, assigneeElement);
 
-  // initSelection 대응: 단일 선택이라 초기 아이템은 최대 1개(hidden input의 초기 value가 이미
-  // Tom Select의 <input> 파싱 경로에서 아이템으로 선택돼 있다). 이름/아바타가 채워진 완전한
-  // 데이터로 비동기 갱신한다.
-  var initialId = tomSelectInstance.items[0];
-  if(initialId){
-    fetch(findAssignableUsersApiUrl + "?query=" + initialId + "&type=loginId", {signal: lifecycle.signal})
-      .then(function(response){
-        if(!response.ok){
-          return Promise.reject(response);
-        }
-        return response.json();
-      })
-      .then(function(data){
-        if(lifecycle.signal.aborted){ return; }
-        if(data && data.length > 0){
-          tomSelectInstance.updateOption(data[0].loginId, data[0]);
-          tomSelectInstance.refreshItems();
-        }
-      })
-      .catch(function(){
-        // 원본 jQuery 버전에도 fail 핸들러가 없어 실패 시 조용히 무시됐다.
-      });
+  var savedItems = tomSelectInstance.items.slice();
+  var clearButton = (root || document).querySelector('[data-clear-assignees]');
+  var saving = false;
+
+  function update(assignees, action){
+    if(!updateAssgineesApiUrl){ return; }
+    saving = true;
+    tomSelectInstance.lock();
+    if(clearButton){ clearButton.disabled = true; }
+    fetch(updateAssgineesApiUrl, {
+      signal: lifecycle.signal,
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({assignees: assignees, action: action})
+    })
+    .then(function(response){
+      if(!response.ok){ throw new Error(response.statusText); }
+      return response.json();
+    })
+    .then(function(response){
+      if(lifecycle.signal.aborted){ return; }
+      response.assignees.forEach(function(user){ tomSelectInstance.addOption(user); });
+      savedItems = response.assignees.map(function(user){ return user.loginId; });
+      tomSelectInstance.setValue(savedItems, true);
+      $yona.notify(message + ": " + response.assignees.map(function(user){ return user.name; }).join(", "), 3000);
+    })
+    .catch(function(error){
+      if(lifecycle.signal.aborted){ return; }
+      tomSelectInstance.setValue(savedItems, true);
+      alert(message + ": " + error.message);
+    })
+    .finally(function(){
+      if(lifecycle.signal.aborted){ return; }
+      saving = false;
+      tomSelectInstance.unlock();
+      if(clearButton){ clearButton.disabled = false; }
+    });
   }
 
   tomSelectInstance.on("item_add", function(value){
-    var data = { assignees: [value] };
-
-    if(updateAssgineesApiUrl){
-      fetch(updateAssgineesApiUrl, {
-        signal: lifecycle.signal,
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(data)
-      })
-      .then(function(response){
-        if(!response.ok){
-          return Promise.reject(response);
-        }
-        return response.json();
-      })
-      .then(function(response){
-        if(lifecycle.signal.aborted){ return; }
-        $yona.notify(message + ": " + response.assignee.name, 3000);
-      })
-      .catch(function(){
-        // 원본 jQuery 버전에도 fail 핸들러가 없어 실패 시 조용히 무시됐다.
-      });
-    }
+    if(!saving){ update([value], "toggle"); }
   });
+  tomSelectInstance.on("item_remove", function(value){
+    if(!saving){ update([value], "toggle"); }
+  });
+  if(clearButton){
+    clearButton.addEventListener("click", function(){
+      if(saving){ return; }
+      if(updateAssgineesApiUrl){ update([], "clear"); }
+      else { tomSelectInstance.clear(true); }
+    }, {signal: lifecycle.signal});
+  }
   return function(){
     lifecycle.abort();
     tomSelectInstance.destroy();

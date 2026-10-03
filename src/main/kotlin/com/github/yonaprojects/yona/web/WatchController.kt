@@ -225,7 +225,7 @@ class WatchController(
                 val issue = issueRepository.findByProjectAndNumber(project, number)
                     ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "이슈를 찾을 수 없습니다.")
                 val baseWatchers = mutableSetOf<User>()
-                issue.assignee?.user?.let { baseWatchers.add(it) }
+                baseWatchers.addAll(issue.assignees)
                 baseWatchers.addAll(issue.voters)
                 issue.authorId?.let { authorId -> userRepository.findById(authorId).ifPresent { baseWatchers.add(it) } }
                 watchService.findActualWatchers(baseWatchers, ResourceType.ISSUE_POST, issue.id.toString(), project.id)

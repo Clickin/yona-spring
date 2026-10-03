@@ -5,8 +5,6 @@ import com.github.yonaprojects.yona.domain.attachment.Attachment
 import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.enumeration.State
-import com.github.yonaprojects.yona.domain.issue.Assignee
-import com.github.yonaprojects.yona.domain.issue.AssigneeRepository
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueComment
 import com.github.yonaprojects.yona.domain.issue.IssueCommentRepository
@@ -84,7 +82,6 @@ class ProjectApiControllerSpec : DescribeSpec({
     val issueCommentRepository = mockk<IssueCommentRepository>()
     val postingCommentRepository = mockk<PostingCommentRepository>()
     val issueLabelRepository = mockk<IssueLabelRepository>()
-    val assigneeRepository = mockk<AssigneeRepository>()
     val attachmentRepository = mockk<AttachmentRepository>()
     val pullRequestRepository = mockk<PullRequestRepository>()
     val notificationUrlResolver = mockk<NotificationUrlResolver>()
@@ -103,7 +100,6 @@ class ProjectApiControllerSpec : DescribeSpec({
         postingCommentRepository,
         milestoneRepository,
         issueLabelRepository,
-        assigneeRepository,
         attachmentRepository,
         pullRequestRepository,
         notificationUrlResolver
@@ -117,7 +113,7 @@ class ProjectApiControllerSpec : DescribeSpec({
             roleRepository, repositoryService, organizationUserRepository,
             issueRepository, postingRepository, reviewCommentRepository, commitCommentRepository,
             milestoneRepository, issueCommentRepository, postingCommentRepository, issueLabelRepository,
-            assigneeRepository, attachmentRepository, pullRequestRepository, notificationUrlResolver,
+            attachmentRepository, pullRequestRepository, notificationUrlResolver,
             answers = false
         )
         every { organizationUserRepository.findByOrganizationIdAndUserId(any(), any()) } returns Optional.empty()
@@ -551,7 +547,7 @@ class ProjectApiControllerSpec : DescribeSpec({
                 id = 700L, title = "버그 발생", body = "이슈 본문", project = project, number = 1L,
                 authorId = issueAuthor.id, createdDate = issueCreated, updatedDate = issueCreated,
                 state = State.OPEN, milestone = milestone,
-                assignee = Assignee(id = 701L, user = assigneeUser, project = project)
+                assignees = mutableSetOf(assigneeUser, issueAuthor)
             )
             issue.labels.add(label)
 
@@ -585,7 +581,6 @@ class ProjectApiControllerSpec : DescribeSpec({
             every { milestoneRepository.findByProject(project) } returns listOf(milestone)
             every { issueLabelRepository.findByProject(project) } returns listOf(label)
             every { projectUserRepository.findByProjectId(200L) } returns project.projectUsers
-            every { assigneeRepository.findByProjectId(200L) } returns listOf(Assignee(id = 702L, user = assigneeUser, project = project))
             every { pullRequestRepository.findByToProject(project) } returns listOf(
                 PullRequest(
                     id = 1100L, number = 1L, toProject = project, fromProject = project, contributor = prContributor
@@ -613,6 +608,7 @@ class ProjectApiControllerSpec : DescribeSpec({
                 .andExpect(jsonPath("$.members[0].loginId").value("manager"))
                 .andExpect(jsonPath("$.members[0].role").value(managerRole.name))
                 .andExpect(jsonPath("$.assignees[0].loginId").value("assignee1"))
+                .andExpect(jsonPath("$.assignees[1].loginId").value("issueauthor"))
                 // authors: 이슈작성자, 게시글작성자, PR기여자 순서로 중복없이 모두 포함
                 .andExpect(jsonPath("$.authors[0].loginId").value("issueauthor"))
                 .andExpect(jsonPath("$.authors[1].loginId").value("postauthor"))
@@ -630,6 +626,7 @@ class ProjectApiControllerSpec : DescribeSpec({
                 .andExpect(jsonPath("$.issues[0].type").value("ISSUE_POST"))
                 .andExpect(jsonPath("$.issues[0].author.loginId").value("issueauthor"))
                 .andExpect(jsonPath("$.issues[0].assignees[0].loginId").value("assignee1"))
+                .andExpect(jsonPath("$.issues[0].assignees[1].loginId").value("issueauthor"))
                 .andExpect(jsonPath("$.issues[0].state").value("OPEN"))
                 // 이슈 안의 labels는 isExclusive가 없어야 한다(project 최상위 labels와 다른 형태)
                 .andExpect(jsonPath("$.issues[0].labels[0].labelName").value("긴급"))
@@ -706,7 +703,6 @@ class ProjectApiControllerSpec : DescribeSpec({
             every { milestoneRepository.findByProject(project2) } returns listOf(milestoneWithDue)
             every { issueLabelRepository.findByProject(project2) } returns emptyList()
             every { projectUserRepository.findByProjectId(201L) } returns project2.projectUsers
-            every { assigneeRepository.findByProjectId(201L) } returns emptyList()
             // PR 기여자도 이슈/게시글 작성자와 동일인 — findAuthors의 dedup(containsKey) 분기 커버
             every { pullRequestRepository.findByToProject(project2) } returns listOf(
                 PullRequest(
@@ -726,8 +722,7 @@ class ProjectApiControllerSpec : DescribeSpec({
 
             mockMvc.perform(get("/api/projects/acme/widget2/exports").principal(managerAuth))
                 .andExpect(status().isOk)
-                // 담당자 없는 이슈: assignees 필드 자체가 없어야 한다
-                .andExpect(jsonPath("$.issues[0].assignees").doesNotExist())
+                .andExpect(jsonPath("$.issues[0].assignees").isEmpty)
                 .andExpect(jsonPath("$.issues[0].labels").doesNotExist())
                 .andExpect(jsonPath("$.issues[0].milestoneId").doesNotExist())
                 .andExpect(jsonPath("$.issues[0].dueDate").exists())
@@ -778,7 +773,6 @@ class ProjectApiControllerSpec : DescribeSpec({
             every { milestoneRepository.findByProject(project3) } returns emptyList()
             every { issueLabelRepository.findByProject(project3) } returns emptyList()
             every { projectUserRepository.findByProjectId(202L) } returns project3.projectUsers
-            every { assigneeRepository.findByProjectId(202L) } returns emptyList()
             every { pullRequestRepository.findByToProject(project3) } returns emptyList()
             every { notificationUrlResolver.getUrl(ResourceType.ISSUE_POST, "720") } returns "http://localhost/acme/widget3/issue/3"
             every { attachmentRepository.findByContainerTypeAndContainerId(ResourceType.ISSUE_POST, "720") } returns emptyList()

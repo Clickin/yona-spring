@@ -6,7 +6,6 @@ import com.github.yonaprojects.yona.domain.attachment.Attachment
 import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.enumeration.EventType
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueComment
 import com.github.yonaprojects.yona.domain.issue.IssueCommentRepository
@@ -40,6 +39,7 @@ import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfig
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -79,11 +79,15 @@ class LegacyIssueResponseIntegrationSpec @Autowired constructor(
                     loginId = "legacy-issue-contract", name = "Alice [Engineering]", englishName = "Alice",
                     email = "legacy-issue-contract@example.com", password = "private-password", passwordSalt = "private-salt"
                 ))
+                val secondAssignee = userRepository.save(User(
+                    loginId = "legacy-second-assignee", name = "Bob", email = "legacy-second@example.com"
+                ))
                 val project = projectRepository.save(Project(owner = owner.loginId, name = "response-contract"))
                 val role = roleRepository.findById(RoleType.MANAGER.roleType).orElseGet {
                     roleRepository.save(Role(id = RoleType.MANAGER.roleType, name = "MANAGER"))
                 }
                 projectUserRepository.save(ProjectUser(user = owner, project = project, role = role))
+                projectUserRepository.save(ProjectUser(user = secondAssignee, project = project, role = role))
                 val category = issueLabelCategoryRepository.save(IssueLabelCategory(name = "kind", project = project))
                 val milestone = milestoneRepository.save(Milestone(title = "Release", project = project))
                 val created = Instant.parse("2026-01-02T03:04:05Z")
@@ -91,7 +95,7 @@ class LegacyIssueResponseIntegrationSpec @Autowired constructor(
                     title = "Original title", body = "Original body", number = 1, project = project,
                     authorId = owner.id, authorLoginId = owner.loginId, authorName = owner.name,
                     createdDate = created, updatedDate = created, milestone = milestone,
-                    assignee = Assignee(user = owner, project = project),
+                    assignees = mutableSetOf(owner, secondAssignee),
                     labels = mutableSetOf(IssueLabel(name = "bug", color = "#ff0000", category = category, project = project))
                 ))
                 val comment = issueCommentRepository.save(IssueComment(
@@ -133,7 +137,9 @@ class LegacyIssueResponseIntegrationSpec @Autowired constructor(
                 result.path("title").asText() shouldBe "Original title"
                 result.path("author").path("loginId").asText() shouldBe owner.loginId
                 result.path("author").path("email").asText() shouldBe owner.email
-                result.path("assignees").single().path("loginId").asText() shouldBe owner.loginId
+                result.path("assignees").map { it.path("loginId").asText() }.toSet() shouldBe
+                    setOf(owner.loginId, secondAssignee.loginId)
+                result.path("assignee") shouldBe result.path("assignees").first()
                 result.path("labels").single().path("labelName").asText() shouldBe "bug"
                 result.path("labels").single().path("labelColor").asText() shouldBe "#ff0000"
                 result.path("labels").single().path("category").asText() shouldBe "kind"
@@ -171,6 +177,8 @@ class LegacyIssueResponseIntegrationSpec @Autowired constructor(
                     .content("""{"title":"Updated title","body":"Updated body"}"""))
                 updated.path("result").path("title").asText() shouldBe "Updated title"
                 updated.path("result").path("body").asText() shouldBe "Updated body"
+                updated.path("result").path("assignees").map { it.path("loginId").asText() }.toSet() shouldBe
+                    setOf(owner.loginId, secondAssignee.loginId)
                 val bodyEvent = updated.path("result").path("events").single { it.path("eventType").asText() == "ISSUE_BODY_CHANGED" }
                 bodyEvent.path("oldValue").asText() shouldBe "Original body"
                 bodyEvent.path("newValue").asText() shouldBe "Updated body"
@@ -181,6 +189,17 @@ class LegacyIssueResponseIntegrationSpec @Autowired constructor(
                 val modern = response(get("/api/v1/projects/${owner.loginId}/${project.name}/issues/1"))
                 modern.path("title").asText() shouldBe "Updated title"
                 modern.has("result") shouldBe false
+
+                val imported = mockMvc.perform(post("/-_-api/v1/owners/${owner.loginId}/projects/${project.name}/issues")
+                    .with(user(details)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"issues":[{"title":"Imported","number":42,"assignees":[{"loginId":"${owner.loginId}"},{"loginId":"${secondAssignee.loginId}"}]}]}"""))
+                    .andReturn().response
+                imported.status shouldBe 201
+                entityManager.flush()
+                entityManager.clear()
+                response(get("/-_-api/v1/owners/${owner.loginId}/projects/${project.name}/issues/42"))
+                    .path("result").path("assignees").map { it.path("loginId").asText() }.toSet() shouldBe
+                    setOf(owner.loginId, secondAssignee.loginId)
             }
         }
     }

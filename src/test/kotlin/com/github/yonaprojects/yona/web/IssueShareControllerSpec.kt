@@ -1,5 +1,8 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.config.security.AccessControl
+import com.github.yonaprojects.yona.domain.enumeration.Operation
+import io.mockk.verify
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.issue.IssueService
@@ -27,13 +30,15 @@ class IssueShareControllerSpec : DescribeSpec({
     val issueRepository = mockk<IssueRepository>()
     val userRepository = mockk<UserRepository>()
     val issueService = mockk<IssueService>()
+    val accessControl = mockk<AccessControl>()
 
     val controller = IssueShareController(
         issueShareService,
         projectRepository,
         issueRepository,
         userRepository,
-        issueService
+        issueService,
+        accessControl
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(controller).build()
 
@@ -43,8 +48,11 @@ class IssueShareControllerSpec : DescribeSpec({
             projectRepository,
             issueRepository,
             userRepository,
-            issueService
+            issueService,
+            accessControl
         )
+        every { accessControl.isAllowed(any(), any(), any<Issue>(), Operation.UPDATE) } returns true
+        every { accessControl.requireIssueAssignment(any(), any(), any()) } returns Unit
     }
 
     describe("IssueShareController 단위 테스트") {
@@ -136,7 +144,8 @@ class IssueShareControllerSpec : DescribeSpec({
                 every { userRepository.findByLoginId("assigneeUser") } returns Optional.of(targetUser)
 
                 val updatedIssue = Issue(id = 100L, title = "testissue", project = project, number = 1L)
-                every { issueService.changeAssignee(100L, targetUser, "testuser") } returns updatedIssue
+                updatedIssue.assignees.add(targetUser)
+                every { issueService.changeAssignees(100L, listOf(targetUser), "testuser") } returns updatedIssue
 
                 val requestBody = """
                     {
@@ -151,8 +160,8 @@ class IssueShareControllerSpec : DescribeSpec({
                         .content(requestBody)
                 )
                     .andExpect(status().isOk)
-                    .andExpect(jsonPath("$.assignee.loginId").value("assigneeUser"))
-                    .andExpect(jsonPath("$.assignee.name").value("담당자"))
+                    .andExpect(jsonPath("$.assignees[0].loginId").value("assigneeUser"))
+                    .andExpect(jsonPath("$.assignees[0].name").value("담당자"))
             }
 
             it("인증되지 않은 요청은 401을 반환해야 한다") {
@@ -201,10 +210,11 @@ class IssueShareControllerSpec : DescribeSpec({
                 ).andExpect(status().isBadRequest)
             }
 
-            it("assignees 배열이 비어있으면 400과 No assignee 메시지를 반환해야 한다") {
+            it("빈 배열로 전체 담당자를 해제한다") {
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("testowner", "testproject") } returns Optional.of(project)
                 every { issueRepository.findByProjectAndNumber(project, 1L) } returns issue
+                every { issueService.changeAssignees(100L, emptyList(), "testuser") } returns issue
 
                 mockMvc.perform(
                     post("/-_-api/v1/owners/testowner/projects/testproject/issues/1/assignees")
@@ -212,16 +222,15 @@ class IssueShareControllerSpec : DescribeSpec({
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"assignees": []}""")
                 )
-                    .andExpect(status().isBadRequest)
-                    .andExpect(jsonPath("$.message").value("No assignee"))
+                    .andExpect(status().isOk)
+                    .andExpect(jsonPath("$.assignees").isEmpty)
             }
 
-            it("존재하지 않는 로그인ID를 지정하면 담당자 해제(지정 안 됨)로 처리되어야 한다") {
+            it("존재하지 않는 로그인ID는 변경 없이 400을 반환한다") {
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("testowner", "testproject") } returns Optional.of(project)
                 every { issueRepository.findByProjectAndNumber(project, 1L) } returns issue
                 every { userRepository.findByLoginId("ghost") } returns Optional.empty()
-                every { issueService.changeAssignee(100L, null, "testuser") } returns issue
 
                 mockMvc.perform(
                     post("/-_-api/v1/owners/testowner/projects/testproject/issues/1/assignees")
@@ -229,8 +238,66 @@ class IssueShareControllerSpec : DescribeSpec({
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"assignees": ["ghost"]}""")
                 )
+                    .andExpect(status().isBadRequest)
+                verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
+            }
+
+            it("개별 담당자 토글은 다른 담당자를 보존하고 전체 해제를 지원한다") {
+                val first = User(id = 2L, loginId = "first", name = "First")
+                val second = User(id = 3L, loginId = "second", name = "Second")
+                val assignedIssue = Issue(id = 100L, title = "testissue", project = project, number = 1L)
+                assignedIssue.assignees.add(first)
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+                every { userRepository.findByLoginId("second") } returns Optional.of(second)
+                every { userRepository.findByLoginId("first") } returns Optional.of(first)
+                every { projectRepository.findByOwnerAndNameOrPreviousPlace("testowner", "testproject") } returns Optional.of(project)
+                every { issueRepository.findByProjectAndNumber(project, 1L) } returns assignedIssue
+                every { issueService.changeAssignees(100L, any(), "testuser") } answers {
+                    assignedIssue.assignees = secondArg<List<User>>().toMutableSet()
+                    assignedIssue
+                }
+                mockMvc.perform(post("/-_-api/v1/owners/testowner/projects/testproject/issues/1/assignees")
+                    .principal(auth).contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"assignees":["second"],"action":"toggle"}"""))
                     .andExpect(status().isOk)
-                    .andExpect(jsonPath("$.assignee.name").value("지정 안 됨"))
+                    .andExpect(jsonPath("$.assignees[0].loginId").value("first"))
+                    .andExpect(jsonPath("$.assignees[1].loginId").value("second"))
+                mockMvc.perform(post("/-_-api/v1/owners/testowner/projects/testproject/issues/1/assignees")
+                    .principal(auth).contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"assignees":["first"],"action":"toggle"}"""))
+                    .andExpect(status().isOk)
+                    .andExpect(jsonPath("$.assignees[0].loginId").value("second"))
+                    .andExpect(jsonPath("$.assignees[1]").doesNotExist())
+                mockMvc.perform(post("/-_-api/v1/owners/testowner/projects/testproject/issues/1/assignees")
+                    .principal(auth).contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"assignees":[],"action":"clear"}"""))
+                    .andExpect(status().isOk)
+                    .andExpect(jsonPath("$.assignees").isEmpty)
+            }
+
+            it("rejects assignment when the actor or targets fail project eligibility") {
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+                every { projectRepository.findByOwnerAndNameOrPreviousPlace("testowner", "testproject") } returns Optional.of(project)
+                every { issueRepository.findByProjectAndNumber(project, 1L) } returns issue
+                every { accessControl.requireIssueAssignment(user, project, emptyList()) } throws
+                    org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN)
+                mockMvc.perform(post("/-_-api/v1/owners/testowner/projects/testproject/issues/1/assignees")
+                    .principal(auth).contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"assignees":[],"action":"clear"}"""))
+                    .andExpect(status().isForbidden)
+                verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
+            }
+
+            it("권한 없는 담당자 변경은 403을 반환한다") {
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+                every { projectRepository.findByOwnerAndNameOrPreviousPlace("testowner", "testproject") } returns Optional.of(project)
+                every { issueRepository.findByProjectAndNumber(project, 1L) } returns issue
+                every { accessControl.isAllowed(user, project, issue, Operation.UPDATE) } returns false
+                mockMvc.perform(post("/-_-api/v1/owners/testowner/projects/testproject/issues/1/assignees")
+                    .principal(auth).contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"assignees":[],"action":"clear"}"""))
+                    .andExpect(status().isForbidden)
+                verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
             }
         }
 

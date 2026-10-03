@@ -3,8 +3,6 @@ package com.github.yonaprojects.yona.web
 import com.github.yonaprojects.yona.AbstractIntegrationTest
 import com.github.yonaprojects.yona.domain.board.Posting
 import com.github.yonaprojects.yona.domain.board.PostingRepository
-import com.github.yonaprojects.yona.domain.issue.Assignee
-import com.github.yonaprojects.yona.domain.issue.AssigneeRepository
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.project.Project
@@ -78,7 +76,6 @@ class TemplateEquivalenceSpec @Autowired constructor(
     private val roleRepository: RoleRepository,
     private val postingRepository: PostingRepository,
     private val issueRepository: IssueRepository,
-    private val assigneeRepository: AssigneeRepository,
     private val issueLabelRepository: IssueLabelRepository,
     private val issueLabelCategoryRepository: IssueLabelCategoryRepository,
     private val yonaUpdateService: YonaUpdateService,
@@ -619,9 +616,8 @@ class TemplateEquivalenceSpec @Autowired constructor(
                             number = 900L
                         )
                     )
-                    if (myIssue.assignee == null) {
-                        val assignee = assigneeRepository.save(Assignee(user = member, project = publicProj))
-                        myIssue.assignee = assignee
+                    if (!myIssue.hasAssignee(member.id!!)) {
+                        myIssue.assignees.add(member)
                         issueRepository.save(myIssue)
                     }
 

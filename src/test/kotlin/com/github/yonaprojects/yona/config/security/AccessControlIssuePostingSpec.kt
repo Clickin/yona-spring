@@ -4,7 +4,6 @@ import com.github.yonaprojects.yona.domain.board.Posting
 import com.github.yonaprojects.yona.domain.board.PostingComment
 import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.enumeration.Operation
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueComment
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
@@ -103,6 +102,26 @@ class AccessControlIssuePostingSpec : DescribeSpec({
             Optional.of(OrganizationUser(user = user, organization = organization, role = Role(id = roleType.roleType)))
     }
 
+    describe("assignment actor and target eligibility") {
+        it("allows members and rejects external targets or external actors including clear") {
+            accessControl.requireIssueAssignment(managerUser, privateProject, listOf(member))
+            for ((actor, targets) in listOf(
+                managerUser to listOf(stranger),
+                stranger to listOf(member),
+                stranger to emptyList()
+            )) {
+                val failure = io.kotest.assertions.throwables.shouldThrow<org.springframework.web.server.ResponseStatusException> {
+                    accessControl.requireIssueAssignment(actor, privateProject, targets)
+                }
+                failure.statusCode.value() shouldBe 403
+            }
+        }
+        it("retains ASSIGN_ISSUE eligibility for non-private organization members") {
+            stubOrgRole(org, groupMemberUser, RoleType.ORG_MEMBER)
+            accessControl.requireIssueAssignment(groupMemberUser, protectedProject, listOf(member))
+        }
+    }
+
     // ==================== ISSUE_POST ====================
     describe("isAllowed(user, project, issue, operation) - ISSUE_POST 미실행 분기 보강") {
         it("익명 접근 차단 설정에서 비로그인 사용자는 READ도 거부") {
@@ -131,8 +150,7 @@ class AccessControlIssuePostingSpec : DescribeSpec({
             accessControl.isAllowed(stranger, privateProject, issue, Operation.READ) shouldBe false
         }
         it("담당자로 지정되지 않은 사용자는 담당자 우회가 적용되지 않는다") {
-            val assignee = Assignee(user = member, project = privateProject)
-            val issue = Issue(id = 1006L, project = privateProject, authorId = null, assignee = assignee)
+            val issue = Issue(id = 1006L, project = privateProject, authorId = null, assignees = mutableSetOf(member))
             accessControl.isAllowed(stranger, privateProject, issue, Operation.READ) shouldBe false
         }
 

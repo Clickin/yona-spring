@@ -240,7 +240,7 @@ class WatchControllerSpec : DescribeSpec({
                 val issue = Issue(
                     id = 101L, number = 6L, title = "Test Issue 2", project = project,
                     authorId = 30L,
-                    assignee = Assignee(id = 1L, user = assigneeUser, project = project),
+                    assignees = mutableSetOf(assigneeUser),
                     voters = mutableSetOf(voter)
                 )
 

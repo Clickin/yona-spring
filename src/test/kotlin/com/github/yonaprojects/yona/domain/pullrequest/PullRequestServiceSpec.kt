@@ -602,18 +602,9 @@ class PullRequestServiceSpec @Autowired constructor(
                 syncRepository(toBareDir, fromBareDir, "master")
 
                 // 이슈 3개 생성 (이슈 번호는 1, 2, 3으로 순차 생성됨)
-                val issue1 = issueService.createIssue(
-                    Issue(title = "이슈 1", body = "첫 번째 이슈", project = toProject),
-                    receiver, null, null, null
-                )
-                val issue2 = issueService.createIssue(
-                    Issue(title = "이슈 2", body = "두 번째 이슈", project = toProject),
-                    receiver, null, null, null
-                )
-                val issue3 = issueService.createIssue(
-                    Issue(title = "이슈 3", body = "세 번째 이슈", project = toProject),
-                    receiver, null, null, null
-                )
+                val issue1 = issueService.createIssue(Issue(title = "이슈 1", body = "첫 번째 이슈", project = toProject), receiver, emptyList(), null, null)
+                val issue2 = issueService.createIssue(Issue(title = "이슈 2", body = "두 번째 이슈", project = toProject), receiver, emptyList(), null, null)
+                val issue3 = issueService.createIssue(Issue(title = "이슈 3", body = "세 번째 이슈", project = toProject), receiver, emptyList(), null, null)
 
                 issue1.number shouldBe 1L
                 issue2.number shouldBe 2L
@@ -1793,12 +1784,8 @@ class PullRequestServiceSpec @Autowired constructor(
             }
 
             it("PR 제목/본문에서 참조하는 이슈가 바뀌면 ISSUE_REFERRED_FROM_PULL_REQUEST 이벤트가 재동기화되어야 한다") {
-                val issue1 = issueService.createIssue(
-                    Issue(title = "이슈 1", body = "...", project = toProject), receiver, null, null, null
-                )
-                val issue2 = issueService.createIssue(
-                    Issue(title = "이슈 2", body = "...", project = toProject), receiver, null, null, null
-                )
+                val issue1 = issueService.createIssue(Issue(title = "이슈 1", body = "...", project = toProject), receiver, emptyList(), null, null)
+                val issue2 = issueService.createIssue(Issue(title = "이슈 2", body = "...", project = toProject), receiver, emptyList(), null, null)
 
                 val pr = pullRequestRepository.save(
                     PullRequest(

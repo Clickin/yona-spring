@@ -306,7 +306,7 @@
                                         <th:block th:if="${eventTypeName == 'ISSUE_ASSIGNEE_CHANGED'}">
                                             <span class="state changed" th:text="#{issue.state.assigned}">할당됨</span>
                                             <span th:if="${event.newValue != null}" th:text="#{issue.event.assigned(${event.senderLoginId}, ${event.newValue})}">담당자로 지정했습니다</span>
-                                            <span th:if="${event.newValue == null}" th:text="#{issue.event.unassigned(${event.senderLoginId})}">담당자를 없앴습니다</span>
+                                            <span th:if="${event.newValue == null}" th:text="${event.senderLoginId} + ': ' + #{notification.issue.assignee.removed(${event.oldValue})}">담당자 지정을 해제했습니다</span>
                                         </th:block>
                                         <th:block th:if="${eventTypeName == 'ISSUE_MILESTONE_CHANGED'}">
                                             <span class="state milestone-changed" th:text="#{issue.update.milestone.id}">마일스톤 변경</span>
@@ -379,23 +379,23 @@
                         <form id="issueUpdateForm" th:action="@{/{owner}/{projectName}/issues/massupdate(owner=${project.owner}, projectName=${project.name})}" method="post">
                             <input type="hidden" name="issues[0].id" th:value="${issue.id}" />
 
-                            <!-- 담당자 — yona issue/partial_assignee.scala.html 대응. isAllowedUpdate
-                                 일 때는 select2 인라인 위젯(yonaAssgineeModule, IssueApi.findAssignableUsers/
-                                 updateAssginees와 동일한 REST 대응 엔드포인트로 저장)으로 바뀐다 — massUpdate가
-                                 아니라 담당자 전용 REST 엔드포인트로 즉시 저장되는 legacy 동작을 그대로 재현한다. -->
+                            <!-- Each assignee can be added or removed independently. -->
                             <dl>
                                 <dt th:text="#{issue.assignee}">담당자</dt>
                                 <dd>
                                     <th:block th:if="${isAllowedUpdate}">
-                                        <input type="hidden" class="bigdrop" id="assignee" name="assigneeLoginId" th:placeholder="#{issue.noAssignee}" th:value="${issue.assignee != null ? issue.assignee.user.loginId : ''}" style="width: 100%" title="">
+                                        <select multiple class="bigdrop" id="assignee" name="assigneeLoginIds" th:aria-label="#{issue.assignee}" th:data-placeholder="#{issue.noAssignee}" style="width: 100%">
+                                            <option th:each="assignee : ${issue.assignees}" th:value="${assignee.loginId}" th:text="${assignee.name + ' (@' + assignee.loginId + ')'}" selected></option>
+                                        </select>
+                                        <button type="button" data-clear-assignees th:text="#{issue.noAssignee}">Clear assignees</button>
                                     </th:block>
                                     <th:block th:unless="${isAllowedUpdate}">
-                                        <a th:if="${issue.assignee != null}" th:href="@{/{loginId}(loginId=${issue.assignee.user.loginId})}" class="usf-group">
-                                            <span class="avatar-wrap smaller"><img th:src="${issue.assignee.user.avatarUrl}" width="20" height="20"></span>
-                                            <strong class="name" th:text="${issue.assignee.user.name}">이름</strong>
-                                            <span class="loginid"> <strong>@</strong><span th:text="${issue.assignee.user.loginId}">loginId</span></span>
+                                        <a th:each="assignee : ${issue.assignees}" th:href="@{/{loginId}(loginId=${assignee.loginId})}" class="usf-group">
+                                            <span class="avatar-wrap smaller"><img th:src="${assignee.avatarUrl}" width="20" height="20"></span>
+                                            <strong class="name" th:text="${assignee.name}">이름</strong>
+                                            <span class="loginid"> <strong>@</strong><span th:text="${assignee.loginId}">loginId</span></span>
                                         </a>
-                                        <div th:unless="${issue.assignee != null}" th:text="#{issue.noAssignee}">담당자 없음</div>
+                                        <div th:if="${issue.assignees.isEmpty()}" th:text="#{issue.noAssignee}">담당자 없음</div>
                                     </th:block>
                                 </dd>
                             </dl>

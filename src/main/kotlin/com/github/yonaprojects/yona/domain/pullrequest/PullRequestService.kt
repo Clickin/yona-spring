@@ -93,9 +93,7 @@ interface PullRequestService {
     // 상태 표시(PullRequestViewController)가 동일한 알고리즘을 공유하도록 이 인터페이스에 노출한다.
     fun getLatestReviewStates(pullRequestId: Long): Map<Long, PullRequestReview.ReviewState>
 
-    // Issue의 assigneeId 갱신 로직(IssueServiceImpl.updateIssue())과 동일하게, 담당자를 바꿀
-    // 때마다 기존 Assignee 로우를 재사용하지 않고 새로 만든다(Assignee는 (user, project) 값
-    // 객체에 가까움). assigneeUser가 null이면 담당자를 해제한다.
+    // 담당자를 바꿀 때 새 Assignee 레코드를 만든다. null이면 담당자를 해제한다.
     fun setAssignee(pullRequestId: Long, assigneeUser: User?): PullRequest
 
     // 라벨은 프로젝트에 이미 정의된 IssueLabel(ProjectViewController.newLabel() 등으로 관리)을

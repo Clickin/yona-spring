@@ -232,55 +232,50 @@ class IssueShareServiceImplSpec : DescribeSpec({
     describe("IssueShareServiceImpl.findAssignableUsers") {
         it("담당자가 있고 현재 사용자가 담당자 본인이면 '나에게 지정'을 추가하지 않는다(작성자 없음)") {
             val assigneeUser = User(id = 10L, loginId = "gildong", name = "홍길동")
-            val assignee = Assignee(id = 1L, user = assigneeUser, project = project)
-            val i = Issue(id = 101L, title = "이슈2", body = null, project = project, number = 2L, authorId = null, assignee = assignee)
+            val i = Issue(id = 101L, title = "이슈2", body = null, project = project, number = 2L, authorId = null, assignees = mutableSetOf(assigneeUser))
             every { projectUserRepository.findByProjectId(1L) } returns emptyList()
 
             val result = service.findAssignableUsers(i, "", currentUser)
 
-            // "나에게 지정"이 없으므로 담당자 해제 + 현재 담당자만 남는다.
-            result.map { it["name"] } shouldContainExactly listOf("담당자 해제", "홍길동")
+            result.map { it["loginId"] } shouldContainExactly listOf("gildong")
         }
 
         it("담당자가 있고 작성자가 현재 사용자와 동일하면 작성자 항목을 추가하지 않는다") {
             val assigneeUser = User(id = 20L, loginId = "sharer1", name = "공유대상")
-            val assignee = Assignee(id = 1L, user = assigneeUser, project = project)
-            val i = Issue(id = 102L, title = "이슈3", body = null, project = project, number = 3L, authorId = 10L, assignee = assignee)
+            val i = Issue(id = 102L, title = "이슈3", body = null, project = project, number = 3L, authorId = 10L, assignees = mutableSetOf(assigneeUser))
             every { userRepository.findById(10L) } returns Optional.of(currentUser)
             every { projectUserRepository.findByProjectId(1L) } returns emptyList()
 
             val result = service.findAssignableUsers(i, "", currentUser)
 
-            result.map { it["name"] } shouldContainExactly listOf("나에게 지정", "담당자 해제", "공유대상")
+            result.map { it["loginId"] } shouldContainExactly listOf("gildong", "sharer1")
         }
 
         it("담당자가 있고 작성자가 담당자와 동일하면 작성자 항목을 추가하지 않는다") {
             val assigneeUser = User(id = 20L, loginId = "sharer1", name = "공유대상")
-            val assignee = Assignee(id = 1L, user = assigneeUser, project = project)
-            val i = Issue(id = 103L, title = "이슈4", body = null, project = project, number = 4L, authorId = 20L, assignee = assignee)
+            val i = Issue(id = 103L, title = "이슈4", body = null, project = project, number = 4L, authorId = 20L, assignees = mutableSetOf(assigneeUser))
             every { userRepository.findById(20L) } returns Optional.of(assigneeUser)
             every { projectUserRepository.findByProjectId(1L) } returns emptyList()
 
             val result = service.findAssignableUsers(i, "", currentUser)
 
-            result.map { it["name"] } shouldContainExactly listOf("나에게 지정", "담당자 해제", "공유대상")
+            result.map { it["loginId"] } shouldContainExactly listOf("gildong", "sharer1")
         }
 
         it("담당자가 있고 작성자가 현재 사용자/담당자 모두와 다르면 작성자 지정 항목을 추가한다") {
             val assigneeUser = User(id = 20L, loginId = "sharer1", name = "공유대상")
             val authorUser = User(id = 70L, loginId = "author1", name = "작성자")
-            val assignee = Assignee(id = 1L, user = assigneeUser, project = project)
-            val i = Issue(id = 104L, title = "이슈5", body = null, project = project, number = 5L, authorId = 70L, assignee = assignee)
+            val i = Issue(id = 104L, title = "이슈5", body = null, project = project, number = 5L, authorId = 70L, assignees = mutableSetOf(assigneeUser, currentUser))
             every { userRepository.findById(70L) } returns Optional.of(authorUser)
             every { projectUserRepository.findByProjectId(1L) } returns emptyList()
 
             val result = service.findAssignableUsers(i, "", currentUser)
 
-            result.map { it["name"] } shouldContainExactly listOf("나에게 지정", "작성자에게 지정", "담당자 해제", "공유대상")
+            result.map { it["loginId"] } shouldContainExactly listOf("author1", "sharer1", "gildong")
         }
 
         it("담당자가 없고 작성자 정보가 없으면 '나에게 지정'만 추가한다(authorId=null)") {
-            val i = Issue(id = 105L, title = "이슈6", body = null, project = project, number = 6L, authorId = null, assignee = null)
+            val i = Issue(id = 105L, title = "이슈6", body = null, project = project, number = 6L, authorId = null)
             every { projectUserRepository.findByProjectId(1L) } returns emptyList()
 
             val result = service.findAssignableUsers(i, "", currentUser)
@@ -290,7 +285,7 @@ class IssueShareServiceImplSpec : DescribeSpec({
         }
 
         it("담당자가 없고 authorId는 있지만 사용자를 찾지 못하면 작성자 항목을 추가하지 않는다") {
-            val i = Issue(id = 106L, title = "이슈7", body = null, project = project, number = 7L, authorId = 999L, assignee = null)
+            val i = Issue(id = 106L, title = "이슈7", body = null, project = project, number = 7L, authorId = 999L)
             every { userRepository.findById(999L) } returns Optional.empty()
             every { projectUserRepository.findByProjectId(1L) } returns emptyList()
 
@@ -301,7 +296,7 @@ class IssueShareServiceImplSpec : DescribeSpec({
 
         it("담당자가 없고 작성자가 현재 사용자와 다르면 작성자 지정 항목을 추가한다") {
             val authorUser = User(id = 71L, loginId = "author2", name = "작성자2")
-            val i = Issue(id = 107L, title = "이슈8", body = null, project = project, number = 8L, authorId = 71L, assignee = null)
+            val i = Issue(id = 107L, title = "이슈8", body = null, project = project, number = 8L, authorId = 71L)
             every { userRepository.findById(71L) } returns Optional.of(authorUser)
             every { projectUserRepository.findByProjectId(1L) } returns emptyList()
 
@@ -345,7 +340,7 @@ class IssueShareServiceImplSpec : DescribeSpec({
         }
 
         it("담당자가 없고 작성자가 현재 사용자와 동일하면 작성자 지정 항목을 추가하지 않는다") {
-            val i = Issue(id = 120L, title = "이슈20", body = null, project = project, number = 20L, authorId = 10L, assignee = null)
+            val i = Issue(id = 120L, title = "이슈20", body = null, project = project, number = 20L, authorId = 10L)
             every { userRepository.findById(10L) } returns Optional.of(currentUser)
             every { projectUserRepository.findByProjectId(1L) } returns emptyList()
 
@@ -356,14 +351,13 @@ class IssueShareServiceImplSpec : DescribeSpec({
 
         it("사이트관리자가 조회하면 배정 가능 후보 목록 반복문이 자기 자신을 순회한다") {
             val siteManager = User(id = 65L, loginId = "siteadmin2", name = "사이트관리자2", state = UserState.SITE_ADMIN)
-            val i = Issue(id = 121L, title = "이슈21", body = null, project = project, number = 21L, authorId = null, assignee = null)
+            val i = Issue(id = 121L, title = "이슈21", body = null, project = project, number = 21L, authorId = null)
             every { projectUserRepository.findByProjectId(1L) } returns emptyList()
             every { userRepository.findAllById(setOf(65L)) } returns listOf(siteManager)
 
             val result = service.findAssignableUsers(i, "", siteManager)
 
-            result shouldHaveSize 2
-            result[1]["loginId"] shouldBe "siteadmin2"
+            result.map { it["loginId"] } shouldContainExactly listOf("siteadmin2")
         }
 
         it("검색어가 있고 검색 결과가 없으면 반복문을 순회하지 않고 빈 목록을 반환한다") {

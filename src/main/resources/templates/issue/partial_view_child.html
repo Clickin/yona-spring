@@ -16,7 +16,7 @@
                 <th:block th:unless="${childIssue.isDraft}">#<span th:text="${childIssue.number}">1</span></th:block>
             </span>
             <span th:text="${childIssue.title}">하위이슈 제목</span>
-            <span th:if="${childIssue.assignee != null}" th:text="' - ' + ${childIssue.assignee.user.getPureNameOnly()}"> - 담당자</span>
+            <span th:each="assignee : ${childIssue.assignees}" th:text="' - ' + ${assignee.getPureNameOnly()}"> - 담당자</span>
         </span>
     </a>
     <span class="font12 no-border-at-child">

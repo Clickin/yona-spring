@@ -44,7 +44,7 @@
                 <!-- 자기 자신이 작성한 경우 공백(또는 미표시) -->
             </div>
             
-            <div class="infos meta col-md-2" th:classappend="${assigneeId != currentUser.id and issue.assignee != null} ? 'span2' : 'span3'">
+            <div class="infos meta col-md-2" th:classappend="${!issue.assignees.isEmpty()} ? 'span2' : 'span3'">
                 <span class="meta-cell">
                     <span class="infos-item" th:text="${issue.updatedDate != null ? #temporals.format(issue.updatedDate, 'yyyy-MM-dd HH:mm') : ''}">수정일</span>
                     
@@ -57,10 +57,10 @@
             </div>
             
             <!-- 담당자 아바타 -->
-            <div class="span1 hide-in-mobile col-md-1" th:if="${assigneeId != currentUser.id and issue.assignee != null}">
+            <div class="span1 hide-in-mobile col-md-1" th:if="${!issue.assignees.isEmpty()}">
                 <div class="mt5 pull-right hide-in-mobile">
-                    <a th:href="@{'/user/' + ${issue.assignee.user.loginId}}" class="avatar-wrap assignee" data-toggle="tooltip" data-placement="bottom" th:title="#{issue.assignee} + ': ' + ${issue.assignee.user.name}">
-                        <img th:src="${issue.assignee.user.avatarUrl != null ? issue.assignee.user.avatarUrl : '/assets/images/default-avatar-128.png'}" width="32" height="32" th:alt="${issue.assignee.user.name}">
+                    <a th:each="assignee : ${issue.assignees}" th:href="@{'/user/' + ${assignee.loginId}}" class="avatar-wrap assignee" data-toggle="tooltip" data-placement="bottom" th:title="#{issue.assignee} + ': ' + ${assignee.name}">
+                        <img th:src="${assignee.avatarUrl != null ? assignee.avatarUrl : '/assets/images/default-avatar-128.png'}" width="32" height="32" th:alt="${assignee.name}">
                     </a>
                 </div>
             </div>

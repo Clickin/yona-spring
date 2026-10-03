@@ -21,31 +21,12 @@
                     </ul>
                 </div>
 
-                <!-- 담당자 변경 드롭다운 -->
-                <div id="assignee" class="btn-group" data-name="assignee.id" style="display: inline-block; margin-right: 5px;">
-                    <button class="btn dropdown-toggle medium" data-toggle="dropdown" disabled="disabled">
-                        <span class="d-label" th:text="#{issue.update.assignee.id}">담당자 지정</span>
-                        <span class="d-caret"><span class="caret"></span></span>
-                    </button>
-                    <ul class="dropdown-menu mass-update-list">
-                        <li data-value="-1"><a href="javascript:void(0);" th:text="#{issue.noAssignee}">담당자 없음</a></li>
-                        <li class="divider"></li>
-                        <th:block th:with="currentUserObj=${#authentication != null and #authentication.name != 'anonymousUser' ? @userRepository.findByLoginId(#authentication.name).orElse(null) : null}">
-                            <li th:if="${currentUserObj != null}" th:data-value="${currentUserObj.id}">
-                                <a href="javascript:void(0);" th:text="#{issue.assignToMe}">나에게 지정</a>
-                            </li>
-                        </th:block>
-                        <li class="divider"></li>
-                        <li th:each="user : ${@templateHelper.getAssignableUsers(project)}" th:data-value="${user.id}">
-                            <a href="javascript:void(0);" class="usf-group" style="display: flex; align-items: center; gap: 6px;">
-                                <span class="avatar-wrap smaller">
-                                    <img th:src="${user.avatarUrl}" width="20" height="20">
-                                </span>
-                                <strong class="name" th:text="${user.name}">이름</strong>
-                                <span class="loginid"> <strong>@</strong><span th:text="${user.loginId}">loginId</span></span>
-                            </a>
-                        </li>
-                    </ul>
+                <div id="assignee" class="btn-group" style="display: inline-block; margin-right: 5px;">
+                    <select multiple data-mass-assignees th:aria-label="#{issue.assignee}" data-toggle="tomselect">
+                        <option th:each="user : ${@templateHelper.getAssignableUsers(project)}" th:value="${user.id}" th:text="${user.name + ' (@' + user.loginId + ')'}"></option>
+                    </select>
+                    <button type="button" data-apply-assignees class="btn medium" disabled th:text="#{issue.update.assignee.id}">Assign</button>
+                    <button type="button" data-clear-mass-assignees class="btn medium" disabled th:text="#{issue.noAssignee}">Clear assignees</button>
                 </div>
 
                 <!-- 마일스톤 변경 드롭다운 -->
@@ -121,7 +102,6 @@
                 "welMassUpdateButtons": document.querySelectorAll('#mass-update-form button'),
                 "welState": document.getElementById("state"),
                 "welMilestone": document.getElementById("milestone"),
-                "welAssignee": document.getElementById("assignee"),
                 "welAttachingLabel": document.getElementById("attaching-label"),
                 "welDetachingLabel": document.getElementById("detaching-label"),
                 "welDeleteButton": document.getElementById("delete"),

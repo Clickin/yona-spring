@@ -1258,15 +1258,15 @@ class ProjectViewController(
         // 1. Assignees
         val memberUsers = projectUsers.map { it.user }.toMutableSet()
         openIssues.forEach { issue ->
-            issue.assignee?.user?.let { memberUsers.add(it) }
+            memberUsers.addAll(issue.assignees)
         }
         val assigneeList = memberUsers.map { user ->
-            val count = openIssues.count { it.assignee?.user?.id == user.id }
+            val count = openIssues.count { it.hasAssignee(user.id) }
             val percent = if (totalOpenIssuesCount > 0) (count / totalOpenIssuesCount * 100).toInt() else 0
             AssigneeDashboardDto(user, count, percent)
         }.filter { it.count > 0 }.sortedByDescending { it.count }
 
-        val notAssignedIssuesCount = openIssues.count { it.assignee == null }
+        val notAssignedIssuesCount = openIssues.count { it.assignees.isEmpty() }
         val notAssignedIssuesPercent = if (totalOpenIssuesCount > 0) (notAssignedIssuesCount / totalOpenIssuesCount * 100).toInt() else 0
 
         // 2. Milestones

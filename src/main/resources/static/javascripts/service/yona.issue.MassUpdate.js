@@ -52,7 +52,6 @@
             htVar.detachingLabelName = (htOptions.welDetachingLabel ? htOptions.welDetachingLabel.dataset.name : undefined) + '[]';
 
             htVar.oState     = new yona.ui.Dropdown({"elContainer": htOptions.welState});
-            htVar.oAssignee  = new yona.ui.Dropdown({"elContainer": htOptions.welAssignee});
             htVar.oMilestone = new yona.ui.Dropdown({"elContainer": htOptions.welMilestone});
             htVar.oAttachingLabel = new yona.ui.Dropdown({"elContainer": htOptions.welAttachingLabel});
             htVar.oDetachingLabel = new yona.ui.Dropdown({"elContainer": htOptions.welDetachingLabel});
@@ -89,7 +88,24 @@
             // massUpdate dropdowns
             htVar.oState.onChange(_onChangeUpdateField);
             htVar.oMilestone.onChange(_onChangeUpdateField);
-            htVar.oAssignee.onChange(_onChangeUpdateField);
+            var assignees = htElement.welMassUpdateForm.querySelector('[data-mass-assignees]');
+            if(assignees){
+                function submitAssignees(clear){
+                    _addFormField(htElement.welMassUpdateForm, '_assigneeIds', 'on');
+                    if(!clear){
+                        Array.from(assignees.selectedOptions).forEach(function(option){
+                            _addFormField(htElement.welMassUpdateForm, 'assigneeIds', option.value);
+                        });
+                    }
+                    _onChangeUpdateField();
+                }
+                htElement.welMassUpdateForm.querySelector('[data-apply-assignees]').addEventListener('click', function(){
+                    submitAssignees(false);
+                });
+                htElement.welMassUpdateForm.querySelector('[data-clear-mass-assignees]').addEventListener('click', function(){
+                    submitAssignees(true);
+                });
+            }
             htVar.oAttachingLabel.onChange(_onChangeAttachingLabelField);
             htVar.oDetachingLabel.onChange(_onChangeUpdateField);
 

@@ -123,9 +123,9 @@ class FavoriteController(
                 "loginId" to issue.authorLoginId,
                 "name" to issue.authorName
             )
-            val assigneeNode = issue.assignee?.let {
-                mapOf("id" to it.id, "loginId" to it.user.loginId, "name" to it.user.name)
-            } ?: emptyMap()
+            val assigneeNodes = issue.assignees.map {
+                mapOf("id" to it.id, "loginId" to it.loginId, "name" to it.name)
+            }
             val projectNode = mapOf("id" to issue.project.id, "name" to issue.project.name)
 
             mapOf(
@@ -136,7 +136,8 @@ class FavoriteController(
                 "createdDate" to issue.createdDate?.let { DateTimeFormatter.ISO_INSTANT.format(it) },
                 "updatedDate" to issue.updatedDate?.let { DateTimeFormatter.ISO_INSTANT.format(it) },
                 "author" to authorNode,
-                "assignee" to assigneeNode,
+                "assignees" to assigneeNodes,
+                "assignee" to assigneeNodes.firstOrNull(),
                 "project" to projectNode,
                 "owner" to issue.project.owner,
                 "refUrl" to "$baseUrl/${issue.project.owner}/${issue.project.name}/issue/${issue.number}"

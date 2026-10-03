@@ -5,7 +5,6 @@ import com.github.yonaprojects.yona.domain.board.PostingComment
 import com.github.yonaprojects.yona.domain.enumeration.EventType
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.enumeration.WebhookType
-import com.github.yonaprojects.yona.domain.issue.Assignee
 import com.github.yonaprojects.yona.domain.issue.Issue
 import com.github.yonaprojects.yona.domain.issue.IssueComment
 import com.github.yonaprojects.yona.domain.milestone.Milestone
@@ -489,7 +488,7 @@ class WebhookServiceSpec : DescribeSpec({
                 val issue = Issue(
                     id = 103L, title = "필드 테스트 이슈", body = "이슈 본문", project = project, number = 13,
                     milestone = milestone,
-                    assignee = Assignee(id = 1L, user = assigneeUser, project = project)
+                    assignees = mutableSetOf(assigneeUser, sender)
                 )
 
                 val payload = webhookService.buildPayload(slackWebhook, EventType.NEW_ISSUE, sender, issue)
@@ -500,7 +499,7 @@ class WebhookServiceSpec : DescribeSpec({
                 fields.get(0).get("title").asText() shouldBe "마일 스톤 변경"
                 fields.get(0).get("value").asText() shouldBe "1.0 릴리즈"
                 fields.get(1).get("title").asText() shouldBe ""
-                fields.get(1).get("value").asText() shouldBe "담당자이름"
+                fields.get(1).get("value").asText() shouldBe "담당자이름, 송신자"
                 fields.get(2).get("title").asText() shouldBe "상태"
                 fields.get(2).get("value").asText() shouldBe issue.state.toString()
             }
@@ -1495,39 +1494,6 @@ class WebhookServiceSpec : DescribeSpec({
                 json.get("attachments").get(0).get("text").asText() shouldBe ""
             }
 
-            // Assignee.user는 Kotlin 타입상 non-null이지만, Hibernate가 프록시/리플렉션으로 null을
-            // 주입할 가능성에 대비한 방어적 분기(resource.assignee?.user?.name)가 실제 코드에 존재한다.
-            it("Assignee.user가 null이면(방어적 분기) attachment 담당자 필드가 빈 문자열이어야 한다") {
-                val assigneeUser = User(id = 8L, loginId = "assignee", name = "담당자이름")
-                val assignee = Assignee(id = 1L, user = assigneeUser, project = project)
-                forceNullField(assignee, "user")
-                val issueWithBrokenAssignee = Issue(
-                    id = 141L, title = "담당자 깨진 이슈", body = "내용", project = project, number = 61,
-                    assignee = assignee
-                )
-
-                val payload = webhookService.buildPayload(slackWebhook, EventType.NEW_ISSUE, sender, issueWithBrokenAssignee)
-                val json = ObjectMapper().readTree(payload)
-                val fields = json.get("attachments").get(0).get("fields")
-
-                fields.get(0).get("value").asText() shouldBe ""
-            }
-
-            it("Assignee.user.name이 null이면(방어적 분기) attachment 담당자 필드가 빈 문자열이어야 한다") {
-                val assigneeUser = User(id = 8L, loginId = "assignee", name = "담당자이름")
-                forceNullField(assigneeUser, "name")
-                val assignee = Assignee(id = 1L, user = assigneeUser, project = project)
-                val issueWithNamelessAssignee = Issue(
-                    id = 142L, title = "담당자 이름 없는 이슈", body = "내용", project = project, number = 62,
-                    assignee = assignee
-                )
-
-                val payload = webhookService.buildPayload(slackWebhook, EventType.NEW_ISSUE, sender, issueWithNamelessAssignee)
-                val json = ObjectMapper().readTree(payload)
-                val fields = json.get("attachments").get(0).get("fields")
-
-                fields.get(0).get("value").asText() shouldBe ""
-            }
 
             val threadWithoutPR = CodeCommentThread(id = 410L, pullRequest = null, project = project)
             val reviewCommentNoParent = ReviewComment(id = 510L, contents = "리뷰 댓글", thread = threadWithoutPR)

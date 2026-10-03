@@ -40,9 +40,14 @@ class Issue(
     @JoinColumn(name = "milestone_id")
     var milestone: Milestone? = null,
 
-    @ManyToOne(fetch = FetchType.LAZY, cascade = [CascadeType.ALL])
-    @JoinColumn(name = "assignee_id")
-    var assignee: Assignee? = null,
+    @ManyToMany
+    @JoinTable(
+        name = "issue_assignee",
+        joinColumns = [JoinColumn(name = "issue_id")],
+        inverseJoinColumns = [JoinColumn(name = "user_id")],
+        uniqueConstraints = [UniqueConstraint(columnNames = ["issue_id", "user_id"])]
+    )
+    var assignees: MutableSet<User> = mutableSetOf(),
 
     // yona Issue.java의 "public Issue parent" 대응. 한 부모 이슈가 여러 하위이슈(subtask)를 가질 수
     // 있어야 하는데(findByParentIssueId()가 List<Issue>를 반환) @OneToOne으로 매핑돼 있으면 Hibernate가
@@ -93,4 +98,6 @@ class Issue(
     project = project,
     number = number,
     numOfComments = numOfComments
-)
+) {
+    fun hasAssignee(userId: Long?): Boolean = userId != null && assignees.any { it.id == userId }
+}

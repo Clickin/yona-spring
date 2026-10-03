@@ -97,6 +97,58 @@ class IssueServiceImplSpec @Autowired constructor(
                 userRepository.deleteAll()
             }
 
+            it("keeps every assignee, emits person deltas, and removes only the requested user") {
+                val author = mkUser("multiple-author")
+                val first = mkUser("multiple-first")
+                val second = mkUser("multiple-second")
+                val project = mkProject("multiple-project", author.loginId, ProjectScope.PRIVATE)
+                val role = roleRepository.save(Role(id = RoleType.MEMBER.roleType))
+                for (member in listOf(author, first, second)) {
+                    val membership = projectUserRepository.save(ProjectUser(user = member, project = project, role = role))
+                    member.projectUsers.add(membership)
+                }
+                val issue = issueService.createIssue(
+                    Issue(title = "Shared task", body = "Work together", project = project),
+                    author, assigneeUsers = listOf(first, second, first)
+                )
+                issue.assignees.map { it.id }.toSet() shouldBe setOf(first.id, second.id)
+                issueService.getIssuesByFilter(IssueFilterType.ASSIGNED, first).map { it.id } shouldBe listOf(issue.id)
+                issueService.getIssuesByFilter(IssueFilterType.ASSIGNED, second).map { it.id } shouldBe listOf(issue.id)
+                val created = notificationEventRepository.findAll().single { it.eventType == EventType.NEW_ISSUE }
+                created.receivers.map { it.id }.toSet() shouldBe setOf(first.id, second.id)
+                issueEventRepository.findByIssueOrderByCreatedAsc(issue).map { it.newValue }.toSet() shouldBe
+                    setOf(first.name, second.name)
+
+                issueService.changeAssignees(issue.id!!, listOf(second), author.loginId)
+                issueService.getIssuesByFilter(IssueFilterType.ASSIGNED, first).shouldBeEmpty()
+                issueService.getIssuesByFilter(IssueFilterType.ASSIGNED, second).map { it.id } shouldBe listOf(issue.id)
+                val removed = notificationEventRepository.findAll().single { it.eventType == EventType.ISSUE_ASSIGNEE_CHANGED }
+                removed.oldValue shouldBe first.name
+                removed.newValue shouldBe null
+                removed.receivers.map { it.id }.toSet() shouldBe setOf(first.id, second.id)
+
+                issueService.changeAssignees(issue.id!!, listOf(first, second), author.loginId)
+                notificationEventRepository.findAll().count { it.eventType == EventType.ISSUE_ASSIGNEE_CHANGED } shouldBe 2
+                val before = issueEventRepository.findByIssueOrderByCreatedAsc(issue).size
+                issueService.changeAssignees(issue.id!!, listOf(second, first, first), author.loginId)
+                issueEventRepository.findByIssueOrderByCreatedAsc(issue).size shouldBe before
+                issueService.changeAssignees(issue.id!!, emptyList(), author.loginId)
+                issue.assignees.shouldBeEmpty()
+                notificationEventRepository.findAll().count { it.eventType == EventType.ISSUE_ASSIGNEE_CHANGED } shouldBe 4
+            }
+
+            it("does not notify an ineligible former assignee about a private issue") {
+                val author = mkUser("private-author")
+                val outsider = mkUser("private-outsider")
+                val project = mkProject("private-assignment", author.loginId, ProjectScope.PRIVATE)
+                val issue = issueRepository.save(Issue(
+                    title = "Private issue", project = project, authorId = author.id,
+                    assignees = mutableSetOf(outsider)
+                ))
+                issueService.changeAssignees(issue.id!!, emptyList(), author.loginId)
+                notificationEventRepository.findAll().flatMap { it.receivers }.any { it.id == outsider.id } shouldBe false
+            }
+
             describe("createIssue의 담당자/마일스톤/라벨 지정 및 본문 null 분기") {
                 it("담당자를 지정해 이슈를 생성하면 Assignee가 설정되어야 한다") {
                     val author = mkUser("ci-a1")
@@ -105,10 +157,10 @@ class IssueServiceImplSpec @Autowired constructor(
 
                     val saved = issueService.createIssue(
                         issue = Issue(title = "담당자 지정 생성", body = "본문", project = project),
-                        author = author, assigneeUser = assignee, isDraft = true
+                        author = author, assigneeUsers = listOf(assignee), isDraft = true
                     )
 
-                    saved.assignee?.user?.id shouldBe assignee.id
+                    saved.assignees.single().id shouldBe assignee.id
                 }
 
                 it("마일스톤을 지정해 이슈를 생성하면 마일스톤이 설정되어야 한다") {
@@ -213,10 +265,10 @@ class IssueServiceImplSpec @Autowired constructor(
 
                     val updated = issueService.updateIssue(
                         issueId = issue.id!!, title = issue.title, body = issue.body ?: "",
-                        updater = author, assigneeUser = assignee
+                        updater = author, assigneeUsers = listOf(assignee)
                     )
 
-                    updated.assignee?.user?.id shouldBe assignee.id
+                    updated.assignees.single().id shouldBe assignee.id
                 }
 
                 it("마일스톤을 지정해 updateIssue를 호출하면 마일스톤이 설정되어야 한다") {
@@ -351,13 +403,13 @@ class IssueServiceImplSpec @Autowired constructor(
                         Issue(
                             title = "동일 담당자 이슈", body = "본문", project = project,
                             authorId = author.id, authorLoginId = author.loginId, authorName = author.name,
-                            createdDate = Instant.now(), assignee = Assignee(user = assignee, project = project)
+                            createdDate = Instant.now(), assignees = mutableSetOf(assignee)
                         )
                     )
 
-                    val result = issueService.changeAssignee(issue.id!!, assignee, author.loginId)
+                    val result = issueService.changeAssignees(issue.id!!, listOfNotNull(assignee), author.loginId)
 
-                    result.assignee?.user?.id shouldBe assignee.id
+                    result.assignees.single().id shouldBe assignee.id
                     issueEventRepository.findByIssueOrderByCreatedAsc(issue).shouldBeEmpty()
                 }
 
@@ -372,13 +424,13 @@ class IssueServiceImplSpec @Autowired constructor(
                         Issue(
                             title = "담당자 해제 이슈", body = "본문", project = project,
                             authorId = author.id, authorLoginId = author.loginId, authorName = author.name,
-                            createdDate = Instant.now(), assignee = Assignee(user = oldAssignee, project = project)
+                            createdDate = Instant.now(), assignees = mutableSetOf(oldAssignee)
                         )
                     )
 
-                    val result = issueService.changeAssignee(issue.id!!, null, updater.loginId)
+                    val result = issueService.changeAssignees(issue.id!!, listOfNotNull(null), updater.loginId)
 
-                    result.assignee shouldBe null
+                    result.assignees.shouldBeEmpty()
                     notificationEventRepository.findAll().any { it.eventType == EventType.ISSUE_ASSIGNEE_CHANGED } shouldBe true
                 }
 
@@ -387,15 +439,15 @@ class IssueServiceImplSpec @Autowired constructor(
                     val project = mkProject("ca-n1-project", "owner-x")
                     val issue = mkIssue("작성자 없는 이슈", project, author = null)
 
-                    val result = issueService.changeAssignee(issue.id!!, newAssignee, "no-such-user")
+                    val result = issueService.changeAssignees(issue.id!!, listOfNotNull(newAssignee), "no-such-user")
 
-                    result.assignee?.user?.id shouldBe newAssignee.id
+                    result.assignees.single().id shouldBe newAssignee.id
                 }
 
                 it("존재하지 않는 이슈의 담당자를 변경하려 하면 IllegalArgumentException을 던져야 한다") {
                     val assignee = mkUser("ca-nf1")
                     shouldThrow<IllegalArgumentException> {
-                        issueService.changeAssignee(999999L, assignee, "someone")
+                        issueService.changeAssignees(999999L, listOfNotNull(assignee), "someone")
                     }
                 }
             }
@@ -467,13 +519,13 @@ class IssueServiceImplSpec @Autowired constructor(
                         Issue(
                             title = "담당자 있는 이슈", body = "본문", project = fromProject,
                             authorId = mover.id, authorLoginId = mover.loginId, authorName = mover.name,
-                            createdDate = Instant.now(), assignee = Assignee(user = assignee, project = fromProject)
+                            createdDate = Instant.now(), assignees = mutableSetOf(assignee)
                         )
                     )
 
                     val moved = issueService.moveIssue(issue.id!!, toProject.id!!, mover)
 
-                    moved.assignee?.user?.id shouldBe assignee.id
+                    moved.assignees.single().id shouldBe assignee.id
                     moved.project.id shouldBe toProject.id
                 }
 

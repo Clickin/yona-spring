@@ -124,7 +124,7 @@ class IssueRestApiControllerSpec : DescribeSpec({
             ).andExpect(status().isCreated)
                 .andExpect(jsonPath("$.id").value(7))
 
-            verify(exactly = 1) { issueController.createIssue(1L, IssueController.CreateIssueRequest(title = "새 이슈", body = "내용", milestoneId = null, assigneeId = null, labelIds = null), any()) }
+            verify(exactly = 1) { issueController.createIssue(1L, IssueController.CreateIssueRequest(title = "새 이슈", body = "내용", milestoneId = null, labelIds = null), any()) }
         }
     }
 

@@ -47,19 +47,16 @@ interface IssueRepository : JpaRepository<Issue, Long>, JpaSpecificationExecutor
     fun findByMilestoneAndState(milestone: Milestone, state: State): List<Issue>
     fun findByAuthorId(authorId: Long): List<Issue>
 
-    // yona models/support/IssueSearchCondition.java의 setAssigneeIfExists()의
-    // eq("assignee.user.id", assigneeId) 대응.
-    fun findByAssignee_UserId(userId: Long): List<Issue>
+    fun findByAssignees_Id(userId: Long): List<Issue>
 
     // yona Issue.java의 findRecentlyIssuesByDaysAgo(user, days) 대응 — 작성자 또는
     // 담당자인 이슈 중 최근 daysAgo일 안에 갱신된 것만, updatedDate desc/state asc 순으로 반환한다.
-    // assignee는 LEFT JOIN으로 명시해야 한다(암묵적 경로 탐색은 INNER JOIN으로 컴파일돼 담당자 없는
-    // 이슈까지 결과에서 사라진다 — searchIssues()와 동일한 이유).
+    // EXISTS preserves unassigned author matches and returns each issue only once.
     @Query("""
         SELECT i FROM Issue i
-        LEFT JOIN i.assignee a
-        LEFT JOIN a.user au
-        WHERE (i.authorId = :userId OR au.id = :userId)
+        WHERE (i.authorId = :userId OR EXISTS (
+            SELECT a.id FROM i.assignees a WHERE a.id = :userId
+        ))
           AND i.updatedDate >= :since
         ORDER BY i.updatedDate DESC, i.state ASC
     """)
@@ -68,9 +65,7 @@ interface IssueRepository : JpaRepository<Issue, Long>, JpaSpecificationExecutor
     // yona Search.java의 issuesEL()의 "(Project && Keyword) || (Author && Keyword) ||
     // (Assignee && Keyword)" 대응 — 프로젝트 접근권한과 무관하게 본인이 작성했거나
     // 담당자로 지정된 이슈는 항상 검색에 노출된다(equalsUserTemplate()가 익명 사용자는 건너뛰므로
-    // userId가 null이면 이 두 분기는 자연히 무효화된다). assignee는 LEFT JOIN으로 명시해야 한다 —
-    // 암묵적 경로 탐색(i.assignee.user.id)은 Hibernate가 INNER JOIN으로 컴파일해, OR로 묶은
-    // 다른 분기가 매치돼야 할 담당자 없는 이슈까지 통째로 결과에서 사라지게 만든다.
+    // userId가 null이면 이 두 분기는 자연히 무효화된다). EXISTS avoids multiplying issue rows.
     // JPQL/Criteria 대신 네이티브 쿼리를 쓰는 이유: Hibernate 7.2.x(버전 12~24.Final 전부 동일)의
     // PostgreSQL SQL AST 변환기가 LIKE 술어를 `like_escape(pattern, escapechar)` 함수 호출로
     // 합성하는데, 같은 쿼리 안에 LIKE가 2개 이상이면(JPQL/Criteria 무관, OR/AND 무관, ESCAPE
@@ -84,21 +79,17 @@ interface IssueRepository : JpaRepository<Issue, Long>, JpaSpecificationExecutor
     @Query(
         value = """
             SELECT i.* FROM issue i
-            LEFT JOIN assignee a ON a.id = i.assignee_id
-            LEFT JOIN n4user au ON au.id = a.user_id
             WHERE (LOWER(i.title) LIKE LOWER(:keyword) OR LOWER(i.body) LIKE LOWER(:keyword))
               AND (i.project_id IN :projectIds
                    OR (:userId IS NOT NULL AND i.author_id = :userId)
-                   OR (:userId IS NOT NULL AND au.id = :userId))
+                   OR EXISTS (SELECT 1 FROM issue_assignee a WHERE a.issue_id = i.id AND a.user_id = :userId))
         """,
         countQuery = """
             SELECT COUNT(*) FROM issue i
-            LEFT JOIN assignee a ON a.id = i.assignee_id
-            LEFT JOIN n4user au ON au.id = a.user_id
             WHERE (LOWER(i.title) LIKE LOWER(:keyword) OR LOWER(i.body) LIKE LOWER(:keyword))
               AND (i.project_id IN :projectIds
                    OR (:userId IS NOT NULL AND i.author_id = :userId)
-                   OR (:userId IS NOT NULL AND au.id = :userId))
+                   OR EXISTS (SELECT 1 FROM issue_assignee a WHERE a.issue_id = i.id AND a.user_id = :userId))
         """,
         nativeQuery = true
     )
@@ -115,12 +106,10 @@ interface IssueRepository : JpaRepository<Issue, Long>, JpaSpecificationExecutor
     @Query(
         value = """
             SELECT COUNT(*) FROM issue i
-            LEFT JOIN assignee a ON a.id = i.assignee_id
-            LEFT JOIN n4user au ON au.id = a.user_id
             WHERE (LOWER(i.title) LIKE LOWER(:keyword) OR LOWER(i.body) LIKE LOWER(:keyword))
               AND (i.project_id IN :projectIds
                    OR (:userId IS NOT NULL AND i.author_id = :userId)
-                   OR (:userId IS NOT NULL AND au.id = :userId))
+                   OR EXISTS (SELECT 1 FROM issue_assignee a WHERE a.issue_id = i.id AND a.user_id = :userId))
         """,
         nativeQuery = true
     )
@@ -178,14 +167,14 @@ interface IssueRepository : JpaRepository<Issue, Long>, JpaSpecificationExecutor
     @Query(
         value = """
             SELECT i.* FROM issue i
-            JOIN assignee a ON a.id = i.assignee_id
-            WHERE a.user_id = :assigneeId AND i.state = :#{#state.name()}
+            WHERE EXISTS (SELECT 1 FROM issue_assignee a WHERE a.issue_id = i.id AND a.user_id = :assigneeId)
+              AND i.state = :#{#state.name()}
               AND (:keyword IS NULL OR LOWER(i.title) LIKE LOWER(:keyword) OR LOWER(i.body) LIKE LOWER(:keyword))
         """,
         countQuery = """
             SELECT COUNT(*) FROM issue i
-            JOIN assignee a ON a.id = i.assignee_id
-            WHERE a.user_id = :assigneeId AND i.state = :#{#state.name()}
+            WHERE EXISTS (SELECT 1 FROM issue_assignee a WHERE a.issue_id = i.id AND a.user_id = :assigneeId)
+              AND i.state = :#{#state.name()}
               AND (:keyword IS NULL OR LOWER(i.title) LIKE LOWER(:keyword) OR LOWER(i.body) LIKE LOWER(:keyword))
         """,
         nativeQuery = true
@@ -202,7 +191,7 @@ interface IssueRepository : JpaRepository<Issue, Long>, JpaSpecificationExecutor
 
     @Query("""
         SELECT COUNT(i) FROM Issue i 
-        WHERE i.assignee.user.id = :assigneeId 
+        WHERE EXISTS (SELECT a.id FROM i.assignees a WHERE a.id = :assigneeId)
           AND i.state = :state
     """)
     fun countByAssigneeAndState(

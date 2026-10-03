@@ -44,8 +44,9 @@ class NotificationMessageResolver(
                 else msg("notification.issue.reopened", locale)
 
             EventType.ISSUE_ASSIGNEE_CHANGED ->
-                if (newValue.isNullOrBlank()) msg("notification.issue.unassigned", locale)
-                else msg("notification.issue.assigned", locale, newValue)
+                if (!newValue.isNullOrBlank()) msg("notification.issue.assigned", locale, newValue)
+                else if (!oldValue.isNullOrBlank()) msg("notification.issue.assignee.removed", locale, oldValue)
+                else msg("notification.issue.unassigned", locale)
 
             // yona는 마일스톤 ID가 아니라 제목 문자열을 그대로 저장한다(IssueServiceImpl).
             EventType.ISSUE_MILESTONE_CHANGED ->
