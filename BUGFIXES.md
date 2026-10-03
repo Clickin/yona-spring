@@ -1,5 +1,12 @@
 # yona product bug fixes — TDD tracking
 
+## 2026-10-03 — Session-authenticated REST API CSRF
+
+- All `/api/v1/**` mutations carrying an authenticated browser session require CSRF, regardless of token-shaped headers. Stateless PAT/OAuth requests remain delegated to their authentication filters; safe methods remain unchanged.
+- Uses the existing cookie repository and SPA/form token handler. Feature branches no longer maintain competing endpoint allowlists in `ResourceServerConfig`.
+- JDK 21 `SessionApiCsrfSpec` passed. A separate invocation of the compiled CSRF filter rejected a session mutation with a forged bearer header (403), accepted the same mutation with its cookie/header token, and delegated a stateless request to authentication.
+- Initial test compilation exhausted the default Kotlin daemon heap; rerunning with `-Pkotlin.daemon.jvmargs=-Xmx4g` succeeded. No application setting was changed for that build-only limit.
+
 ## 2026-09-27 — CUBRID security column and schema-restart portability
 
 - CUBRID rejects literal `TEXT` and `NOT NULL` LOB columns. Profile-specific Hibernate mappings
