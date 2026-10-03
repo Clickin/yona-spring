@@ -11,7 +11,6 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler
 import org.springframework.security.web.csrf.CsrfTokenRequestHandler
 import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher
-import org.springframework.security.web.util.matcher.OrRequestMatcher
 import org.springframework.security.web.util.matcher.RequestMatcher
 import org.springframework.util.StringUtils
 import java.util.function.Supplier
@@ -30,18 +29,20 @@ val tokenAuthenticatedRequestMatcher = RequestMatcher { request ->
     ApiTokenAuthenticationFilter.extractToken(request) != null
 }
 
-private val pinnedIssueMutationPath = OrRequestMatcher(
-    PathPatternRequestMatcher.pathPattern("/api/v1/projects/{owner}/{project}/issues/{number}/pin"),
-    PathPatternRequestMatcher.pathPattern("/{owner}/{project}/issue/{number}/pin")
-)
-
-// Only the new pin routes change policy. A token-looking header must not exempt an ambient session.
+// The browser pin route uses the catch-all chain, not the API chain.
+private val pinnedIssueMutationPath = PathPatternRequestMatcher.pathPattern("/{owner}/{project}/issue/{number}/pin")
 val pinnedIssueSessionMutationMatcher = RequestMatcher { request ->
-    val context = request.getSession(false)
-        ?.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY) as? SecurityContext
+    pinnedIssueMutationPath.matches(request) && sessionApiMutationMatcher.matches(request)
+}
+
+// Apply within the /api/v1 filter chain. Token-shaped headers cannot exempt
+// requests carrying an authenticated browser session.
+val sessionApiMutationMatcher = RequestMatcher { request ->
+    val context = request.getSession(false)?.getAttribute(
+        HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY
+    ) as? SecurityContext
     val authentication = context?.authentication
     CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request) &&
-        pinnedIssueMutationPath.matches(request) &&
         authentication?.isAuthenticated == true && authentication !is AnonymousAuthenticationToken
 }
 

@@ -2,7 +2,7 @@ package com.github.yonaprojects.yona.config.oauth2server
 
 import com.github.yonaprojects.yona.config.ApiTokenAuthenticationFilter
 import com.github.yonaprojects.yona.config.SpaCsrfTokenRequestHandler
-import com.github.yonaprojects.yona.config.pinnedIssueSessionMutationMatcher
+import com.github.yonaprojects.yona.config.sessionApiMutationMatcher
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -121,7 +121,7 @@ class ResourceServerConfig(
             .csrf { csrf ->
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(SpaCsrfTokenRequestHandler())
-                    .requireCsrfProtectionMatcher(pinnedIssueSessionMutationMatcher)
+                    .requireCsrfProtectionMatcher(sessionApiMutationMatcher)
             }
             .authorizeHttpRequests { authorize ->
                 authorize
