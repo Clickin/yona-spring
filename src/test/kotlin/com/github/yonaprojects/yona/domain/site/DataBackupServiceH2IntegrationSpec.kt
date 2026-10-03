@@ -113,14 +113,10 @@ class DataBackupServiceH2IntegrationSpec @Autowired constructor(
                 val issue = issueRepository.saveAndFlush(
                     Issue(project = project, number = 1L, title = "Both assignees", assignees = mutableSetOf(first, second))
                 )
-                val backup = dataBackupService.exportAll()
-                val tables = objectMapper.readTree(backup).get("tables")
-                val assignments = tables.get("ISSUE_ASSIGNEE")
-                assignments.filter { it.get("ISSUE_ID").asLong() == issue.id }.map { it.get("USER_ID").asLong() }.toSet() shouldBe
-                    setOf(first.id, second.id)
+                val backup = DataBackupArchiveTestSupport.exportSiteToBytes(dataBackupService)
 
                 jdbc.update("DELETE FROM issue_assignee WHERE issue_id = ?", issue.id)
-                dataBackupService.importAll(backup)
+                DataBackupArchiveTestSupport.importSiteBytes(dataBackupService, backup)
 
                 jdbc.queryForList("SELECT user_id FROM issue_assignee WHERE issue_id = ?", Long::class.java, issue.id).toSet() shouldBe
                     setOf(first.id, second.id)

@@ -70,7 +70,7 @@ class IssueSearchServiceSpec @Autowired constructor(
             val first = issues.save(Issue(
                 title = "[Bug][UI] 로그인 오류", body = "첫 번째", project = project, number = 1,
                 authorId = author.id, authorLoginId = author.loginId,
-                assignee = Assignee(user = assignee, project = project), milestone = milestone,
+                assignees = mutableSetOf(assignee), milestone = milestone,
                 dueDate = Instant.parse("2026-01-01T00:00:00Z"), labels = mutableSetOf(label)
             ))
             val second = issues.save(Issue(title = "재현 기록", project = project, number = 2,
@@ -309,7 +309,7 @@ class IssueSearchServiceSpec @Autowired constructor(
             } }
             for (project in projects) {
                 val issue = Issue(title = "aclneedle", project = project, number = 1, authorId = users[3].id,
-                    assignee = Assignee(user = users[4], project = project))
+                    assignees = mutableSetOf(users[4]))
                 em.persist(issue)
                 em.persist(IssueSharer(loginId = users[5].loginId, user = users[5], issue = issue))
                 em.persist(IssueSharer(loginId = users[9].loginId, user = users[9], issue = issue))
