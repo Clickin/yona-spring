@@ -1,0 +1,6605 @@
+{
+  "h2": {
+    "tests": 507,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "measuredAt": "2026-10-03",
+  "note": "Aggregates only. Query text and per-case results are excluded.",
+  "environment": {
+    "database": "MariaDB 10.11",
+    "collation": "utf8mb4_unicode_ci",
+    "java": "21.0.6",
+    "heap": "1g",
+    "freshDatabasePerRun": true,
+    "timing": "One warmup, median of three first-page service calls, no HTTP/rendering"
+  },
+  "executionOrder": [
+    "baseline-843",
+    "stage1-843",
+    "proximity-a-843",
+    "proximity-b-843",
+    "proximity-b-844",
+    "baseline-844",
+    "stage3-843"
+  ],
+  "configurations": {
+    "baseline-843": {
+      "source": "1a85fc396",
+      "decision": "baseline"
+    },
+    "stage1-843": {
+      "source": "9644755c3",
+      "decision": "reverted",
+      "reason": "overall MRR and recallAt5 decreased"
+    },
+    "proximity-a-843": {
+      "source": "1a85fc396 + proximity",
+      "exactBoost": 3,
+      "nearSlop": 4,
+      "nearBoost": 1,
+      "decision": "not selected"
+    },
+    "proximity-b-843": {
+      "source": "1a85fc396 + proximity",
+      "exactBoost": 5,
+      "nearSlop": 3,
+      "nearBoost": 1,
+      "decision": "selected"
+    },
+    "proximity-b-844": {
+      "source": "1a85fc396 + proximity",
+      "exactBoost": 5,
+      "nearSlop": 3,
+      "nearBoost": 1,
+      "decision": "holdout validation"
+    },
+    "baseline-844": {
+      "source": "1a85fc396",
+      "decision": "holdout baseline"
+    },
+    "stage3-843": {
+      "source": "selected proximity + identifier boundaries; stage 1 reverted",
+      "indexVersion": 3,
+      "decision": "retained"
+    }
+  },
+  "runs": {
+    "baseline-843": {
+      "database": "mariadb",
+      "java": "21.0.6",
+      "seed": 843,
+      "sampledIssues": 300,
+      "user": "siteAdmin",
+      "issues": 4882,
+      "comments": 6335,
+      "identifierSampling": {
+        "identifierCamelSuffix": {
+          "eligibleIssues": 347,
+          "sampledIssues": 300
+        },
+        "identifierCamelPrefix": {
+          "eligibleIssues": 338,
+          "sampledIssues": 300
+        },
+        "identifierDotFinal": {
+          "eligibleIssues": 1138,
+          "sampledIssues": 300
+        },
+        "identifierSnakePart": {
+          "eligibleIssues": 848,
+          "sampledIssues": 300
+        },
+        "identifierKebabPart": {
+          "eligibleIssues": 398,
+          "sampledIssues": 300
+        },
+        "identifierSlashPart": {
+          "eligibleIssues": 140,
+          "sampledIssues": 140
+        }
+      },
+      "indexBytes": 8375012,
+      "exact": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 13,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.76,
+          "recallAt10": 0.81,
+          "recallAt20": 0.8666666666666667,
+          "mrr": 0.6618717512844474,
+          "hitsP50": 2.0,
+          "hitsP90": 175.0,
+          "pageP50Ms": 27.266958,
+          "pageP95Ms": 54.597541
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6033333333333334,
+          "recallAt10": 0.66,
+          "recallAt20": 0.7366666666666667,
+          "mrr": 0.4949472947183678,
+          "hitsP50": 5.0,
+          "hitsP90": 1380.0,
+          "pageP50Ms": 40.170458,
+          "pageP95Ms": 80.87875
+        },
+        "lucene": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.49,
+          "recallAt20": 0.5866666666666667,
+          "mrr": 0.3413290961160457,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 3.799333,
+          "pageP95Ms": 28.16075
+        },
+        "luceneDate": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.33,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5133333333333333,
+          "mrr": 0.2381482457926504,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 6.463833,
+          "pageP95Ms": 32.650542
+        }
+      },
+      "separated": {
+        "cases": 288,
+        "luceneOnly": 278,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.115208,
+          "pageP95Ms": 27.553208
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6701388888888888,
+          "recallAt10": 0.7395833333333334,
+          "recallAt20": 0.8194444444444444,
+          "mrr": 0.5582436212373261,
+          "hitsP50": 3.0,
+          "hitsP90": 158.0,
+          "pageP50Ms": 40.021625,
+          "pageP95Ms": 81.360542
+        },
+        "lucene": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.5,
+          "recallAt10": 0.5833333333333334,
+          "recallAt20": 0.6736111111111112,
+          "mrr": 0.39859070044353406,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 3.295542,
+          "pageP95Ms": 9.619875
+        },
+        "luceneDate": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.3923611111111111,
+          "recallAt10": 0.4652777777777778,
+          "recallAt20": 0.5798611111111112,
+          "mrr": 0.2881218316904154,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 5.834084,
+          "pageP95Ms": 13.499333
+        }
+      },
+      "reordered": {
+        "cases": 300,
+        "luceneOnly": 281,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.16325,
+          "pageP95Ms": 27.627459
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5733333333333334,
+          "recallAt10": 0.6433333333333333,
+          "recallAt20": 0.7133333333333334,
+          "mrr": 0.4778940860681902,
+          "hitsP50": 7.0,
+          "hitsP90": 1644.0,
+          "pageP50Ms": 40.506542,
+          "pageP95Ms": 80.968042
+        },
+        "lucene": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.38333333333333336,
+          "recallAt10": 0.48333333333333334,
+          "recallAt20": 0.5866666666666667,
+          "mrr": 0.2824148621682644,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 3.851875,
+          "pageP95Ms": 30.651834
+        },
+        "luceneDate": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.27,
+          "recallAt10": 0.37,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.20667320040451295,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 6.243375,
+          "pageP95Ms": 35.578125
+        }
+      },
+      "inflected": {
+        "cases": 165,
+        "luceneOnly": 161,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.119083,
+          "pageP95Ms": 27.8245
+        },
+        "likeAnd": {
+          "recall": 0.012121212121212121,
+          "recallAt5": 0.012121212121212121,
+          "recallAt10": 0.012121212121212121,
+          "recallAt20": 0.012121212121212121,
+          "mrr": 0.012121212121212121,
+          "hitsP50": 0.0,
+          "hitsP90": 9.0,
+          "pageP50Ms": 39.809791,
+          "pageP95Ms": 42.553333
+        },
+        "lucene": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.30303030303030304,
+          "recallAt10": 0.4121212121212121,
+          "recallAt20": 0.509090909090909,
+          "mrr": 0.23483542103787142,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 4.59925,
+          "pageP95Ms": 12.885875
+        },
+        "luceneDate": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.24242424242424243,
+          "recallAt10": 0.32727272727272727,
+          "recallAt20": 0.4121212121212121,
+          "mrr": 0.19024747784084386,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 7.420833,
+          "pageP95Ms": 15.7465
+        }
+      },
+      "particle": {
+        "cases": 187,
+        "luceneOnly": 181,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.091417,
+          "pageP95Ms": 27.41325
+        },
+        "likeAnd": {
+          "recall": 0.08021390374331551,
+          "recallAt5": 0.06417112299465241,
+          "recallAt10": 0.06951871657754011,
+          "recallAt20": 0.06951871657754011,
+          "mrr": 0.053872990637696516,
+          "hitsP50": 0.0,
+          "hitsP90": 10.0,
+          "pageP50Ms": 39.9465,
+          "pageP95Ms": 41.999708
+        },
+        "lucene": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.5026737967914439,
+          "recallAt10": 0.5882352941176471,
+          "recallAt20": 0.7219251336898396,
+          "mrr": 0.4052421777283181,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 3.0675,
+          "pageP95Ms": 9.933792
+        },
+        "luceneDate": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.3582887700534759,
+          "recallAt10": 0.45989304812834225,
+          "recallAt20": 0.5775401069518716,
+          "mrr": 0.28065187887179865,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 5.059875,
+          "pageP95Ms": 13.982375
+        }
+      },
+      "joined": {
+        "cases": 300,
+        "luceneOnly": 279,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.18,
+          "pageP95Ms": 54.035459
+        },
+        "likeAnd": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.109041,
+          "pageP95Ms": 54.199375
+        },
+        "lucene": {
+          "recall": 0.93,
+          "recallAt5": 0.31666666666666665,
+          "recallAt10": 0.41,
+          "recallAt20": 0.5033333333333333,
+          "mrr": 0.2433762547660191,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 4.021958,
+          "pageP95Ms": 30.66325
+        },
+        "luceneDate": {
+          "recall": 0.93,
+          "recallAt5": 0.23,
+          "recallAt10": 0.33,
+          "recallAt20": 0.41,
+          "mrr": 0.16809461682663177,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 6.642333,
+          "pageP95Ms": 35.823458
+        }
+      },
+      "identifierSplit": {
+        "cases": 183,
+        "luceneOnly": 183,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.873166,
+          "pageP95Ms": 29.206667
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.7759562841530054,
+          "recallAt10": 0.8032786885245902,
+          "recallAt20": 0.8524590163934426,
+          "mrr": 0.555776475477817,
+          "hitsP50": 3.0,
+          "hitsP90": 55.0,
+          "pageP50Ms": 43.832125,
+          "pageP95Ms": 86.921375
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.9726775956284153,
+          "recallAt10": 0.9836065573770492,
+          "recallAt20": 0.9890710382513661,
+          "mrr": 0.8523030577703338,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.404583,
+          "pageP95Ms": 5.722542
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.912568306010929,
+          "recallAt10": 0.9562841530054644,
+          "recallAt20": 0.9781420765027322,
+          "mrr": 0.7651398939484201,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.162291,
+          "pageP95Ms": 7.105292
+        }
+      },
+      "identifierPart": {
+        "cases": 8,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 28.858667,
+          "pageP95Ms": 29.804625
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 29.028417,
+          "pageP95Ms": 29.919208
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 0.875,
+          "recallAt20": 1.0,
+          "mrr": 0.8203125,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 1.056417,
+          "pageP95Ms": 8.031458
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 0.882584,
+          "pageP95Ms": 7.68525
+        }
+      },
+      "missing": {
+        "cases": 20,
+        "like": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.046584,
+          "pageP95Ms": 27.177708
+        },
+        "likeAnd": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.0345,
+          "pageP95Ms": 27.192375
+        },
+        "lucene": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.272916,
+          "pageP95Ms": 0.311
+        },
+        "luceneDate": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.26725,
+          "pageP95Ms": 0.30625
+        }
+      },
+      "identifierCamelSuffix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 41,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.83275,
+          "pageP95Ms": 58.998417
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.771666,
+          "pageP95Ms": 58.906125
+        },
+        "lucene": {
+          "recall": 0.8633333333333333,
+          "recallAt5": 0.4766666666666667,
+          "recallAt10": 0.5766666666666667,
+          "recallAt20": 0.66,
+          "mrr": 0.37883792387971854,
+          "hitsP50": 7.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 2.042167,
+          "pageP95Ms": 17.525417
+        },
+        "luceneDate": {
+          "recall": 0.8633333333333333,
+          "recallAt5": 0.4766666666666667,
+          "recallAt10": 0.58,
+          "recallAt20": 0.6666666666666666,
+          "mrr": 0.38982978066624807,
+          "hitsP50": 7.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 1.761042,
+          "pageP95Ms": 19.389208
+        }
+      },
+      "identifierCamelPrefix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 16,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.575583,
+          "pageP95Ms": 56.719
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.498,
+          "pageP95Ms": 56.512916
+        },
+        "lucene": {
+          "recall": 0.9466666666666667,
+          "recallAt5": 0.5933333333333334,
+          "recallAt10": 0.66,
+          "recallAt20": 0.7033333333333334,
+          "mrr": 0.46406850820787676,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.713625,
+          "pageP95Ms": 17.533959
+        },
+        "luceneDate": {
+          "recall": 0.9466666666666667,
+          "recallAt5": 0.5733333333333334,
+          "recallAt10": 0.64,
+          "recallAt20": 0.71,
+          "mrr": 0.4824501580310575,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.434167,
+          "pageP95Ms": 13.458334
+        }
+      },
+      "identifierDotFinal": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.585375,
+          "pageP95Ms": 57.640791
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.452083,
+          "pageP95Ms": 57.484208
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.4666666666666667,
+          "recallAt10": 0.58,
+          "recallAt20": 0.7066666666666667,
+          "mrr": 0.3514900188215887,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 8.032666,
+          "pageP95Ms": 19.861375
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.37666666666666665,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.57,
+          "mrr": 0.259841223797012,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 11.720459,
+          "pageP95Ms": 24.5505
+        }
+      },
+      "identifierSnakePart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.515833,
+          "pageP95Ms": 57.658416
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.524041,
+          "pageP95Ms": 57.561333
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.41,
+          "recallAt10": 0.49666666666666665,
+          "recallAt20": 0.59,
+          "mrr": 0.3249351827679534,
+          "hitsP50": 49.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 8.586125,
+          "pageP95Ms": 16.587375
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.34,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.5933333333333334,
+          "mrr": 0.27470789099823234,
+          "hitsP50": 49.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 11.551208,
+          "pageP95Ms": 20.446917
+        }
+      },
+      "identifierKebabPart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 38.34925,
+          "pageP95Ms": 57.741291
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 38.555667,
+          "pageP95Ms": 57.726166
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.4666666666666667,
+          "recallAt10": 0.5966666666666667,
+          "recallAt20": 0.7033333333333334,
+          "mrr": 0.3287437564027008,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 5.19225,
+          "pageP95Ms": 13.675667
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.43,
+          "recallAt10": 0.5266666666666666,
+          "recallAt20": 0.6266666666666667,
+          "mrr": 0.2973305431682433,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 7.179916,
+          "pageP95Ms": 18.715959
+        }
+      },
+      "identifierSlashPart": {
+        "cases": 140,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.292917,
+          "pageP95Ms": 57.217291
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.192542,
+          "pageP95Ms": 57.051166
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.5642857142857143,
+          "recallAt10": 0.6571428571428571,
+          "recallAt20": 0.7928571428571428,
+          "mrr": 0.4347734407488247,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 4.753083,
+          "pageP95Ms": 13.780459
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.5214285714285715,
+          "recallAt10": 0.6214285714285714,
+          "recallAt20": 0.7214285714285714,
+          "mrr": 0.42061961716717655,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 6.760875,
+          "pageP95Ms": 18.280333
+        }
+      },
+      "all": {
+        "cases": 3371,
+        "luceneOnly": 1363,
+        "likeOnly": 70,
+        "like": {
+          "recall": 0.5778700682290122,
+          "recallAt5": 0.26579649955502815,
+          "recallAt10": 0.30525066745772766,
+          "recallAt20": 0.3530109759715218,
+          "mrr": 0.218165633021801,
+          "hitsP50": 1.0,
+          "hitsP90": 341.0,
+          "pageP50Ms": 27.955916,
+          "pageP95Ms": 56.8935
+        },
+        "likeAnd": {
+          "recall": 0.8116285968555325,
+          "recallAt5": 0.40640759418570155,
+          "recallAt10": 0.46039750815781666,
+          "recallAt20": 0.525660041530703,
+          "mrr": 0.32728648618960643,
+          "hitsP50": 6.0,
+          "hitsP90": 563.0,
+          "pageP50Ms": 39.919875,
+          "pageP95Ms": 78.59
+        },
+        "lucene": {
+          "recall": 0.9614357757342035,
+          "recallAt5": 0.47878967665381195,
+          "recallAt10": 0.5674873924651439,
+          "recallAt20": 0.6600415307030555,
+          "mrr": 0.37593686610798965,
+          "hitsP50": 21.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 4.005542,
+          "pageP95Ms": 16.540375
+        },
+        "luceneDate": {
+          "recall": 0.9614357757342035,
+          "recallAt5": 0.4078908335805399,
+          "recallAt10": 0.49747849302877484,
+          "recallAt20": 0.5953722930881045,
+          "mrr": 0.31681785189322376,
+          "hitsP50": 21.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 5.73675,
+          "pageP95Ms": 20.325834
+        }
+      },
+      "legacyAll": {
+        "cases": 1731,
+        "luceneOnly": 1363,
+        "likeOnly": 13,
+        "like": {
+          "recall": 0.1779318313113807,
+          "recallAt5": 0.13575967648757944,
+          "recallAt10": 0.14500288850375506,
+          "recallAt20": 0.15482380127094164,
+          "mrr": 0.11881723656640403,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 27.194833,
+          "pageP95Ms": 32.462167
+        },
+        "likeAnd": {
+          "recall": 0.63316002310803,
+          "recallAt5": 0.4095898324667822,
+          "recallAt10": 0.44714038128249567,
+          "recallAt20": 0.49104563835932985,
+          "mrr": 0.33132237580884905,
+          "hitsP50": 2.0,
+          "hitsP90": 148.0,
+          "pageP50Ms": 39.980958,
+          "pageP95Ms": 80.87875
+        },
+        "lucene": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.4685153090699018,
+          "recallAt10": 0.5476603119584056,
+          "recallAt20": 0.6383593298671288,
+          "mrr": 0.3766564280307624,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 3.43125,
+          "pageP95Ms": 15.793417
+        },
+        "luceneDate": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.37146158290005776,
+          "recallAt10": 0.45753899480069327,
+          "recallAt20": 0.5522819179664934,
+          "mrr": 0.28761314461606824,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 5.644958,
+          "pageP95Ms": 19.42725
+        }
+      },
+      "identifierAll": {
+        "cases": 1640,
+        "luceneOnly": 0,
+        "likeOnly": 57,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 36.850417,
+          "pageP95Ms": 57.748958
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 36.754542,
+          "pageP95Ms": 57.699542
+        },
+        "lucene": {
+          "recall": 0.9652439024390244,
+          "recallAt5": 0.4896341463414634,
+          "recallAt10": 0.5884146341463414,
+          "recallAt20": 0.6829268292682927,
+          "mrr": 0.3751773772736494,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 5.099416,
+          "pageP95Ms": 17.457208
+        },
+        "luceneDate": {
+          "recall": 0.9652439024390244,
+          "recallAt5": 0.44634146341463415,
+          "recallAt10": 0.5396341463414634,
+          "recallAt20": 0.6408536585365854,
+          "mrr": 0.34764306426929314,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 6.016584,
+          "pageP95Ms": 20.578541
+        }
+      }
+    },
+    "stage1-843": {
+      "database": "mariadb",
+      "java": "21.0.6",
+      "seed": 843,
+      "sampledIssues": 300,
+      "user": "siteAdmin",
+      "issues": 4882,
+      "comments": 6335,
+      "identifierSampling": {
+        "identifierCamelSuffix": {
+          "eligibleIssues": 347,
+          "sampledIssues": 300
+        },
+        "identifierCamelPrefix": {
+          "eligibleIssues": 338,
+          "sampledIssues": 300
+        },
+        "identifierDotFinal": {
+          "eligibleIssues": 1138,
+          "sampledIssues": 300
+        },
+        "identifierSnakePart": {
+          "eligibleIssues": 848,
+          "sampledIssues": 300
+        },
+        "identifierKebabPart": {
+          "eligibleIssues": 398,
+          "sampledIssues": 300
+        },
+        "identifierSlashPart": {
+          "eligibleIssues": 140,
+          "sampledIssues": 140
+        }
+      },
+      "indexBytes": 8375012,
+      "exact": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 13,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.76,
+          "recallAt10": 0.81,
+          "recallAt20": 0.8666666666666667,
+          "mrr": 0.6618717512844474,
+          "hitsP50": 2.0,
+          "hitsP90": 175.0,
+          "pageP50Ms": 27.151667,
+          "pageP95Ms": 54.326834
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6033333333333334,
+          "recallAt10": 0.66,
+          "recallAt20": 0.7366666666666667,
+          "mrr": 0.4949472947183678,
+          "hitsP50": 5.0,
+          "hitsP90": 1380.0,
+          "pageP50Ms": 39.94975,
+          "pageP95Ms": 80.268625
+        },
+        "lucene": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.49,
+          "recallAt20": 0.5866666666666667,
+          "mrr": 0.3413290961160457,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 3.799166,
+          "pageP95Ms": 29.122458
+        },
+        "luceneDate": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.33,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5133333333333333,
+          "mrr": 0.2381482457926504,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 6.615959,
+          "pageP95Ms": 34.126
+        }
+      },
+      "separated": {
+        "cases": 288,
+        "luceneOnly": 278,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.016083,
+          "pageP95Ms": 27.442041
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6701388888888888,
+          "recallAt10": 0.7395833333333334,
+          "recallAt20": 0.8194444444444444,
+          "mrr": 0.5582436212373261,
+          "hitsP50": 3.0,
+          "hitsP90": 158.0,
+          "pageP50Ms": 39.895708,
+          "pageP95Ms": 80.965125
+        },
+        "lucene": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.5,
+          "recallAt10": 0.5833333333333334,
+          "recallAt20": 0.6736111111111112,
+          "mrr": 0.39859070044353406,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 3.333167,
+          "pageP95Ms": 9.692625
+        },
+        "luceneDate": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.3923611111111111,
+          "recallAt10": 0.4652777777777778,
+          "recallAt20": 0.5798611111111112,
+          "mrr": 0.2881218316904154,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 5.808583,
+          "pageP95Ms": 13.794208
+        }
+      },
+      "reordered": {
+        "cases": 300,
+        "luceneOnly": 281,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.040791,
+          "pageP95Ms": 27.473334
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5733333333333334,
+          "recallAt10": 0.6433333333333333,
+          "recallAt20": 0.7133333333333334,
+          "mrr": 0.4778940860681902,
+          "hitsP50": 7.0,
+          "hitsP90": 1644.0,
+          "pageP50Ms": 40.414584,
+          "pageP95Ms": 80.811458
+        },
+        "lucene": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.38333333333333336,
+          "recallAt10": 0.48333333333333334,
+          "recallAt20": 0.5866666666666667,
+          "mrr": 0.2824148621682644,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 3.856625,
+          "pageP95Ms": 31.622542
+        },
+        "luceneDate": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.27,
+          "recallAt10": 0.37,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.20667320040451295,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 6.387625,
+          "pageP95Ms": 36.727042
+        }
+      },
+      "inflected": {
+        "cases": 165,
+        "luceneOnly": 161,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.039708,
+          "pageP95Ms": 27.649666
+        },
+        "likeAnd": {
+          "recall": 0.012121212121212121,
+          "recallAt5": 0.012121212121212121,
+          "recallAt10": 0.012121212121212121,
+          "recallAt20": 0.012121212121212121,
+          "mrr": 0.012121212121212121,
+          "hitsP50": 0.0,
+          "hitsP90": 9.0,
+          "pageP50Ms": 39.684167,
+          "pageP95Ms": 42.426083
+        },
+        "lucene": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.30303030303030304,
+          "recallAt10": 0.4121212121212121,
+          "recallAt20": 0.509090909090909,
+          "mrr": 0.23483542103787142,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 4.573625,
+          "pageP95Ms": 13.288291
+        },
+        "luceneDate": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.24242424242424243,
+          "recallAt10": 0.32727272727272727,
+          "recallAt20": 0.4121212121212121,
+          "mrr": 0.19024747784084386,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 7.415334,
+          "pageP95Ms": 16.131625
+        }
+      },
+      "particle": {
+        "cases": 187,
+        "luceneOnly": 181,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.010125,
+          "pageP95Ms": 27.394458
+        },
+        "likeAnd": {
+          "recall": 0.08021390374331551,
+          "recallAt5": 0.06417112299465241,
+          "recallAt10": 0.06951871657754011,
+          "recallAt20": 0.06951871657754011,
+          "mrr": 0.053872990637696516,
+          "hitsP50": 0.0,
+          "hitsP90": 10.0,
+          "pageP50Ms": 39.795916,
+          "pageP95Ms": 41.614958
+        },
+        "lucene": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.5026737967914439,
+          "recallAt10": 0.5882352941176471,
+          "recallAt20": 0.7219251336898396,
+          "mrr": 0.4052421777283181,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 3.121292,
+          "pageP95Ms": 10.013625
+        },
+        "luceneDate": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.3582887700534759,
+          "recallAt10": 0.45989304812834225,
+          "recallAt20": 0.5775401069518716,
+          "mrr": 0.28065187887179865,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 5.202,
+          "pageP95Ms": 14.622416
+        }
+      },
+      "joined": {
+        "cases": 300,
+        "luceneOnly": 279,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.075708,
+          "pageP95Ms": 53.783791
+        },
+        "likeAnd": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.007417,
+          "pageP95Ms": 53.799083
+        },
+        "lucene": {
+          "recall": 0.93,
+          "recallAt5": 0.31666666666666665,
+          "recallAt10": 0.41,
+          "recallAt20": 0.5033333333333333,
+          "mrr": 0.2433762547660191,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 4.167792,
+          "pageP95Ms": 31.616208
+        },
+        "luceneDate": {
+          "recall": 0.93,
+          "recallAt5": 0.23,
+          "recallAt10": 0.33,
+          "recallAt20": 0.41,
+          "mrr": 0.16809461682663177,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 6.660792,
+          "pageP95Ms": 36.816208
+        }
+      },
+      "identifierSplit": {
+        "cases": 183,
+        "luceneOnly": 183,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.822708,
+          "pageP95Ms": 28.855709
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.7759562841530054,
+          "recallAt10": 0.8032786885245902,
+          "recallAt20": 0.8524590163934426,
+          "mrr": 0.555776475477817,
+          "hitsP50": 3.0,
+          "hitsP90": 55.0,
+          "pageP50Ms": 43.671333,
+          "pageP95Ms": 86.806917
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.9726775956284153,
+          "recallAt10": 0.9836065573770492,
+          "recallAt20": 0.9890710382513661,
+          "mrr": 0.8523030577703338,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.34675,
+          "pageP95Ms": 5.845333
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.912568306010929,
+          "recallAt10": 0.9562841530054644,
+          "recallAt20": 0.9781420765027322,
+          "mrr": 0.7651398939484201,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.119083,
+          "pageP95Ms": 7.004625
+        }
+      },
+      "identifierPart": {
+        "cases": 8,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 28.744958,
+          "pageP95Ms": 29.8675
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 28.709791,
+          "pageP95Ms": 29.801167
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 0.875,
+          "recallAt20": 1.0,
+          "mrr": 0.8203125,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 1.109375,
+          "pageP95Ms": 7.799583
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 0.908041,
+          "pageP95Ms": 7.428583
+        }
+      },
+      "missing": {
+        "cases": 20,
+        "like": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 26.983083,
+          "pageP95Ms": 27.063083
+        },
+        "likeAnd": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 26.947583,
+          "pageP95Ms": 27.089916
+        },
+        "lucene": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.278666,
+          "pageP95Ms": 0.328208
+        },
+        "luceneDate": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.27575,
+          "pageP95Ms": 0.318292
+        }
+      },
+      "identifierCamelSuffix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 41,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.412709,
+          "pageP95Ms": 58.409667
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.414375,
+          "pageP95Ms": 58.383042
+        },
+        "lucene": {
+          "recall": 0.8633333333333333,
+          "recallAt5": 0.4666666666666667,
+          "recallAt10": 0.5866666666666667,
+          "recallAt20": 0.67,
+          "mrr": 0.3777294596796989,
+          "hitsP50": 7.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 2.043833,
+          "pageP95Ms": 17.634583
+        },
+        "luceneDate": {
+          "recall": 0.8633333333333333,
+          "recallAt5": 0.4766666666666667,
+          "recallAt10": 0.58,
+          "recallAt20": 0.6666666666666666,
+          "mrr": 0.38982978066624807,
+          "hitsP50": 7.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 1.764417,
+          "pageP95Ms": 19.967292
+        }
+      },
+      "identifierCamelPrefix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 16,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.443917,
+          "pageP95Ms": 56.354125
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.421,
+          "pageP95Ms": 56.173791
+        },
+        "lucene": {
+          "recall": 0.9466666666666667,
+          "recallAt5": 0.5866666666666667,
+          "recallAt10": 0.66,
+          "recallAt20": 0.7066666666666667,
+          "mrr": 0.46377544334500204,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.599125,
+          "pageP95Ms": 17.932292
+        },
+        "luceneDate": {
+          "recall": 0.9466666666666667,
+          "recallAt5": 0.5733333333333334,
+          "recallAt10": 0.64,
+          "recallAt20": 0.71,
+          "mrr": 0.4824501580310575,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.378167,
+          "pageP95Ms": 13.67525
+        }
+      },
+      "identifierDotFinal": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.10775,
+          "pageP95Ms": 56.951542
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.1365,
+          "pageP95Ms": 56.9435
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.4666666666666667,
+          "recallAt10": 0.58,
+          "recallAt20": 0.7066666666666667,
+          "mrr": 0.3514900188215887,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 8.151583,
+          "pageP95Ms": 20.384625
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.37666666666666665,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.57,
+          "mrr": 0.259841223797012,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 11.884917,
+          "pageP95Ms": 24.631583
+        }
+      },
+      "identifierSnakePart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.243667,
+          "pageP95Ms": 57.2515
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.116833,
+          "pageP95Ms": 57.2175
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.41,
+          "recallAt10": 0.49666666666666665,
+          "recallAt20": 0.59,
+          "mrr": 0.3249351827679534,
+          "hitsP50": 49.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 8.695125,
+          "pageP95Ms": 16.788875
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.34,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.5933333333333334,
+          "mrr": 0.27470789099823234,
+          "hitsP50": 49.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 11.734917,
+          "pageP95Ms": 20.806709
+        }
+      },
+      "identifierKebabPart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 38.274625,
+          "pageP95Ms": 57.524916
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 38.425208,
+          "pageP95Ms": 57.28175
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.4666666666666667,
+          "recallAt10": 0.5966666666666667,
+          "recallAt20": 0.7033333333333334,
+          "mrr": 0.3287437564027008,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 5.364583,
+          "pageP95Ms": 13.867708
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.43,
+          "recallAt10": 0.5266666666666666,
+          "recallAt20": 0.6266666666666667,
+          "mrr": 0.2973305431682433,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 7.238083,
+          "pageP95Ms": 19.138
+        }
+      },
+      "identifierSlashPart": {
+        "cases": 140,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.398208,
+          "pageP95Ms": 56.961625
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.223167,
+          "pageP95Ms": 56.888583
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.5642857142857143,
+          "recallAt10": 0.6571428571428571,
+          "recallAt20": 0.7928571428571428,
+          "mrr": 0.4347734407488247,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 4.584583,
+          "pageP95Ms": 14.162
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.5214285714285715,
+          "recallAt10": 0.6214285714285714,
+          "recallAt20": 0.7214285714285714,
+          "mrr": 0.42061961716717655,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 7.041709,
+          "pageP95Ms": 18.530834
+        }
+      },
+      "all": {
+        "cases": 3371,
+        "luceneOnly": 1363,
+        "likeOnly": 70,
+        "like": {
+          "recall": 0.5778700682290122,
+          "recallAt5": 0.26579649955502815,
+          "recallAt10": 0.30525066745772766,
+          "recallAt20": 0.3530109759715218,
+          "mrr": 0.218165633021801,
+          "hitsP50": 1.0,
+          "hitsP90": 341.0,
+          "pageP50Ms": 27.866791,
+          "pageP95Ms": 56.438833
+        },
+        "likeAnd": {
+          "recall": 0.8116285968555325,
+          "recallAt5": 0.40640759418570155,
+          "recallAt10": 0.46039750815781666,
+          "recallAt20": 0.525660041530703,
+          "mrr": 0.32728648618960643,
+          "hitsP50": 6.0,
+          "hitsP90": 563.0,
+          "pageP50Ms": 39.7555,
+          "pageP95Ms": 78.239625
+        },
+        "lucene": {
+          "recall": 0.9614357757342035,
+          "recallAt5": 0.4773064372589736,
+          "recallAt10": 0.5683773361020469,
+          "recallAt20": 0.6612281222189261,
+          "mrr": 0.3758121379208438,
+          "hitsP50": 21.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 4.053917,
+          "pageP95Ms": 16.841875
+        },
+        "luceneDate": {
+          "recall": 0.9614357757342035,
+          "recallAt5": 0.4078908335805399,
+          "recallAt10": 0.49747849302877484,
+          "recallAt20": 0.5953722930881045,
+          "mrr": 0.31681785189322376,
+          "hitsP50": 21.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 5.804917,
+          "pageP95Ms": 20.512625
+        }
+      },
+      "legacyAll": {
+        "cases": 1731,
+        "luceneOnly": 1363,
+        "likeOnly": 13,
+        "like": {
+          "recall": 0.1779318313113807,
+          "recallAt5": 0.13575967648757944,
+          "recallAt10": 0.14500288850375506,
+          "recallAt20": 0.15482380127094164,
+          "mrr": 0.11881723656640403,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 27.094292,
+          "pageP95Ms": 32.309041
+        },
+        "likeAnd": {
+          "recall": 0.63316002310803,
+          "recallAt5": 0.4095898324667822,
+          "recallAt10": 0.44714038128249567,
+          "recallAt20": 0.49104563835932985,
+          "mrr": 0.33132237580884905,
+          "hitsP50": 2.0,
+          "hitsP90": 148.0,
+          "pageP50Ms": 39.837667,
+          "pageP95Ms": 80.477625
+        },
+        "lucene": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.4685153090699018,
+          "recallAt10": 0.5476603119584056,
+          "recallAt20": 0.6383593298671288,
+          "mrr": 0.3766564280307624,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 3.424875,
+          "pageP95Ms": 16.081625
+        },
+        "luceneDate": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.37146158290005776,
+          "recallAt10": 0.45753899480069327,
+          "recallAt20": 0.5522819179664934,
+          "mrr": 0.28761314461606824,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 5.774542,
+          "pageP95Ms": 19.747292
+        }
+      },
+      "identifierAll": {
+        "cases": 1640,
+        "luceneOnly": 0,
+        "likeOnly": 57,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 36.626375,
+          "pageP95Ms": 57.392875
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 36.637833,
+          "pageP95Ms": 57.234375
+        },
+        "lucene": {
+          "recall": 0.9652439024390244,
+          "recallAt5": 0.4865853658536585,
+          "recallAt10": 0.5902439024390244,
+          "recallAt20": 0.6853658536585366,
+          "mrr": 0.374921000006047,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 5.23325,
+          "pageP95Ms": 17.667042
+        },
+        "luceneDate": {
+          "recall": 0.9652439024390244,
+          "recallAt5": 0.44634146341463415,
+          "recallAt10": 0.5396341463414634,
+          "recallAt20": 0.6408536585365854,
+          "mrr": 0.34764306426929314,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 6.05075,
+          "pageP95Ms": 20.936417
+        }
+      }
+    },
+    "proximity-a-843": {
+      "database": "mariadb",
+      "java": "21.0.6",
+      "seed": 843,
+      "sampledIssues": 300,
+      "user": "siteAdmin",
+      "issues": 4882,
+      "comments": 6335,
+      "identifierSampling": {
+        "identifierCamelSuffix": {
+          "eligibleIssues": 347,
+          "sampledIssues": 300
+        },
+        "identifierCamelPrefix": {
+          "eligibleIssues": 338,
+          "sampledIssues": 300
+        },
+        "identifierDotFinal": {
+          "eligibleIssues": 1138,
+          "sampledIssues": 300
+        },
+        "identifierSnakePart": {
+          "eligibleIssues": 848,
+          "sampledIssues": 300
+        },
+        "identifierKebabPart": {
+          "eligibleIssues": 398,
+          "sampledIssues": 300
+        },
+        "identifierSlashPart": {
+          "eligibleIssues": 140,
+          "sampledIssues": 140
+        }
+      },
+      "indexBytes": 8375012,
+      "exact": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 13,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.76,
+          "recallAt10": 0.81,
+          "recallAt20": 0.8666666666666667,
+          "mrr": 0.6618717512844474,
+          "hitsP50": 2.0,
+          "hitsP90": 175.0,
+          "pageP50Ms": 27.2165,
+          "pageP95Ms": 54.473875
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6033333333333334,
+          "recallAt10": 0.66,
+          "recallAt20": 0.7366666666666667,
+          "mrr": 0.4949472947183678,
+          "hitsP50": 5.0,
+          "hitsP90": 1380.0,
+          "pageP50Ms": 39.985958,
+          "pageP95Ms": 80.452083
+        },
+        "lucene": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.5833333333333334,
+          "recallAt10": 0.65,
+          "recallAt20": 0.72,
+          "mrr": 0.4833341024934625,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 4.958833,
+          "pageP95Ms": 36.464333
+        },
+        "luceneDate": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.33,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5133333333333333,
+          "mrr": 0.2381482457926504,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 7.229791,
+          "pageP95Ms": 40.048709
+        }
+      },
+      "separated": {
+        "cases": 288,
+        "luceneOnly": 278,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.095959,
+          "pageP95Ms": 27.500417
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6701388888888888,
+          "recallAt10": 0.7395833333333334,
+          "recallAt20": 0.8194444444444444,
+          "mrr": 0.5582436212373261,
+          "hitsP50": 3.0,
+          "hitsP90": 158.0,
+          "pageP50Ms": 39.996292,
+          "pageP95Ms": 81.15525
+        },
+        "lucene": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.5104166666666666,
+          "recallAt10": 0.5972222222222222,
+          "recallAt20": 0.7013888888888888,
+          "mrr": 0.40949951789423644,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 4.115875,
+          "pageP95Ms": 10.71425
+        },
+        "luceneDate": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.3923611111111111,
+          "recallAt10": 0.4652777777777778,
+          "recallAt20": 0.5798611111111112,
+          "mrr": 0.2881218316904154,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 6.531916,
+          "pageP95Ms": 15.48075
+        }
+      },
+      "reordered": {
+        "cases": 300,
+        "luceneOnly": 281,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.118625,
+          "pageP95Ms": 27.494167
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5733333333333334,
+          "recallAt10": 0.6433333333333333,
+          "recallAt20": 0.7133333333333334,
+          "mrr": 0.4778940860681902,
+          "hitsP50": 7.0,
+          "hitsP90": 1644.0,
+          "pageP50Ms": 40.456125,
+          "pageP95Ms": 81.016667
+        },
+        "lucene": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.42,
+          "recallAt10": 0.5233333333333333,
+          "recallAt20": 0.6166666666666667,
+          "mrr": 0.31414904952444483,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 4.689416,
+          "pageP95Ms": 39.089042
+        },
+        "luceneDate": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.27,
+          "recallAt10": 0.37,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.20667320040451295,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 7.013291,
+          "pageP95Ms": 44.156958
+        }
+      },
+      "inflected": {
+        "cases": 165,
+        "luceneOnly": 161,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.109708,
+          "pageP95Ms": 27.682542
+        },
+        "likeAnd": {
+          "recall": 0.012121212121212121,
+          "recallAt5": 0.012121212121212121,
+          "recallAt10": 0.012121212121212121,
+          "recallAt20": 0.012121212121212121,
+          "mrr": 0.012121212121212121,
+          "hitsP50": 0.0,
+          "hitsP90": 9.0,
+          "pageP50Ms": 39.778417,
+          "pageP95Ms": 41.939125
+        },
+        "lucene": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.5272727272727272,
+          "recallAt10": 0.6242424242424243,
+          "recallAt20": 0.703030303030303,
+          "mrr": 0.4107370654535165,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 5.455292,
+          "pageP95Ms": 13.575125
+        },
+        "luceneDate": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.24242424242424243,
+          "recallAt10": 0.32727272727272727,
+          "recallAt20": 0.4121212121212121,
+          "mrr": 0.19024747784084386,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 8.233041,
+          "pageP95Ms": 17.57225
+        }
+      },
+      "particle": {
+        "cases": 187,
+        "luceneOnly": 181,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.093542,
+          "pageP95Ms": 27.416084
+        },
+        "likeAnd": {
+          "recall": 0.08021390374331551,
+          "recallAt5": 0.06417112299465241,
+          "recallAt10": 0.06951871657754011,
+          "recallAt20": 0.06951871657754011,
+          "mrr": 0.053872990637696516,
+          "hitsP50": 0.0,
+          "hitsP90": 10.0,
+          "pageP50Ms": 39.905125,
+          "pageP95Ms": 41.830083
+        },
+        "lucene": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.7112299465240641,
+          "recallAt10": 0.7593582887700535,
+          "recallAt20": 0.8342245989304813,
+          "mrr": 0.6054481790997707,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 3.987041,
+          "pageP95Ms": 11.639417
+        },
+        "luceneDate": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.3582887700534759,
+          "recallAt10": 0.45989304812834225,
+          "recallAt20": 0.5775401069518716,
+          "mrr": 0.28065187887179865,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 5.708292,
+          "pageP95Ms": 15.904958
+        }
+      },
+      "joined": {
+        "cases": 300,
+        "luceneOnly": 279,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.152417,
+          "pageP95Ms": 54.086708
+        },
+        "likeAnd": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.083084,
+          "pageP95Ms": 53.916042
+        },
+        "lucene": {
+          "recall": 0.93,
+          "recallAt5": 0.49666666666666665,
+          "recallAt10": 0.58,
+          "recallAt20": 0.6266666666666667,
+          "mrr": 0.4066592292094319,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 5.223167,
+          "pageP95Ms": 38.753333
+        },
+        "luceneDate": {
+          "recall": 0.93,
+          "recallAt5": 0.23,
+          "recallAt10": 0.33,
+          "recallAt20": 0.41,
+          "mrr": 0.16809461682663177,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 7.370083,
+          "pageP95Ms": 43.792041
+        }
+      },
+      "identifierSplit": {
+        "cases": 183,
+        "luceneOnly": 183,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.855,
+          "pageP95Ms": 28.993583
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.7759562841530054,
+          "recallAt10": 0.8032786885245902,
+          "recallAt20": 0.8524590163934426,
+          "mrr": 0.555776475477817,
+          "hitsP50": 3.0,
+          "hitsP90": 55.0,
+          "pageP50Ms": 43.704083,
+          "pageP95Ms": 86.952542
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.9890710382513661,
+          "recallAt10": 0.994535519125683,
+          "recallAt20": 0.994535519125683,
+          "mrr": 0.9486197696195388,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.489125,
+          "pageP95Ms": 7.211709
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.912568306010929,
+          "recallAt10": 0.9562841530054644,
+          "recallAt20": 0.9781420765027322,
+          "mrr": 0.7651398939484201,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.264625,
+          "pageP95Ms": 7.565333
+        }
+      },
+      "identifierPart": {
+        "cases": 8,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 29.004708,
+          "pageP95Ms": 29.700542
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 28.620584,
+          "pageP95Ms": 29.666625
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 0.875,
+          "recallAt20": 1.0,
+          "mrr": 0.8203125,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 1.107833,
+          "pageP95Ms": 7.809959
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 0.841125,
+          "pageP95Ms": 7.36325
+        }
+      },
+      "missing": {
+        "cases": 20,
+        "like": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.029625,
+          "pageP95Ms": 27.1705
+        },
+        "likeAnd": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.0005,
+          "pageP95Ms": 27.1335
+        },
+        "lucene": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.304584,
+          "pageP95Ms": 0.351334
+        },
+        "luceneDate": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.292083,
+          "pageP95Ms": 0.335084
+        }
+      },
+      "identifierCamelSuffix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 41,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.51625,
+          "pageP95Ms": 58.565708
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.423375,
+          "pageP95Ms": 58.597
+        },
+        "lucene": {
+          "recall": 0.8633333333333333,
+          "recallAt5": 0.49,
+          "recallAt10": 0.5866666666666667,
+          "recallAt20": 0.6733333333333333,
+          "mrr": 0.38998716480184376,
+          "hitsP50": 7.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 2.037917,
+          "pageP95Ms": 17.602291
+        },
+        "luceneDate": {
+          "recall": 0.8633333333333333,
+          "recallAt5": 0.4766666666666667,
+          "recallAt10": 0.58,
+          "recallAt20": 0.6666666666666666,
+          "mrr": 0.38982978066624807,
+          "hitsP50": 7.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 1.752042,
+          "pageP95Ms": 20.145917
+        }
+      },
+      "identifierCamelPrefix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 16,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.463583,
+          "pageP95Ms": 56.370083
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.438625,
+          "pageP95Ms": 56.273625
+        },
+        "lucene": {
+          "recall": 0.9466666666666667,
+          "recallAt5": 0.6133333333333333,
+          "recallAt10": 0.69,
+          "recallAt20": 0.7533333333333333,
+          "mrr": 0.49245213938808075,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.635958,
+          "pageP95Ms": 18.142583
+        },
+        "luceneDate": {
+          "recall": 0.9466666666666667,
+          "recallAt5": 0.5733333333333334,
+          "recallAt10": 0.64,
+          "recallAt20": 0.71,
+          "mrr": 0.4824501580310575,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.429834,
+          "pageP95Ms": 13.783334
+        }
+      },
+      "identifierDotFinal": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.095,
+          "pageP95Ms": 57.083375
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.086291,
+          "pageP95Ms": 57.076542
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.48,
+          "recallAt10": 0.5833333333333334,
+          "recallAt20": 0.71,
+          "mrr": 0.36504070994949706,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 8.223916,
+          "pageP95Ms": 20.3045
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.37666666666666665,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.57,
+          "mrr": 0.259841223797012,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 11.895666,
+          "pageP95Ms": 25.120708
+        }
+      },
+      "identifierSnakePart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.326416,
+          "pageP95Ms": 57.287792
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.158375,
+          "pageP95Ms": 57.159792
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.5,
+          "recallAt20": 0.5966666666666667,
+          "mrr": 0.34522021705178396,
+          "hitsP50": 49.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 8.737,
+          "pageP95Ms": 16.958583
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.34,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.5933333333333334,
+          "mrr": 0.27470789099823234,
+          "hitsP50": 49.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 11.854042,
+          "pageP95Ms": 21.087125
+        }
+      },
+      "identifierKebabPart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 37.895666,
+          "pageP95Ms": 57.487875
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 38.576958,
+          "pageP95Ms": 57.406333
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.49666666666666665,
+          "recallAt10": 0.6233333333333333,
+          "recallAt20": 0.7233333333333334,
+          "mrr": 0.36159269736220667,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 5.465625,
+          "pageP95Ms": 13.999459
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.43,
+          "recallAt10": 0.5266666666666666,
+          "recallAt20": 0.6266666666666667,
+          "mrr": 0.2973305431682433,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 7.431584,
+          "pageP95Ms": 19.276041
+        }
+      },
+      "identifierSlashPart": {
+        "cases": 140,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.322959,
+          "pageP95Ms": 57.451458
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.358375,
+          "pageP95Ms": 57.116
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.5928571428571429,
+          "recallAt10": 0.6785714285714286,
+          "recallAt20": 0.8071428571428572,
+          "mrr": 0.45159283058426947,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 4.9645,
+          "pageP95Ms": 14.218291
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.5214285714285715,
+          "recallAt10": 0.6214285714285714,
+          "recallAt20": 0.7214285714285714,
+          "mrr": 0.42061961716717655,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 6.898125,
+          "pageP95Ms": 18.92375
+        }
+      },
+      "all": {
+        "cases": 3371,
+        "luceneOnly": 1363,
+        "likeOnly": 70,
+        "like": {
+          "recall": 0.5778700682290122,
+          "recallAt5": 0.26579649955502815,
+          "recallAt10": 0.30525066745772766,
+          "recallAt20": 0.3530109759715218,
+          "mrr": 0.218165633021801,
+          "hitsP50": 1.0,
+          "hitsP90": 341.0,
+          "pageP50Ms": 27.878417,
+          "pageP95Ms": 56.588417
+        },
+        "likeAnd": {
+          "recall": 0.8116285968555325,
+          "recallAt5": 0.40640759418570155,
+          "recallAt10": 0.46039750815781666,
+          "recallAt20": 0.525660041530703,
+          "mrr": 0.32728648618960643,
+          "hitsP50": 6.0,
+          "hitsP90": 563.0,
+          "pageP50Ms": 39.845458,
+          "pageP95Ms": 78.418917
+        },
+        "lucene": {
+          "recall": 0.9614357757342035,
+          "recallAt5": 0.5458320973005043,
+          "recallAt10": 0.629486799169386,
+          "recallAt20": 0.7128448531592999,
+          "mrr": 0.4419578147438206,
+          "hitsP50": 21.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 4.658625,
+          "pageP95Ms": 17.6715
+        },
+        "luceneDate": {
+          "recall": 0.9614357757342035,
+          "recallAt5": 0.4078908335805399,
+          "recallAt10": 0.49747849302877484,
+          "recallAt20": 0.5953722930881045,
+          "mrr": 0.31681785189322376,
+          "hitsP50": 21.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 6.283459,
+          "pageP95Ms": 21.294083
+        }
+      },
+      "legacyAll": {
+        "cases": 1731,
+        "luceneOnly": 1363,
+        "likeOnly": 13,
+        "like": {
+          "recall": 0.1779318313113807,
+          "recallAt5": 0.13575967648757944,
+          "recallAt10": 0.14500288850375506,
+          "recallAt20": 0.15482380127094164,
+          "mrr": 0.11881723656640403,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 27.160708,
+          "pageP95Ms": 32.543083
+        },
+        "likeAnd": {
+          "recall": 0.63316002310803,
+          "recallAt5": 0.4095898324667822,
+          "recallAt10": 0.44714038128249567,
+          "recallAt20": 0.49104563835932985,
+          "mrr": 0.33132237580884905,
+          "hitsP50": 2.0,
+          "hitsP90": 148.0,
+          "pageP50Ms": 39.901167,
+          "pageP95Ms": 80.555583
+        },
+        "lucene": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.5805892547660312,
+          "recallAt10": 0.6539572501444252,
+          "recallAt20": 0.7238590410167534,
+          "mrr": 0.48545864740242944,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 4.262208,
+          "pageP95Ms": 17.670792
+        },
+        "luceneDate": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.37146158290005776,
+          "recallAt10": 0.45753899480069327,
+          "recallAt20": 0.5522819179664934,
+          "mrr": 0.28761314461606824,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 6.444583,
+          "pageP95Ms": 21.479083
+        }
+      },
+      "identifierAll": {
+        "cases": 1640,
+        "luceneOnly": 0,
+        "likeOnly": 57,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 36.68175,
+          "pageP95Ms": 57.432
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 36.524625,
+          "pageP95Ms": 57.363875
+        },
+        "lucene": {
+          "recall": 0.9652439024390244,
+          "recallAt5": 0.5091463414634146,
+          "recallAt10": 0.6036585365853658,
+          "recallAt20": 0.7012195121951219,
+          "mrr": 0.39604321637062206,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 5.222375,
+          "pageP95Ms": 17.737833
+        },
+        "luceneDate": {
+          "recall": 0.9652439024390244,
+          "recallAt5": 0.44634146341463415,
+          "recallAt10": 0.5396341463414634,
+          "recallAt20": 0.6408536585365854,
+          "mrr": 0.34764306426929314,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 6.054666,
+          "pageP95Ms": 21.143084
+        }
+      }
+    },
+    "proximity-b-843": {
+      "database": "mariadb",
+      "java": "21.0.6",
+      "seed": 843,
+      "sampledIssues": 300,
+      "user": "siteAdmin",
+      "issues": 4882,
+      "comments": 6335,
+      "identifierSampling": {
+        "identifierCamelSuffix": {
+          "eligibleIssues": 347,
+          "sampledIssues": 300
+        },
+        "identifierCamelPrefix": {
+          "eligibleIssues": 338,
+          "sampledIssues": 300
+        },
+        "identifierDotFinal": {
+          "eligibleIssues": 1138,
+          "sampledIssues": 300
+        },
+        "identifierSnakePart": {
+          "eligibleIssues": 848,
+          "sampledIssues": 300
+        },
+        "identifierKebabPart": {
+          "eligibleIssues": 398,
+          "sampledIssues": 300
+        },
+        "identifierSlashPart": {
+          "eligibleIssues": 140,
+          "sampledIssues": 140
+        }
+      },
+      "indexBytes": 8375012,
+      "exact": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 13,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.76,
+          "recallAt10": 0.81,
+          "recallAt20": 0.8666666666666667,
+          "mrr": 0.6618717512844474,
+          "hitsP50": 2.0,
+          "hitsP90": 175.0,
+          "pageP50Ms": 27.201792,
+          "pageP95Ms": 54.424584
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6033333333333334,
+          "recallAt10": 0.66,
+          "recallAt20": 0.7366666666666667,
+          "mrr": 0.4949472947183678,
+          "hitsP50": 5.0,
+          "hitsP90": 1380.0,
+          "pageP50Ms": 40.024458,
+          "pageP95Ms": 80.48125
+        },
+        "lucene": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.6,
+          "recallAt10": 0.66,
+          "recallAt20": 0.7333333333333333,
+          "mrr": 0.5004971397475637,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 4.94225,
+          "pageP95Ms": 36.760292
+        },
+        "luceneDate": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.33,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5133333333333333,
+          "mrr": 0.2381482457926504,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 7.247458,
+          "pageP95Ms": 40.781167
+        }
+      },
+      "separated": {
+        "cases": 288,
+        "luceneOnly": 278,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.069208,
+          "pageP95Ms": 27.559167
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6701388888888888,
+          "recallAt10": 0.7395833333333334,
+          "recallAt20": 0.8194444444444444,
+          "mrr": 0.5582436212373261,
+          "hitsP50": 3.0,
+          "hitsP90": 158.0,
+          "pageP50Ms": 39.990166,
+          "pageP95Ms": 81.201833
+        },
+        "lucene": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.5034722222222222,
+          "recallAt10": 0.5729166666666666,
+          "recallAt20": 0.6979166666666666,
+          "mrr": 0.40522794798938994,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 4.108292,
+          "pageP95Ms": 10.792041
+        },
+        "luceneDate": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.3923611111111111,
+          "recallAt10": 0.4652777777777778,
+          "recallAt20": 0.5798611111111112,
+          "mrr": 0.2881218316904154,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 6.516584,
+          "pageP95Ms": 15.954208
+        }
+      },
+      "reordered": {
+        "cases": 300,
+        "luceneOnly": 281,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.097833,
+          "pageP95Ms": 27.560625
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5733333333333334,
+          "recallAt10": 0.6433333333333333,
+          "recallAt20": 0.7133333333333334,
+          "mrr": 0.4778940860681902,
+          "hitsP50": 7.0,
+          "hitsP90": 1644.0,
+          "pageP50Ms": 40.376625,
+          "pageP95Ms": 80.923125
+        },
+        "lucene": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.41,
+          "recallAt10": 0.5066666666666667,
+          "recallAt20": 0.61,
+          "mrr": 0.30139632148236667,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 4.820292,
+          "pageP95Ms": 38.746083
+        },
+        "luceneDate": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.27,
+          "recallAt10": 0.37,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.20667320040451295,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 7.005042,
+          "pageP95Ms": 45.051125
+        }
+      },
+      "inflected": {
+        "cases": 165,
+        "luceneOnly": 161,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.077542,
+          "pageP95Ms": 27.676291
+        },
+        "likeAnd": {
+          "recall": 0.012121212121212121,
+          "recallAt5": 0.012121212121212121,
+          "recallAt10": 0.012121212121212121,
+          "recallAt20": 0.012121212121212121,
+          "mrr": 0.012121212121212121,
+          "hitsP50": 0.0,
+          "hitsP90": 9.0,
+          "pageP50Ms": 39.800792,
+          "pageP95Ms": 41.902542
+        },
+        "lucene": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.5515151515151515,
+          "recallAt10": 0.6181818181818182,
+          "recallAt20": 0.7090909090909091,
+          "mrr": 0.4639700046176274,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 5.472792,
+          "pageP95Ms": 14.014959
+        },
+        "luceneDate": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.24242424242424243,
+          "recallAt10": 0.32727272727272727,
+          "recallAt20": 0.4121212121212121,
+          "mrr": 0.19024747784084386,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 8.274708,
+          "pageP95Ms": 16.894584
+        }
+      },
+      "particle": {
+        "cases": 187,
+        "luceneOnly": 181,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.049792,
+          "pageP95Ms": 27.498708
+        },
+        "likeAnd": {
+          "recall": 0.08021390374331551,
+          "recallAt5": 0.06417112299465241,
+          "recallAt10": 0.06951871657754011,
+          "recallAt20": 0.06951871657754011,
+          "mrr": 0.053872990637696516,
+          "hitsP50": 0.0,
+          "hitsP90": 10.0,
+          "pageP50Ms": 39.883125,
+          "pageP95Ms": 41.818375
+        },
+        "lucene": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.7219251336898396,
+          "recallAt10": 0.7967914438502673,
+          "recallAt20": 0.8663101604278075,
+          "mrr": 0.6319301759142104,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 4.018208,
+          "pageP95Ms": 12.255625
+        },
+        "luceneDate": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.3582887700534759,
+          "recallAt10": 0.45989304812834225,
+          "recallAt20": 0.5775401069518716,
+          "mrr": 0.28065187887179865,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 5.729,
+          "pageP95Ms": 16.033667
+        }
+      },
+      "joined": {
+        "cases": 300,
+        "luceneOnly": 279,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.142042,
+          "pageP95Ms": 53.9625
+        },
+        "likeAnd": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.066708,
+          "pageP95Ms": 53.871291
+        },
+        "lucene": {
+          "recall": 0.93,
+          "recallAt5": 0.52,
+          "recallAt10": 0.5966666666666667,
+          "recallAt20": 0.6533333333333333,
+          "mrr": 0.4285045624636806,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 5.324125,
+          "pageP95Ms": 38.795958
+        },
+        "luceneDate": {
+          "recall": 0.93,
+          "recallAt5": 0.23,
+          "recallAt10": 0.33,
+          "recallAt20": 0.41,
+          "mrr": 0.16809461682663177,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 7.438,
+          "pageP95Ms": 45.006958
+        }
+      },
+      "identifierSplit": {
+        "cases": 183,
+        "luceneOnly": 183,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.838458,
+          "pageP95Ms": 29.050042
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.7759562841530054,
+          "recallAt10": 0.8032786885245902,
+          "recallAt20": 0.8524590163934426,
+          "mrr": 0.555776475477817,
+          "hitsP50": 3.0,
+          "hitsP90": 55.0,
+          "pageP50Ms": 43.764875,
+          "pageP95Ms": 87.162166
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.9890710382513661,
+          "recallAt10": 0.994535519125683,
+          "recallAt20": 0.994535519125683,
+          "mrr": 0.9568175904241479,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.468708,
+          "pageP95Ms": 7.017584
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.912568306010929,
+          "recallAt10": 0.9562841530054644,
+          "recallAt20": 0.9781420765027322,
+          "mrr": 0.7651398939484201,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.256584,
+          "pageP95Ms": 7.549208
+        }
+      },
+      "identifierPart": {
+        "cases": 8,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 28.900792,
+          "pageP95Ms": 29.795
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 28.922375,
+          "pageP95Ms": 29.665833
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 0.875,
+          "recallAt20": 1.0,
+          "mrr": 0.8203125,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 1.097,
+          "pageP95Ms": 8.019625
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 0.852167,
+          "pageP95Ms": 7.544916
+        }
+      },
+      "missing": {
+        "cases": 20,
+        "like": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 26.966042,
+          "pageP95Ms": 27.187875
+        },
+        "likeAnd": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.008875,
+          "pageP95Ms": 27.131959
+        },
+        "lucene": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.2915,
+          "pageP95Ms": 0.350125
+        },
+        "luceneDate": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.287875,
+          "pageP95Ms": 0.344083
+        }
+      },
+      "identifierCamelSuffix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 41,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.701875,
+          "pageP95Ms": 58.704875
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.676042,
+          "pageP95Ms": 58.620958
+        },
+        "lucene": {
+          "recall": 0.8633333333333333,
+          "recallAt5": 0.49333333333333335,
+          "recallAt10": 0.59,
+          "recallAt20": 0.67,
+          "mrr": 0.39025131454472956,
+          "hitsP50": 7.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 1.975375,
+          "pageP95Ms": 17.649708
+        },
+        "luceneDate": {
+          "recall": 0.8633333333333333,
+          "recallAt5": 0.4766666666666667,
+          "recallAt10": 0.58,
+          "recallAt20": 0.6666666666666666,
+          "mrr": 0.38982978066624807,
+          "hitsP50": 7.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 1.745708,
+          "pageP95Ms": 20.034084
+        }
+      },
+      "identifierCamelPrefix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 16,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.636708,
+          "pageP95Ms": 56.471667
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.521333,
+          "pageP95Ms": 56.339
+        },
+        "lucene": {
+          "recall": 0.9466666666666667,
+          "recallAt5": 0.6166666666666667,
+          "recallAt10": 0.6966666666666667,
+          "recallAt20": 0.7533333333333333,
+          "mrr": 0.49397702085974726,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.645458,
+          "pageP95Ms": 18.112875
+        },
+        "luceneDate": {
+          "recall": 0.9466666666666667,
+          "recallAt5": 0.5733333333333334,
+          "recallAt10": 0.64,
+          "recallAt20": 0.71,
+          "mrr": 0.4824501580310575,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.52075,
+          "pageP95Ms": 13.91975
+        }
+      },
+      "identifierDotFinal": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.2935,
+          "pageP95Ms": 57.186708
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.2245,
+          "pageP95Ms": 56.966167
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.48,
+          "recallAt10": 0.5833333333333334,
+          "recallAt20": 0.71,
+          "mrr": 0.3650267575442403,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 8.204583,
+          "pageP95Ms": 20.4785
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.37666666666666665,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.57,
+          "mrr": 0.259841223797012,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 11.9775,
+          "pageP95Ms": 24.870916
+        }
+      },
+      "identifierSnakePart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.44275,
+          "pageP95Ms": 57.411083
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.317084,
+          "pageP95Ms": 57.376708
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.43333333333333335,
+          "recallAt10": 0.5,
+          "recallAt20": 0.5966666666666667,
+          "mrr": 0.3474092352803858,
+          "hitsP50": 49.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 8.721583,
+          "pageP95Ms": 17.076
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.34,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.5933333333333334,
+          "mrr": 0.27470789099823234,
+          "hitsP50": 49.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 11.731584,
+          "pageP95Ms": 20.828542
+        }
+      },
+      "identifierKebabPart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 38.085167,
+          "pageP95Ms": 57.557375
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 38.045459,
+          "pageP95Ms": 57.516375
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.5,
+          "recallAt10": 0.62,
+          "recallAt20": 0.7233333333333334,
+          "mrr": 0.3623889936585029,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 5.414209,
+          "pageP95Ms": 14.017625
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.43,
+          "recallAt10": 0.5266666666666666,
+          "recallAt20": 0.6266666666666667,
+          "mrr": 0.2973305431682433,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 7.379916,
+          "pageP95Ms": 19.289208
+        }
+      },
+      "identifierSlashPart": {
+        "cases": 140,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.629125,
+          "pageP95Ms": 57.623833
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.479834,
+          "pageP95Ms": 57.317875
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.5928571428571429,
+          "recallAt10": 0.6785714285714286,
+          "recallAt20": 0.8071428571428572,
+          "mrr": 0.45766425915569797,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 4.97725,
+          "pageP95Ms": 14.158708
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.5214285714285715,
+          "recallAt10": 0.6214285714285714,
+          "recallAt20": 0.7214285714285714,
+          "mrr": 0.42061961716717655,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 6.950958,
+          "pageP95Ms": 18.7825
+        }
+      },
+      "all": {
+        "cases": 3371,
+        "luceneOnly": 1363,
+        "likeOnly": 70,
+        "like": {
+          "recall": 0.5778700682290122,
+          "recallAt5": 0.26579649955502815,
+          "recallAt10": 0.30525066745772766,
+          "recallAt20": 0.3530109759715218,
+          "mrr": 0.218165633021801,
+          "hitsP50": 1.0,
+          "hitsP90": 341.0,
+          "pageP50Ms": 27.929041,
+          "pageP95Ms": 56.714584
+        },
+        "likeAnd": {
+          "recall": 0.8116285968555325,
+          "recallAt5": 0.40640759418570155,
+          "recallAt10": 0.46039750815781666,
+          "recallAt20": 0.525660041530703,
+          "mrr": 0.32728648618960643,
+          "hitsP50": 6.0,
+          "hitsP90": 563.0,
+          "pageP50Ms": 39.843375,
+          "pageP95Ms": 78.48225
+        },
+        "lucene": {
+          "recall": 0.9614357757342035,
+          "recallAt5": 0.5511717591219223,
+          "recallAt10": 0.6306733906852566,
+          "recallAt20": 0.7172945713438149,
+          "mrr": 0.44912493671984116,
+          "hitsP50": 21.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 4.708917,
+          "pageP95Ms": 17.767959
+        },
+        "luceneDate": {
+          "recall": 0.9614357757342035,
+          "recallAt5": 0.4078908335805399,
+          "recallAt10": 0.49747849302877484,
+          "recallAt20": 0.5953722930881045,
+          "mrr": 0.31681785189322376,
+          "hitsP50": 21.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 6.3085,
+          "pageP95Ms": 21.538208
+        }
+      },
+      "legacyAll": {
+        "cases": 1731,
+        "luceneOnly": 1363,
+        "likeOnly": 13,
+        "like": {
+          "recall": 0.1779318313113807,
+          "recallAt5": 0.13575967648757944,
+          "recallAt10": 0.14500288850375506,
+          "recallAt20": 0.15482380127094164,
+          "mrr": 0.11881723656640403,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 27.1365,
+          "pageP95Ms": 32.514083
+        },
+        "likeAnd": {
+          "recall": 0.63316002310803,
+          "recallAt5": 0.4095898324667822,
+          "recallAt10": 0.44714038128249567,
+          "recallAt20": 0.49104563835932985,
+          "mrr": 0.33132237580884905,
+          "hitsP50": 2.0,
+          "hitsP90": 148.0,
+          "pageP50Ms": 39.91675,
+          "pageP95Ms": 80.578125
+        },
+        "lucene": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.5880993645291739,
+          "recallAt10": 0.6551126516464472,
+          "recallAt20": 0.733102253032929,
+          "mrr": 0.4981000397657495,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 4.3565,
+          "pageP95Ms": 17.800292
+        },
+        "luceneDate": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.37146158290005776,
+          "recallAt10": 0.45753899480069327,
+          "recallAt20": 0.5522819179664934,
+          "mrr": 0.28761314461606824,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 6.453166,
+          "pageP95Ms": 21.682083
+        }
+      },
+      "identifierAll": {
+        "cases": 1640,
+        "luceneOnly": 0,
+        "likeOnly": 57,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 36.931875,
+          "pageP95Ms": 57.557375
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 36.723417,
+          "pageP95Ms": 57.481708
+        },
+        "lucene": {
+          "recall": 0.9652439024390244,
+          "recallAt5": 0.5121951219512195,
+          "recallAt10": 0.6048780487804878,
+          "recallAt20": 0.7006097560975609,
+          "mrr": 0.3974323127122428,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 5.247083,
+          "pageP95Ms": 17.649708
+        },
+        "luceneDate": {
+          "recall": 0.9652439024390244,
+          "recallAt5": 0.44634146341463415,
+          "recallAt10": 0.5396341463414634,
+          "recallAt20": 0.6408536585365854,
+          "mrr": 0.34764306426929314,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 6.05125,
+          "pageP95Ms": 21.056666
+        }
+      }
+    },
+    "proximity-b-844": {
+      "database": "mariadb",
+      "java": "21.0.6",
+      "seed": 844,
+      "sampledIssues": 300,
+      "user": "siteAdmin",
+      "issues": 4882,
+      "comments": 6335,
+      "identifierSampling": {
+        "identifierCamelSuffix": {
+          "eligibleIssues": 347,
+          "sampledIssues": 300
+        },
+        "identifierCamelPrefix": {
+          "eligibleIssues": 338,
+          "sampledIssues": 300
+        },
+        "identifierDotFinal": {
+          "eligibleIssues": 1138,
+          "sampledIssues": 300
+        },
+        "identifierSnakePart": {
+          "eligibleIssues": 848,
+          "sampledIssues": 300
+        },
+        "identifierKebabPart": {
+          "eligibleIssues": 398,
+          "sampledIssues": 300
+        },
+        "identifierSlashPart": {
+          "eligibleIssues": 140,
+          "sampledIssues": 140
+        }
+      },
+      "indexBytes": 8375012,
+      "exact": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 8,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.8,
+          "recallAt10": 0.8466666666666667,
+          "recallAt20": 0.8766666666666667,
+          "mrr": 0.7040463325116028,
+          "hitsP50": 2.0,
+          "hitsP90": 68.0,
+          "pageP50Ms": 27.247125,
+          "pageP95Ms": 54.569292
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6366666666666667,
+          "recallAt10": 0.6966666666666667,
+          "recallAt20": 0.7466666666666667,
+          "mrr": 0.5244783842533006,
+          "hitsP50": 5.0,
+          "hitsP90": 667.0,
+          "pageP50Ms": 40.037416,
+          "pageP95Ms": 81.670833
+        },
+        "lucene": {
+          "recall": 0.9733333333333334,
+          "recallAt5": 0.68,
+          "recallAt10": 0.77,
+          "recallAt20": 0.81,
+          "mrr": 0.5518536550513391,
+          "hitsP50": 44.0,
+          "hitsP90": 825.0,
+          "pageP50Ms": 4.805667,
+          "pageP95Ms": 17.963209
+        },
+        "luceneDate": {
+          "recall": 0.9733333333333334,
+          "recallAt5": 0.3,
+          "recallAt10": 0.43333333333333335,
+          "recallAt20": 0.5166666666666667,
+          "mrr": 0.21994302181525408,
+          "hitsP50": 44.0,
+          "hitsP90": 825.0,
+          "pageP50Ms": 7.314459,
+          "pageP95Ms": 21.612333
+        }
+      },
+      "separated": {
+        "cases": 299,
+        "luceneOnly": 283,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.087333,
+          "pageP95Ms": 27.56825
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.7123745819397993,
+          "recallAt10": 0.7959866220735786,
+          "recallAt20": 0.8561872909698997,
+          "mrr": 0.5843188893177639,
+          "hitsP50": 3.0,
+          "hitsP90": 102.0,
+          "pageP50Ms": 39.957167,
+          "pageP95Ms": 81.411375
+        },
+        "lucene": {
+          "recall": 0.9464882943143813,
+          "recallAt5": 0.49498327759197325,
+          "recallAt10": 0.5585284280936454,
+          "recallAt20": 0.6789297658862876,
+          "mrr": 0.3484578982131967,
+          "hitsP50": 29.0,
+          "hitsP90": 441.0,
+          "pageP50Ms": 4.288917,
+          "pageP95Ms": 10.377875
+        },
+        "luceneDate": {
+          "recall": 0.9464882943143813,
+          "recallAt5": 0.36789297658862874,
+          "recallAt10": 0.4682274247491639,
+          "recallAt20": 0.5518394648829431,
+          "mrr": 0.25360417693331544,
+          "hitsP50": 29.0,
+          "hitsP90": 441.0,
+          "pageP50Ms": 6.773125,
+          "pageP95Ms": 13.534708
+        }
+      },
+      "reordered": {
+        "cases": 300,
+        "luceneOnly": 285,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.103958,
+          "pageP95Ms": 27.503
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.63,
+          "recallAt10": 0.71,
+          "recallAt20": 0.7733333333333333,
+          "mrr": 0.5089369989121599,
+          "hitsP50": 6.0,
+          "hitsP90": 519.0,
+          "pageP50Ms": 40.133209,
+          "pageP95Ms": 82.272666
+        },
+        "lucene": {
+          "recall": 0.95,
+          "recallAt5": 0.47333333333333333,
+          "recallAt10": 0.55,
+          "recallAt20": 0.6533333333333333,
+          "mrr": 0.34759066166186103,
+          "hitsP50": 31.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 5.008916,
+          "pageP95Ms": 17.74825
+        },
+        "luceneDate": {
+          "recall": 0.95,
+          "recallAt5": 0.31,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5233333333333333,
+          "mrr": 0.2138343110264683,
+          "hitsP50": 31.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 7.364125,
+          "pageP95Ms": 21.332834
+        }
+      },
+      "inflected": {
+        "cases": 170,
+        "luceneOnly": 163,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.08225,
+          "pageP95Ms": 27.543292
+        },
+        "likeAnd": {
+          "recall": 0.01764705882352941,
+          "recallAt5": 0.01764705882352941,
+          "recallAt10": 0.01764705882352941,
+          "recallAt20": 0.01764705882352941,
+          "mrr": 0.01764705882352941,
+          "hitsP50": 0.0,
+          "hitsP90": 4.0,
+          "pageP50Ms": 39.739541,
+          "pageP95Ms": 41.785083
+        },
+        "lucene": {
+          "recall": 0.9588235294117647,
+          "recallAt5": 0.6235294117647059,
+          "recallAt10": 0.6705882352941176,
+          "recallAt20": 0.7235294117647059,
+          "mrr": 0.5078269754173474,
+          "hitsP50": 51.0,
+          "hitsP90": 720.0,
+          "pageP50Ms": 5.060459,
+          "pageP95Ms": 13.699208
+        },
+        "luceneDate": {
+          "recall": 0.9588235294117647,
+          "recallAt5": 0.27058823529411763,
+          "recallAt10": 0.3764705882352941,
+          "recallAt20": 0.4294117647058823,
+          "mrr": 0.19318754885523423,
+          "hitsP50": 51.0,
+          "hitsP90": 720.0,
+          "pageP50Ms": 8.109667,
+          "pageP95Ms": 16.160167
+        }
+      },
+      "particle": {
+        "cases": 186,
+        "luceneOnly": 179,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.089208,
+          "pageP95Ms": 27.478125
+        },
+        "likeAnd": {
+          "recall": 0.04838709677419355,
+          "recallAt5": 0.04838709677419355,
+          "recallAt10": 0.04838709677419355,
+          "recallAt20": 0.04838709677419355,
+          "mrr": 0.03763440860215054,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 39.855625,
+          "pageP95Ms": 41.20875
+        },
+        "lucene": {
+          "recall": 0.9623655913978495,
+          "recallAt5": 0.8333333333333334,
+          "recallAt10": 0.8602150537634409,
+          "recallAt20": 0.8924731182795699,
+          "mrr": 0.6658198877770911,
+          "hitsP50": 29.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 4.662458,
+          "pageP95Ms": 12.787958
+        },
+        "luceneDate": {
+          "recall": 0.9623655913978495,
+          "recallAt5": 0.2903225806451613,
+          "recallAt10": 0.41935483870967744,
+          "recallAt20": 0.5752688172043011,
+          "mrr": 0.2197906611790143,
+          "hitsP50": 29.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 6.905584,
+          "pageP95Ms": 15.363583
+        }
+      },
+      "joined": {
+        "cases": 300,
+        "luceneOnly": 287,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 27.143583,
+          "pageP95Ms": 28.660625
+        },
+        "likeAnd": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 27.073042,
+          "pageP95Ms": 28.883083
+        },
+        "lucene": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.6366666666666667,
+          "recallAt10": 0.6933333333333334,
+          "recallAt20": 0.7433333333333333,
+          "mrr": 0.510454825069627,
+          "hitsP50": 56.0,
+          "hitsP90": 1422.0,
+          "pageP50Ms": 5.450125,
+          "pageP95Ms": 36.112542
+        },
+        "luceneDate": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.29333333333333333,
+          "recallAt10": 0.36666666666666664,
+          "recallAt20": 0.46,
+          "mrr": 0.21967546092001247,
+          "hitsP50": 56.0,
+          "hitsP90": 1422.0,
+          "pageP50Ms": 7.940208,
+          "pageP95Ms": 40.463417
+        }
+      },
+      "identifierSplit": {
+        "cases": 194,
+        "luceneOnly": 194,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.937542,
+          "pageP95Ms": 29.671791
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.7628865979381443,
+          "recallAt10": 0.7989690721649485,
+          "recallAt20": 0.8350515463917526,
+          "mrr": 0.5578144482126443,
+          "hitsP50": 3.0,
+          "hitsP90": 44.0,
+          "pageP50Ms": 43.812833,
+          "pageP95Ms": 87.365042
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.9587628865979382,
+          "recallAt10": 0.9690721649484536,
+          "recallAt20": 0.979381443298969,
+          "mrr": 0.929996857380878,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.447958,
+          "pageP95Ms": 7.85175
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.9175257731958762,
+          "recallAt10": 0.9432989690721649,
+          "recallAt20": 0.9639175257731959,
+          "mrr": 0.7642133294419575,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.205542,
+          "pageP95Ms": 10.06625
+        }
+      },
+      "identifierPart": {
+        "cases": 3,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 1.0,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 1.0,
+          "hitsP50": 1.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 29.372167,
+          "pageP95Ms": 29.498958
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 1.0,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 1.0,
+          "hitsP50": 1.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 29.555667,
+          "pageP95Ms": 29.622541
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 1.0,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 1.0,
+          "hitsP50": 1.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 1.236125,
+          "pageP95Ms": 1.483125
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 1.0,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 1.0,
+          "hitsP50": 1.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 0.89675,
+          "pageP95Ms": 1.14275
+        }
+      },
+      "missing": {
+        "cases": 20,
+        "like": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.097042,
+          "pageP95Ms": 27.437459
+        },
+        "likeAnd": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.058792,
+          "pageP95Ms": 27.260458
+        },
+        "lucene": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.307292,
+          "pageP95Ms": 0.346083
+        },
+        "luceneDate": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.298208,
+          "pageP95Ms": 0.345083
+        }
+      },
+      "identifierCamelSuffix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 43,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.45666666666666667,
+          "recallAt10": 0.52,
+          "recallAt20": 0.5733333333333334,
+          "mrr": 0.3613771312512699,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.650708,
+          "pageP95Ms": 58.702833
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.45666666666666667,
+          "recallAt10": 0.52,
+          "recallAt20": 0.5733333333333334,
+          "mrr": 0.3613771312512699,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.537625,
+          "pageP95Ms": 58.718875
+        },
+        "lucene": {
+          "recall": 0.8566666666666667,
+          "recallAt5": 0.4866666666666667,
+          "recallAt10": 0.5866666666666667,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.39508229751445756,
+          "hitsP50": 6.0,
+          "hitsP90": 103.0,
+          "pageP50Ms": 1.990583,
+          "pageP95Ms": 17.13225
+        },
+        "luceneDate": {
+          "recall": 0.8566666666666667,
+          "recallAt5": 0.5066666666666667,
+          "recallAt10": 0.5966666666666667,
+          "recallAt20": 0.6733333333333333,
+          "mrr": 0.39754970724685296,
+          "hitsP50": 6.0,
+          "hitsP90": 103.0,
+          "pageP50Ms": 1.803084,
+          "pageP95Ms": 19.771541
+        }
+      },
+      "identifierCamelPrefix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 22,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.5366666666666666,
+          "recallAt10": 0.6333333333333333,
+          "recallAt20": 0.6833333333333333,
+          "mrr": 0.44813572520352835,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.807667,
+          "pageP95Ms": 56.884959
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5366666666666666,
+          "recallAt10": 0.6333333333333333,
+          "recallAt20": 0.6833333333333333,
+          "mrr": 0.44813572520352835,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.758125,
+          "pageP95Ms": 56.703458
+        },
+        "lucene": {
+          "recall": 0.9266666666666666,
+          "recallAt5": 0.56,
+          "recallAt10": 0.6566666666666666,
+          "recallAt20": 0.7366666666666667,
+          "mrr": 0.4704116534445877,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.58,
+          "pageP95Ms": 18.209083
+        },
+        "luceneDate": {
+          "recall": 0.9266666666666666,
+          "recallAt5": 0.55,
+          "recallAt10": 0.6366666666666667,
+          "recallAt20": 0.72,
+          "mrr": 0.4529273688258995,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.332917,
+          "pageP95Ms": 14.001292
+        }
+      },
+      "identifierDotFinal": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.46,
+          "recallAt20": 0.5366666666666666,
+          "mrr": 0.26378919949422885,
+          "hitsP50": 37.0,
+          "hitsP90": 228.0,
+          "pageP50Ms": 49.49025,
+          "pageP95Ms": 57.263834
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.46,
+          "recallAt20": 0.5366666666666666,
+          "mrr": 0.26378919949422885,
+          "hitsP50": 37.0,
+          "hitsP90": 228.0,
+          "pageP50Ms": 49.239958,
+          "pageP95Ms": 57.130667
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.48333333333333334,
+          "recallAt10": 0.5866666666666667,
+          "recallAt20": 0.69,
+          "mrr": 0.3602121865328426,
+          "hitsP50": 32.0,
+          "hitsP90": 162.0,
+          "pageP50Ms": 8.57,
+          "pageP95Ms": 19.7885
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.38333333333333336,
+          "recallAt10": 0.47333333333333333,
+          "recallAt20": 0.5566666666666666,
+          "mrr": 0.2649731913891331,
+          "hitsP50": 32.0,
+          "hitsP90": 162.0,
+          "pageP50Ms": 13.131625,
+          "pageP95Ms": 24.675167
+        }
+      },
+      "identifierSnakePart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.27,
+          "recallAt10": 0.34,
+          "recallAt20": 0.44333333333333336,
+          "mrr": 0.21677329606017462,
+          "hitsP50": 93.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 44.50875,
+          "pageP95Ms": 58.093292
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.27,
+          "recallAt10": 0.34,
+          "recallAt20": 0.44333333333333336,
+          "mrr": 0.21677329606017462,
+          "hitsP50": 93.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 44.40025,
+          "pageP95Ms": 58.023833
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.36,
+          "recallAt10": 0.43333333333333335,
+          "recallAt20": 0.55,
+          "mrr": 0.2982198045328764,
+          "hitsP50": 73.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 9.449625,
+          "pageP95Ms": 15.770166
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.31333333333333335,
+          "recallAt10": 0.37333333333333335,
+          "recallAt20": 0.49,
+          "mrr": 0.2376322911314238,
+          "hitsP50": 73.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 13.167542,
+          "pageP95Ms": 20.884375
+        }
+      },
+      "identifierKebabPart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.35,
+          "recallAt10": 0.43,
+          "recallAt20": 0.5333333333333333,
+          "mrr": 0.2582769375480711,
+          "hitsP50": 44.0,
+          "hitsP90": 880.0,
+          "pageP50Ms": 40.339333,
+          "pageP95Ms": 58.413333
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.35,
+          "recallAt10": 0.43,
+          "recallAt20": 0.5333333333333333,
+          "mrr": 0.2582769375480711,
+          "hitsP50": 44.0,
+          "hitsP90": 880.0,
+          "pageP50Ms": 40.263667,
+          "pageP95Ms": 58.302333
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.5366666666666666,
+          "recallAt10": 0.6566666666666666,
+          "recallAt20": 0.74,
+          "mrr": 0.3947558637032666,
+          "hitsP50": 21.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 5.477084,
+          "pageP95Ms": 15.713833
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.42,
+          "recallAt10": 0.53,
+          "recallAt20": 0.6166666666666667,
+          "mrr": 0.3066811026853746,
+          "hitsP50": 21.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 7.080166,
+          "pageP95Ms": 19.410625
+        }
+      },
+      "identifierSlashPart": {
+        "cases": 140,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4357142857142857,
+          "recallAt10": 0.5,
+          "recallAt20": 0.5714285714285714,
+          "mrr": 0.34625090175167417,
+          "hitsP50": 20.0,
+          "hitsP90": 830.0,
+          "pageP50Ms": 33.514834,
+          "pageP95Ms": 57.293041
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4357142857142857,
+          "recallAt10": 0.5,
+          "recallAt20": 0.5714285714285714,
+          "mrr": 0.34625090175167417,
+          "hitsP50": 20.0,
+          "hitsP90": 830.0,
+          "pageP50Ms": 33.41775,
+          "pageP95Ms": 57.145625
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.6357142857142857,
+          "recallAt10": 0.7071428571428572,
+          "recallAt20": 0.7928571428571428,
+          "mrr": 0.482483753584015,
+          "hitsP50": 10.0,
+          "hitsP90": 198.0,
+          "pageP50Ms": 3.953667,
+          "pageP95Ms": 14.811291
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.5642857142857143,
+          "recallAt10": 0.6571428571428571,
+          "recallAt20": 0.7214285714285714,
+          "mrr": 0.43549899850208446,
+          "hitsP50": 10.0,
+          "hitsP90": 198.0,
+          "pageP50Ms": 6.485,
+          "pageP95Ms": 18.906541
+        }
+      },
+      "all": {
+        "cases": 3392,
+        "luceneOnly": 1391,
+        "likeOnly": 73,
+        "like": {
+          "recall": 0.5728183962264151,
+          "recallAt5": 0.2650353773584906,
+          "recallAt10": 0.3071933962264151,
+          "recallAt20": 0.3469929245283019,
+          "mrr": 0.2143852337458425,
+          "hitsP50": 1.0,
+          "hitsP90": 325.0,
+          "pageP50Ms": 27.96825,
+          "pageP95Ms": 56.980292
+        },
+        "likeAnd": {
+          "recall": 0.8101415094339622,
+          "recallAt5": 0.41627358490566035,
+          "recallAt10": 0.47612028301886794,
+          "recallAt20": 0.5306603773584906,
+          "mrr": 0.32987405038953926,
+          "hitsP50": 6.0,
+          "hitsP90": 442.0,
+          "pageP50Ms": 39.845084,
+          "pageP95Ms": 78.031458
+        },
+        "lucene": {
+          "recall": 0.9613797169811321,
+          "recallAt5": 0.5754716981132075,
+          "recallAt10": 0.6518278301886793,
+          "recallAt20": 0.7299528301886793,
+          "mrr": 0.4610564258844739,
+          "hitsP50": 21.0,
+          "hitsP90": 398.0,
+          "pageP50Ms": 4.788709,
+          "pageP95Ms": 17.111584
+        },
+        "luceneDate": {
+          "recall": 0.9613797169811321,
+          "recallAt5": 0.41067216981132076,
+          "recallAt10": 0.5035377358490566,
+          "recallAt20": 0.5905070754716981,
+          "mrr": 0.311244922583109,
+          "hitsP50": 21.0,
+          "hitsP90": 398.0,
+          "pageP50Ms": 6.665333,
+          "pageP95Ms": 20.699791
+        }
+      },
+      "legacyAll": {
+        "cases": 1752,
+        "luceneOnly": 1391,
+        "likeOnly": 8,
+        "like": {
+          "recall": 0.17294520547945205,
+          "recallAt5": 0.1386986301369863,
+          "recallAt10": 0.146689497716895,
+          "recallAt20": 0.15182648401826485,
+          "mrr": 0.12226820762184978,
+          "hitsP50": 0.0,
+          "hitsP90": 4.0,
+          "pageP50Ms": 27.158083,
+          "pageP95Ms": 29.838791
+        },
+        "likeAnd": {
+          "recall": 0.632420091324201,
+          "recallAt5": 0.4315068493150685,
+          "recallAt10": 0.4737442922374429,
+          "recallAt20": 0.507420091324201,
+          "mrr": 0.345862994183163,
+          "hitsP50": 2.0,
+          "hitsP90": 91.0,
+          "pageP50Ms": 39.878875,
+          "pageP95Ms": 80.877334
+        },
+        "lucene": {
+          "recall": 0.9623287671232876,
+          "recallAt5": 0.6478310502283106,
+          "recallAt10": 0.7054794520547946,
+          "recallAt20": 0.7688356164383562,
+          "mrr": 0.5255428820661949,
+          "hitsP50": 28.0,
+          "hitsP90": 655.0,
+          "pageP50Ms": 4.463625,
+          "pageP95Ms": 15.6305
+        },
+        "luceneDate": {
+          "recall": 0.9623287671232876,
+          "recallAt5": 0.3778538812785388,
+          "recallAt10": 0.4754566210045662,
+          "recallAt20": 0.5622146118721462,
+          "mrr": 0.283586654810506,
+          "hitsP50": 28.0,
+          "hitsP90": 655.0,
+          "pageP50Ms": 6.76125,
+          "pageP95Ms": 18.099167
+        }
+      },
+      "identifierAll": {
+        "cases": 1640,
+        "luceneOnly": 0,
+        "likeOnly": 65,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4,
+          "recallAt10": 0.47865853658536583,
+          "recallAt20": 0.5554878048780488,
+          "mrr": 0.3127931787270815,
+          "hitsP50": 31.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 37.350209,
+          "pageP95Ms": 57.869459
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4,
+          "recallAt10": 0.47865853658536583,
+          "recallAt20": 0.5554878048780488,
+          "mrr": 0.3127931787270815,
+          "hitsP50": 31.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 37.264625,
+          "pageP95Ms": 57.831375
+        },
+        "lucene": {
+          "recall": 0.9603658536585366,
+          "recallAt5": 0.49817073170731707,
+          "recallAt10": 0.5945121951219512,
+          "recallAt20": 0.6884146341463414,
+          "mrr": 0.39216601659766503,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 5.573541,
+          "pageP95Ms": 17.499208
+        },
+        "luceneDate": {
+          "recall": 0.9603658536585366,
+          "recallAt5": 0.4457317073170732,
+          "recallAt10": 0.5335365853658537,
+          "recallAt20": 0.6207317073170732,
+          "mrr": 0.3407920476670088,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 6.502458,
+          "pageP95Ms": 21.297625
+        }
+      }
+    },
+    "baseline-844": {
+      "database": "mariadb",
+      "java": "21.0.6",
+      "seed": 844,
+      "sampledIssues": 300,
+      "user": "siteAdmin",
+      "issues": 4882,
+      "comments": 6335,
+      "identifierSampling": {
+        "identifierCamelSuffix": {
+          "eligibleIssues": 347,
+          "sampledIssues": 300
+        },
+        "identifierCamelPrefix": {
+          "eligibleIssues": 338,
+          "sampledIssues": 300
+        },
+        "identifierDotFinal": {
+          "eligibleIssues": 1138,
+          "sampledIssues": 300
+        },
+        "identifierSnakePart": {
+          "eligibleIssues": 848,
+          "sampledIssues": 300
+        },
+        "identifierKebabPart": {
+          "eligibleIssues": 398,
+          "sampledIssues": 300
+        },
+        "identifierSlashPart": {
+          "eligibleIssues": 140,
+          "sampledIssues": 140
+        }
+      },
+      "indexBytes": 8375012,
+      "exact": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 8,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.8,
+          "recallAt10": 0.8466666666666667,
+          "recallAt20": 0.8766666666666667,
+          "mrr": 0.7040463325116028,
+          "hitsP50": 2.0,
+          "hitsP90": 68.0,
+          "pageP50Ms": 27.247208,
+          "pageP95Ms": 54.670375
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6366666666666667,
+          "recallAt10": 0.6966666666666667,
+          "recallAt20": 0.7466666666666667,
+          "mrr": 0.5244783842533006,
+          "hitsP50": 5.0,
+          "hitsP90": 667.0,
+          "pageP50Ms": 40.012833,
+          "pageP95Ms": 81.471583
+        },
+        "lucene": {
+          "recall": 0.9733333333333334,
+          "recallAt5": 0.4066666666666667,
+          "recallAt10": 0.52,
+          "recallAt20": 0.6033333333333334,
+          "mrr": 0.2859124964138629,
+          "hitsP50": 44.0,
+          "hitsP90": 825.0,
+          "pageP50Ms": 3.597417,
+          "pageP95Ms": 18.311292
+        },
+        "luceneDate": {
+          "recall": 0.9733333333333334,
+          "recallAt5": 0.3,
+          "recallAt10": 0.43333333333333335,
+          "recallAt20": 0.5166666666666667,
+          "mrr": 0.21994302181525408,
+          "hitsP50": 44.0,
+          "hitsP90": 825.0,
+          "pageP50Ms": 6.352417,
+          "pageP95Ms": 19.805375
+        }
+      },
+      "separated": {
+        "cases": 299,
+        "luceneOnly": 283,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.10775,
+          "pageP95Ms": 27.498959
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.7123745819397993,
+          "recallAt10": 0.7959866220735786,
+          "recallAt20": 0.8561872909698997,
+          "mrr": 0.5843188893177639,
+          "hitsP50": 3.0,
+          "hitsP90": 102.0,
+          "pageP50Ms": 39.97025,
+          "pageP95Ms": 81.6715
+        },
+        "lucene": {
+          "recall": 0.9464882943143813,
+          "recallAt5": 0.4882943143812709,
+          "recallAt10": 0.5618729096989966,
+          "recallAt20": 0.6688963210702341,
+          "mrr": 0.33331031899140573,
+          "hitsP50": 29.0,
+          "hitsP90": 441.0,
+          "pageP50Ms": 3.473791,
+          "pageP95Ms": 9.26775
+        },
+        "luceneDate": {
+          "recall": 0.9464882943143813,
+          "recallAt5": 0.36789297658862874,
+          "recallAt10": 0.4682274247491639,
+          "recallAt20": 0.5518394648829431,
+          "mrr": 0.25360417693331544,
+          "hitsP50": 29.0,
+          "hitsP90": 441.0,
+          "pageP50Ms": 5.903542,
+          "pageP95Ms": 12.151458
+        }
+      },
+      "reordered": {
+        "cases": 300,
+        "luceneOnly": 285,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.119041,
+          "pageP95Ms": 27.493541
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.63,
+          "recallAt10": 0.71,
+          "recallAt20": 0.7733333333333333,
+          "mrr": 0.5089369989121599,
+          "hitsP50": 6.0,
+          "hitsP90": 519.0,
+          "pageP50Ms": 40.143875,
+          "pageP95Ms": 82.286167
+        },
+        "lucene": {
+          "recall": 0.95,
+          "recallAt5": 0.44666666666666666,
+          "recallAt10": 0.5266666666666666,
+          "recallAt20": 0.6233333333333333,
+          "mrr": 0.30926523618831275,
+          "hitsP50": 31.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 4.083458,
+          "pageP95Ms": 16.301917
+        },
+        "luceneDate": {
+          "recall": 0.95,
+          "recallAt5": 0.31,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5233333333333333,
+          "mrr": 0.2138343110264683,
+          "hitsP50": 31.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 6.734458,
+          "pageP95Ms": 18.414708
+        }
+      },
+      "inflected": {
+        "cases": 170,
+        "luceneOnly": 163,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.108375,
+          "pageP95Ms": 27.654667
+        },
+        "likeAnd": {
+          "recall": 0.01764705882352941,
+          "recallAt5": 0.01764705882352941,
+          "recallAt10": 0.01764705882352941,
+          "recallAt20": 0.01764705882352941,
+          "mrr": 0.01764705882352941,
+          "hitsP50": 0.0,
+          "hitsP90": 4.0,
+          "pageP50Ms": 39.732667,
+          "pageP95Ms": 41.772792
+        },
+        "lucene": {
+          "recall": 0.9588235294117647,
+          "recallAt5": 0.3411764705882353,
+          "recallAt10": 0.43529411764705883,
+          "recallAt20": 0.5705882352941176,
+          "mrr": 0.26322433921069,
+          "hitsP50": 51.0,
+          "hitsP90": 720.0,
+          "pageP50Ms": 4.119959,
+          "pageP95Ms": 11.918916
+        },
+        "luceneDate": {
+          "recall": 0.9588235294117647,
+          "recallAt5": 0.27058823529411763,
+          "recallAt10": 0.3764705882352941,
+          "recallAt20": 0.4294117647058823,
+          "mrr": 0.19318754885523423,
+          "hitsP50": 51.0,
+          "hitsP90": 720.0,
+          "pageP50Ms": 7.741125,
+          "pageP95Ms": 16.132791
+        }
+      },
+      "particle": {
+        "cases": 186,
+        "luceneOnly": 179,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.144833,
+          "pageP95Ms": 27.500916
+        },
+        "likeAnd": {
+          "recall": 0.04838709677419355,
+          "recallAt5": 0.04838709677419355,
+          "recallAt10": 0.04838709677419355,
+          "recallAt20": 0.04838709677419355,
+          "mrr": 0.03763440860215054,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 39.871,
+          "pageP95Ms": 41.241209
+        },
+        "lucene": {
+          "recall": 0.9623655913978495,
+          "recallAt5": 0.5053763440860215,
+          "recallAt10": 0.6397849462365591,
+          "recallAt20": 0.7204301075268817,
+          "mrr": 0.3439046971786583,
+          "hitsP50": 29.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 3.6505,
+          "pageP95Ms": 10.987167
+        },
+        "luceneDate": {
+          "recall": 0.9623655913978495,
+          "recallAt5": 0.2903225806451613,
+          "recallAt10": 0.41935483870967744,
+          "recallAt20": 0.5752688172043011,
+          "mrr": 0.2197906611790143,
+          "hitsP50": 29.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 5.931,
+          "pageP95Ms": 13.956209
+        }
+      },
+      "joined": {
+        "cases": 300,
+        "luceneOnly": 287,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 27.1335,
+          "pageP95Ms": 28.303459
+        },
+        "likeAnd": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 27.081375,
+          "pageP95Ms": 28.166167
+        },
+        "lucene": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.3933333333333333,
+          "recallAt10": 0.47,
+          "recallAt20": 0.55,
+          "mrr": 0.2966049721900691,
+          "hitsP50": 56.0,
+          "hitsP90": 1422.0,
+          "pageP50Ms": 4.179625,
+          "pageP95Ms": 29.905
+        },
+        "luceneDate": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.29333333333333333,
+          "recallAt10": 0.36666666666666664,
+          "recallAt20": 0.46,
+          "mrr": 0.21967546092001247,
+          "hitsP50": 56.0,
+          "hitsP90": 1422.0,
+          "pageP50Ms": 7.005417,
+          "pageP95Ms": 34.645333
+        }
+      },
+      "identifierSplit": {
+        "cases": 194,
+        "luceneOnly": 194,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.83,
+          "pageP95Ms": 29.409583
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.7628865979381443,
+          "recallAt10": 0.7989690721649485,
+          "recallAt20": 0.8350515463917526,
+          "mrr": 0.5578144482126443,
+          "hitsP50": 3.0,
+          "hitsP90": 44.0,
+          "pageP50Ms": 43.718375,
+          "pageP95Ms": 87.302709
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.9226804123711341,
+          "recallAt10": 0.9381443298969072,
+          "recallAt20": 0.9587628865979382,
+          "mrr": 0.7975051257399307,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.28975,
+          "pageP95Ms": 7.572916
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.9175257731958762,
+          "recallAt10": 0.9432989690721649,
+          "recallAt20": 0.9639175257731959,
+          "mrr": 0.7642133294419575,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.095834,
+          "pageP95Ms": 9.508291
+        }
+      },
+      "identifierPart": {
+        "cases": 3,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 1.0,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 1.0,
+          "hitsP50": 1.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 29.18675,
+          "pageP95Ms": 29.373292
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 1.0,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 1.0,
+          "hitsP50": 1.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 29.0755,
+          "pageP95Ms": 29.206917
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 1.0,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 1.0,
+          "hitsP50": 1.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 1.099292,
+          "pageP95Ms": 1.130791
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 1.0,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 1.0,
+          "hitsP50": 1.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 1.044,
+          "pageP95Ms": 1.044792
+        }
+      },
+      "missing": {
+        "cases": 20,
+        "like": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 26.976083,
+          "pageP95Ms": 27.194208
+        },
+        "likeAnd": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 26.977667,
+          "pageP95Ms": 27.373625
+        },
+        "lucene": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.271208,
+          "pageP95Ms": 0.28875
+        },
+        "luceneDate": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.267417,
+          "pageP95Ms": 0.301042
+        }
+      },
+      "identifierCamelSuffix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 43,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.45666666666666667,
+          "recallAt10": 0.52,
+          "recallAt20": 0.5733333333333334,
+          "mrr": 0.3613771312512699,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.577417,
+          "pageP95Ms": 58.732708
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.45666666666666667,
+          "recallAt10": 0.52,
+          "recallAt20": 0.5733333333333334,
+          "mrr": 0.3613771312512699,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.574542,
+          "pageP95Ms": 58.632666
+        },
+        "lucene": {
+          "recall": 0.8566666666666667,
+          "recallAt5": 0.47,
+          "recallAt10": 0.5733333333333334,
+          "recallAt20": 0.6666666666666666,
+          "mrr": 0.3851037642249818,
+          "hitsP50": 6.0,
+          "hitsP90": 103.0,
+          "pageP50Ms": 1.917375,
+          "pageP95Ms": 16.486541
+        },
+        "luceneDate": {
+          "recall": 0.8566666666666667,
+          "recallAt5": 0.5066666666666667,
+          "recallAt10": 0.5966666666666667,
+          "recallAt20": 0.6733333333333333,
+          "mrr": 0.39754970724685296,
+          "hitsP50": 6.0,
+          "hitsP90": 103.0,
+          "pageP50Ms": 1.656583,
+          "pageP95Ms": 18.560125
+        }
+      },
+      "identifierCamelPrefix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 22,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.5366666666666666,
+          "recallAt10": 0.6333333333333333,
+          "recallAt20": 0.6833333333333333,
+          "mrr": 0.44813572520352835,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.673875,
+          "pageP95Ms": 56.719583
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5366666666666666,
+          "recallAt10": 0.6333333333333333,
+          "recallAt20": 0.6833333333333333,
+          "mrr": 0.44813572520352835,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.621083,
+          "pageP95Ms": 56.692791
+        },
+        "lucene": {
+          "recall": 0.9266666666666666,
+          "recallAt5": 0.5333333333333333,
+          "recallAt10": 0.6133333333333333,
+          "recallAt20": 0.6833333333333333,
+          "mrr": 0.437703871562125,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.515791,
+          "pageP95Ms": 17.484916
+        },
+        "luceneDate": {
+          "recall": 0.9266666666666666,
+          "recallAt5": 0.55,
+          "recallAt10": 0.6366666666666667,
+          "recallAt20": 0.72,
+          "mrr": 0.4529273688258995,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.29075,
+          "pageP95Ms": 12.875834
+        }
+      },
+      "identifierDotFinal": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.46,
+          "recallAt20": 0.5366666666666666,
+          "mrr": 0.26378919949422885,
+          "hitsP50": 37.0,
+          "hitsP90": 228.0,
+          "pageP50Ms": 49.4175,
+          "pageP95Ms": 57.203417
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.46,
+          "recallAt20": 0.5366666666666666,
+          "mrr": 0.26378919949422885,
+          "hitsP50": 37.0,
+          "hitsP90": 228.0,
+          "pageP50Ms": 49.26475,
+          "pageP95Ms": 57.293875
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.4766666666666667,
+          "recallAt10": 0.5833333333333334,
+          "recallAt20": 0.69,
+          "mrr": 0.3548212983485361,
+          "hitsP50": 32.0,
+          "hitsP90": 162.0,
+          "pageP50Ms": 8.289791,
+          "pageP95Ms": 20.005917
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.38333333333333336,
+          "recallAt10": 0.47333333333333333,
+          "recallAt20": 0.5566666666666666,
+          "mrr": 0.2649731913891331,
+          "hitsP50": 32.0,
+          "hitsP90": 162.0,
+          "pageP50Ms": 12.806583,
+          "pageP95Ms": 24.032625
+        }
+      },
+      "identifierSnakePart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.27,
+          "recallAt10": 0.34,
+          "recallAt20": 0.44333333333333336,
+          "mrr": 0.21677329606017462,
+          "hitsP50": 93.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 44.4625,
+          "pageP95Ms": 58.184792
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.27,
+          "recallAt10": 0.34,
+          "recallAt20": 0.44333333333333336,
+          "mrr": 0.21677329606017462,
+          "hitsP50": 93.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 44.416083,
+          "pageP95Ms": 58.023041
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.35333333333333333,
+          "recallAt10": 0.43,
+          "recallAt20": 0.54,
+          "mrr": 0.28375386516695106,
+          "hitsP50": 73.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 9.149458,
+          "pageP95Ms": 15.60475
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.31333333333333335,
+          "recallAt10": 0.37333333333333335,
+          "recallAt20": 0.49,
+          "mrr": 0.2376322911314238,
+          "hitsP50": 73.0,
+          "hitsP90": 408.0,
+          "pageP50Ms": 12.43175,
+          "pageP95Ms": 20.423041
+        }
+      },
+      "identifierKebabPart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.35,
+          "recallAt10": 0.43,
+          "recallAt20": 0.5333333333333333,
+          "mrr": 0.2582769375480711,
+          "hitsP50": 44.0,
+          "hitsP90": 880.0,
+          "pageP50Ms": 40.362,
+          "pageP95Ms": 58.53875
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.35,
+          "recallAt10": 0.43,
+          "recallAt20": 0.5333333333333333,
+          "mrr": 0.2582769375480711,
+          "hitsP50": 44.0,
+          "hitsP90": 880.0,
+          "pageP50Ms": 40.325334,
+          "pageP95Ms": 58.555166
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.49666666666666665,
+          "recallAt10": 0.62,
+          "recallAt20": 0.71,
+          "mrr": 0.3543758004411473,
+          "hitsP50": 21.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 5.257125,
+          "pageP95Ms": 15.135209
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.42,
+          "recallAt10": 0.53,
+          "recallAt20": 0.6166666666666667,
+          "mrr": 0.3066811026853746,
+          "hitsP50": 21.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 7.021125,
+          "pageP95Ms": 18.743958
+        }
+      },
+      "identifierSlashPart": {
+        "cases": 140,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4357142857142857,
+          "recallAt10": 0.5,
+          "recallAt20": 0.5714285714285714,
+          "mrr": 0.34625090175167417,
+          "hitsP50": 20.0,
+          "hitsP90": 830.0,
+          "pageP50Ms": 33.434334,
+          "pageP95Ms": 57.276167
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4357142857142857,
+          "recallAt10": 0.5,
+          "recallAt20": 0.5714285714285714,
+          "mrr": 0.34625090175167417,
+          "hitsP50": 20.0,
+          "hitsP90": 830.0,
+          "pageP50Ms": 33.377208,
+          "pageP95Ms": 57.089084
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.6071428571428571,
+          "recallAt10": 0.6857142857142857,
+          "recallAt20": 0.7785714285714286,
+          "mrr": 0.462489760573967,
+          "hitsP50": 10.0,
+          "hitsP90": 198.0,
+          "pageP50Ms": 3.994791,
+          "pageP95Ms": 14.152083
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.5642857142857143,
+          "recallAt10": 0.6571428571428571,
+          "recallAt20": 0.7214285714285714,
+          "mrr": 0.43549899850208446,
+          "hitsP50": 10.0,
+          "hitsP90": 198.0,
+          "pageP50Ms": 6.448916,
+          "pageP95Ms": 18.321125
+        }
+      },
+      "all": {
+        "cases": 3392,
+        "luceneOnly": 1391,
+        "likeOnly": 73,
+        "like": {
+          "recall": 0.5728183962264151,
+          "recallAt5": 0.2650353773584906,
+          "recallAt10": 0.3071933962264151,
+          "recallAt20": 0.3469929245283019,
+          "mrr": 0.2143852337458425,
+          "hitsP50": 1.0,
+          "hitsP90": 325.0,
+          "pageP50Ms": 27.884958,
+          "pageP95Ms": 56.903875
+        },
+        "likeAnd": {
+          "recall": 0.8101415094339622,
+          "recallAt5": 0.41627358490566035,
+          "recallAt10": 0.47612028301886794,
+          "recallAt20": 0.5306603773584906,
+          "mrr": 0.32987405038953926,
+          "hitsP50": 6.0,
+          "hitsP90": 442.0,
+          "pageP50Ms": 39.862167,
+          "pageP95Ms": 78.103542
+        },
+        "lucene": {
+          "recall": 0.9613797169811321,
+          "recallAt5": 0.4829009433962264,
+          "recallAt10": 0.5728183962264151,
+          "recallAt20": 0.6630306603773585,
+          "mrr": 0.3664802915548852,
+          "hitsP50": 21.0,
+          "hitsP90": 398.0,
+          "pageP50Ms": 4.045459,
+          "pageP95Ms": 16.025583
+        },
+        "luceneDate": {
+          "recall": 0.9613797169811321,
+          "recallAt5": 0.41067216981132076,
+          "recallAt10": 0.5035377358490566,
+          "recallAt20": 0.5905070754716981,
+          "mrr": 0.311244922583109,
+          "hitsP50": 21.0,
+          "hitsP90": 398.0,
+          "pageP50Ms": 6.050208,
+          "pageP95Ms": 19.680292
+        }
+      },
+      "legacyAll": {
+        "cases": 1752,
+        "luceneOnly": 1391,
+        "likeOnly": 8,
+        "like": {
+          "recall": 0.17294520547945205,
+          "recallAt5": 0.1386986301369863,
+          "recallAt10": 0.146689497716895,
+          "recallAt20": 0.15182648401826485,
+          "mrr": 0.12226820762184978,
+          "hitsP50": 0.0,
+          "hitsP90": 4.0,
+          "pageP50Ms": 27.164542,
+          "pageP95Ms": 29.617875
+        },
+        "likeAnd": {
+          "recall": 0.632420091324201,
+          "recallAt5": 0.4315068493150685,
+          "recallAt10": 0.4737442922374429,
+          "recallAt20": 0.507420091324201,
+          "mrr": 0.345862994183163,
+          "hitsP50": 2.0,
+          "hitsP90": 91.0,
+          "pageP50Ms": 39.897792,
+          "pageP95Ms": 80.9105
+        },
+        "lucene": {
+          "recall": 0.9623287671232876,
+          "recallAt5": 0.4874429223744292,
+          "recallAt10": 0.5713470319634704,
+          "recallAt20": 0.6581050228310502,
+          "mrr": 0.3616581064787084,
+          "hitsP50": 28.0,
+          "hitsP90": 655.0,
+          "pageP50Ms": 3.499,
+          "pageP95Ms": 13.730583
+        },
+        "luceneDate": {
+          "recall": 0.9623287671232876,
+          "recallAt5": 0.3778538812785388,
+          "recallAt10": 0.4754566210045662,
+          "recallAt20": 0.5622146118721462,
+          "mrr": 0.283586654810506,
+          "hitsP50": 28.0,
+          "hitsP90": 655.0,
+          "pageP50Ms": 5.893625,
+          "pageP95Ms": 16.617916
+        }
+      },
+      "identifierAll": {
+        "cases": 1640,
+        "luceneOnly": 0,
+        "likeOnly": 65,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4,
+          "recallAt10": 0.47865853658536583,
+          "recallAt20": 0.5554878048780488,
+          "mrr": 0.3127931787270815,
+          "hitsP50": 31.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 37.367875,
+          "pageP95Ms": 57.976792
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4,
+          "recallAt10": 0.47865853658536583,
+          "recallAt20": 0.5554878048780488,
+          "mrr": 0.3127931787270815,
+          "hitsP50": 31.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 37.219458,
+          "pageP95Ms": 57.945416
+        },
+        "lucene": {
+          "recall": 0.9603658536585366,
+          "recallAt5": 0.47804878048780486,
+          "recallAt10": 0.574390243902439,
+          "recallAt20": 0.6682926829268293,
+          "mrr": 0.3716317965874863,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 5.329584,
+          "pageP95Ms": 17.139417
+        },
+        "luceneDate": {
+          "recall": 0.9603658536585366,
+          "recallAt5": 0.4457317073170732,
+          "recallAt10": 0.5335365853658537,
+          "recallAt20": 0.6207317073170732,
+          "mrr": 0.3407920476670088,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 6.448916,
+          "pageP95Ms": 20.975417
+        }
+      }
+    },
+    "stage3-843": {
+      "database": "mariadb",
+      "java": "21.0.6",
+      "seed": 843,
+      "sampledIssues": 300,
+      "user": "siteAdmin",
+      "issues": 4882,
+      "comments": 6335,
+      "identifierSampling": {
+        "identifierCamelSuffix": {
+          "eligibleIssues": 347,
+          "sampledIssues": 300
+        },
+        "identifierCamelPrefix": {
+          "eligibleIssues": 338,
+          "sampledIssues": 300
+        },
+        "identifierDotFinal": {
+          "eligibleIssues": 1138,
+          "sampledIssues": 300
+        },
+        "identifierSnakePart": {
+          "eligibleIssues": 848,
+          "sampledIssues": 300
+        },
+        "identifierKebabPart": {
+          "eligibleIssues": 398,
+          "sampledIssues": 300
+        },
+        "identifierSlashPart": {
+          "eligibleIssues": 140,
+          "sampledIssues": 140
+        }
+      },
+      "indexBytes": 4944547,
+      "exact": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 13,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.76,
+          "recallAt10": 0.81,
+          "recallAt20": 0.8666666666666667,
+          "mrr": 0.6618717512844474,
+          "hitsP50": 2.0,
+          "hitsP90": 175.0,
+          "pageP50Ms": 27.313542,
+          "pageP95Ms": 54.694917
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6033333333333334,
+          "recallAt10": 0.66,
+          "recallAt20": 0.7366666666666667,
+          "mrr": 0.4949472947183678,
+          "hitsP50": 5.0,
+          "hitsP90": 1380.0,
+          "pageP50Ms": 40.174542,
+          "pageP95Ms": 81.086791
+        },
+        "lucene": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.6,
+          "recallAt10": 0.66,
+          "recallAt20": 0.7333333333333333,
+          "mrr": 0.5004971397475637,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 5.005084,
+          "pageP95Ms": 38.473166
+        },
+        "luceneDate": {
+          "recall": 0.9566666666666667,
+          "recallAt5": 0.33,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5133333333333333,
+          "mrr": 0.2381482457926504,
+          "hitsP50": 38.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 7.109709,
+          "pageP95Ms": 40.353625
+        }
+      },
+      "separated": {
+        "cases": 288,
+        "luceneOnly": 278,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.152625,
+          "pageP95Ms": 27.700375
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.6701388888888888,
+          "recallAt10": 0.7395833333333334,
+          "recallAt20": 0.8194444444444444,
+          "mrr": 0.5582436212373261,
+          "hitsP50": 3.0,
+          "hitsP90": 158.0,
+          "pageP50Ms": 40.078167,
+          "pageP95Ms": 81.708584
+        },
+        "lucene": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.5034722222222222,
+          "recallAt10": 0.5729166666666666,
+          "recallAt20": 0.6979166666666666,
+          "mrr": 0.40522794798938994,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 4.14375,
+          "pageP95Ms": 10.714959
+        },
+        "luceneDate": {
+          "recall": 0.9652777777777778,
+          "recallAt5": 0.3923611111111111,
+          "recallAt10": 0.4652777777777778,
+          "recallAt20": 0.5798611111111112,
+          "mrr": 0.2881218316904154,
+          "hitsP50": 32.0,
+          "hitsP90": 481.0,
+          "pageP50Ms": 6.5035,
+          "pageP95Ms": 15.167416
+        }
+      },
+      "reordered": {
+        "cases": 300,
+        "luceneOnly": 281,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.201667,
+          "pageP95Ms": 27.650666
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5733333333333334,
+          "recallAt10": 0.6433333333333333,
+          "recallAt20": 0.7133333333333334,
+          "mrr": 0.4778940860681902,
+          "hitsP50": 7.0,
+          "hitsP90": 1644.0,
+          "pageP50Ms": 40.611792,
+          "pageP95Ms": 81.293875
+        },
+        "lucene": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.41,
+          "recallAt10": 0.5066666666666667,
+          "recallAt20": 0.61,
+          "mrr": 0.30139632148236667,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 4.776042,
+          "pageP95Ms": 38.825333
+        },
+        "luceneDate": {
+          "recall": 0.9366666666666666,
+          "recallAt5": 0.27,
+          "recallAt10": 0.37,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.20667320040451295,
+          "hitsP50": 45.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 6.905959,
+          "pageP95Ms": 44.848042
+        }
+      },
+      "inflected": {
+        "cases": 165,
+        "luceneOnly": 161,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 1.0,
+          "pageP50Ms": 27.170917,
+          "pageP95Ms": 27.868958
+        },
+        "likeAnd": {
+          "recall": 0.012121212121212121,
+          "recallAt5": 0.012121212121212121,
+          "recallAt10": 0.012121212121212121,
+          "recallAt20": 0.012121212121212121,
+          "mrr": 0.012121212121212121,
+          "hitsP50": 0.0,
+          "hitsP90": 9.0,
+          "pageP50Ms": 39.948375,
+          "pageP95Ms": 42.317083
+        },
+        "lucene": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.5515151515151515,
+          "recallAt10": 0.6181818181818182,
+          "recallAt20": 0.7090909090909091,
+          "mrr": 0.4639700046176274,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 5.513791,
+          "pageP95Ms": 14.803083
+        },
+        "luceneDate": {
+          "recall": 0.9757575757575757,
+          "recallAt5": 0.24242424242424243,
+          "recallAt10": 0.32727272727272727,
+          "recallAt20": 0.4121212121212121,
+          "mrr": 0.19024747784084386,
+          "hitsP50": 77.0,
+          "hitsP90": 1169.0,
+          "pageP50Ms": 8.051584,
+          "pageP95Ms": 17.656334
+        }
+      },
+      "particle": {
+        "cases": 187,
+        "luceneOnly": 181,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.147375,
+          "pageP95Ms": 27.529
+        },
+        "likeAnd": {
+          "recall": 0.08021390374331551,
+          "recallAt5": 0.06417112299465241,
+          "recallAt10": 0.06951871657754011,
+          "recallAt20": 0.06951871657754011,
+          "mrr": 0.053872990637696516,
+          "hitsP50": 0.0,
+          "hitsP90": 10.0,
+          "pageP50Ms": 40.006042,
+          "pageP95Ms": 41.927041
+        },
+        "lucene": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.7219251336898396,
+          "recallAt10": 0.7967914438502673,
+          "recallAt20": 0.8663101604278075,
+          "mrr": 0.6319301759142104,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 4.096209,
+          "pageP95Ms": 12.016208
+        },
+        "luceneDate": {
+          "recall": 0.9679144385026738,
+          "recallAt5": 0.3582887700534759,
+          "recallAt10": 0.45989304812834225,
+          "recallAt20": 0.5775401069518716,
+          "mrr": 0.28065187887179865,
+          "hitsP50": 30.0,
+          "hitsP90": 402.0,
+          "pageP50Ms": 5.713333,
+          "pageP95Ms": 15.8925
+        }
+      },
+      "joined": {
+        "cases": 300,
+        "luceneOnly": 279,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.213333,
+          "pageP95Ms": 54.089417
+        },
+        "likeAnd": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 8.0,
+          "pageP50Ms": 27.199583,
+          "pageP95Ms": 54.144709
+        },
+        "lucene": {
+          "recall": 0.93,
+          "recallAt5": 0.52,
+          "recallAt10": 0.5966666666666667,
+          "recallAt20": 0.6533333333333333,
+          "mrr": 0.4285045624636806,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 5.269583,
+          "pageP95Ms": 38.68275
+        },
+        "luceneDate": {
+          "recall": 0.93,
+          "recallAt5": 0.23,
+          "recallAt10": 0.33,
+          "recallAt20": 0.41,
+          "mrr": 0.16809461682663177,
+          "hitsP50": 83.0,
+          "hitsP90": 1632.0,
+          "pageP50Ms": 7.388458,
+          "pageP95Ms": 44.905
+        }
+      },
+      "identifierSplit": {
+        "cases": 183,
+        "luceneOnly": 183,
+        "likeOnly": 0,
+        "like": {
+          "recall": 0.0,
+          "recallAt5": 0.0,
+          "recallAt10": 0.0,
+          "recallAt20": 0.0,
+          "mrr": 0.0,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.932833,
+          "pageP95Ms": 29.032
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.7759562841530054,
+          "recallAt10": 0.8032786885245902,
+          "recallAt20": 0.8524590163934426,
+          "mrr": 0.555776475477817,
+          "hitsP50": 3.0,
+          "hitsP90": 55.0,
+          "pageP50Ms": 43.889875,
+          "pageP95Ms": 87.337625
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.9890710382513661,
+          "recallAt10": 0.994535519125683,
+          "recallAt20": 0.994535519125683,
+          "mrr": 0.9568175904241479,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.441833,
+          "pageP95Ms": 7.59425
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.912568306010929,
+          "recallAt10": 0.9562841530054644,
+          "recallAt20": 0.9781420765027322,
+          "mrr": 0.7651398939484201,
+          "hitsP50": 1.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 1.228583,
+          "pageP95Ms": 7.831708
+        }
+      },
+      "identifierPart": {
+        "cases": 8,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 29.108667,
+          "pageP95Ms": 29.823416
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 28.710959,
+          "pageP95Ms": 29.814667
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 0.875,
+          "recallAt20": 1.0,
+          "mrr": 0.8203125,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 1.015959,
+          "pageP95Ms": 7.862167
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.875,
+          "recallAt10": 1.0,
+          "recallAt20": 1.0,
+          "mrr": 0.8888888888888888,
+          "hitsP50": 1.0,
+          "hitsP90": 16.0,
+          "pageP50Ms": 0.768333,
+          "pageP95Ms": 7.350541
+        }
+      },
+      "missing": {
+        "cases": 20,
+        "like": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.1855,
+          "pageP95Ms": 27.351375
+        },
+        "likeAnd": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 27.1345,
+          "pageP95Ms": 27.302375
+        },
+        "lucene": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.283333,
+          "pageP95Ms": 0.33575
+        },
+        "luceneDate": {
+          "recall": null,
+          "recallAt5": null,
+          "recallAt10": null,
+          "recallAt20": null,
+          "mrr": null,
+          "hitsP50": 0.0,
+          "hitsP90": 0.0,
+          "pageP50Ms": 0.288583,
+          "pageP95Ms": 0.333792
+        }
+      },
+      "identifierCamelSuffix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.739333,
+          "pageP95Ms": 58.848667
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.4866666666666667,
+          "recallAt20": 0.5766666666666667,
+          "mrr": 0.35410147607861314,
+          "hitsP50": 22.0,
+          "hitsP90": 850.0,
+          "pageP50Ms": 34.73075,
+          "pageP95Ms": 58.798625
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.55,
+          "recallAt10": 0.6633333333333333,
+          "recallAt20": 0.77,
+          "mrr": 0.4383096632397204,
+          "hitsP50": 10.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 2.621125,
+          "pageP95Ms": 17.917375
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.5333333333333333,
+          "recallAt10": 0.6666666666666666,
+          "recallAt20": 0.7733333333333333,
+          "mrr": 0.4406582311032045,
+          "hitsP50": 10.0,
+          "hitsP90": 155.0,
+          "pageP50Ms": 2.621625,
+          "pageP95Ms": 20.082125
+        }
+      },
+      "identifierCamelPrefix": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.670375,
+          "pageP95Ms": 56.511542
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.5466666666666666,
+          "recallAt10": 0.62,
+          "recallAt20": 0.6766666666666666,
+          "mrr": 0.46875090399962677,
+          "hitsP50": 7.0,
+          "hitsP90": 397.0,
+          "pageP50Ms": 29.602084,
+          "pageP95Ms": 56.609417
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.66,
+          "recallAt10": 0.7433333333333333,
+          "recallAt20": 0.8033333333333333,
+          "mrr": 0.5310346452539222,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.735292,
+          "pageP95Ms": 18.5565
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.6133333333333333,
+          "recallAt10": 0.69,
+          "recallAt20": 0.76,
+          "mrr": 0.5154691808895163,
+          "hitsP50": 4.0,
+          "hitsP90": 193.0,
+          "pageP50Ms": 1.497917,
+          "pageP95Ms": 13.86275
+        }
+      },
+      "identifierDotFinal": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.463958,
+          "pageP95Ms": 57.3595
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.37,
+          "recallAt10": 0.4533333333333333,
+          "recallAt20": 0.5666666666666667,
+          "mrr": 0.26443824479325323,
+          "hitsP50": 27.0,
+          "hitsP90": 229.0,
+          "pageP50Ms": 48.398459,
+          "pageP95Ms": 57.177625
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.48,
+          "recallAt10": 0.5833333333333334,
+          "recallAt20": 0.71,
+          "mrr": 0.3650267575442403,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 8.359875,
+          "pageP95Ms": 20.756
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.37666666666666665,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.57,
+          "mrr": 0.259841223797012,
+          "hitsP50": 28.0,
+          "hitsP90": 217.0,
+          "pageP50Ms": 12.311833,
+          "pageP95Ms": 25.564209
+        }
+      },
+      "identifierSnakePart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.425792,
+          "pageP95Ms": 57.54025
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.32,
+          "recallAt10": 0.39,
+          "recallAt20": 0.49666666666666665,
+          "mrr": 0.255916418501109,
+          "hitsP50": 70.0,
+          "hitsP90": 665.0,
+          "pageP50Ms": 44.342334,
+          "pageP95Ms": 57.449833
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.43333333333333335,
+          "recallAt10": 0.5,
+          "recallAt20": 0.5966666666666667,
+          "mrr": 0.3474092352803858,
+          "hitsP50": 49.0,
+          "hitsP90": 409.0,
+          "pageP50Ms": 8.999333,
+          "pageP95Ms": 17.56225
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.34,
+          "recallAt10": 0.45666666666666667,
+          "recallAt20": 0.5933333333333334,
+          "mrr": 0.27462639939754485,
+          "hitsP50": 49.0,
+          "hitsP90": 409.0,
+          "pageP50Ms": 12.248833,
+          "pageP95Ms": 21.2995
+        }
+      },
+      "identifierKebabPart": {
+        "cases": 300,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 38.209667,
+          "pageP95Ms": 57.712458
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.3433333333333333,
+          "recallAt10": 0.4166666666666667,
+          "recallAt20": 0.5,
+          "mrr": 0.255457522449819,
+          "hitsP50": 44.0,
+          "hitsP90": 901.0,
+          "pageP50Ms": 38.731375,
+          "pageP95Ms": 57.713167
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.5,
+          "recallAt10": 0.62,
+          "recallAt20": 0.7233333333333334,
+          "mrr": 0.3623889936585029,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 5.740917,
+          "pageP95Ms": 14.314625
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.4266666666666667,
+          "recallAt10": 0.5233333333333333,
+          "recallAt20": 0.6266666666666667,
+          "mrr": 0.29631456069388773,
+          "hitsP50": 27.0,
+          "hitsP90": 329.0,
+          "pageP50Ms": 7.647,
+          "pageP95Ms": 19.72275
+        }
+      },
+      "identifierSlashPart": {
+        "cases": 140,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.691709,
+          "pageP95Ms": 57.562416
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.42142857142857143,
+          "recallAt10": 0.4857142857142857,
+          "recallAt20": 0.55,
+          "mrr": 0.35831673338084863,
+          "hitsP50": 28.0,
+          "hitsP90": 738.0,
+          "pageP50Ms": 33.50175,
+          "pageP95Ms": 57.991458
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.5928571428571429,
+          "recallAt10": 0.6785714285714286,
+          "recallAt20": 0.8071428571428572,
+          "mrr": 0.45766425915569797,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 5.143542,
+          "pageP95Ms": 14.5855
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.5214285714285715,
+          "recallAt10": 0.6214285714285714,
+          "recallAt20": 0.7214285714285714,
+          "mrr": 0.420520768458414,
+          "hitsP50": 14.0,
+          "hitsP90": 116.0,
+          "pageP50Ms": 7.07975,
+          "pageP95Ms": 19.165208
+        }
+      },
+      "all": {
+        "cases": 3371,
+        "luceneOnly": 1363,
+        "likeOnly": 13,
+        "like": {
+          "recall": 0.5778700682290122,
+          "recallAt5": 0.26579649955502815,
+          "recallAt10": 0.30525066745772766,
+          "recallAt20": 0.3530109759715218,
+          "mrr": 0.218165633021801,
+          "hitsP50": 1.0,
+          "hitsP90": 341.0,
+          "pageP50Ms": 28.042833,
+          "pageP95Ms": 56.849708
+        },
+        "likeAnd": {
+          "recall": 0.8116285968555325,
+          "recallAt5": 0.40640759418570155,
+          "recallAt10": 0.46039750815781666,
+          "recallAt20": 0.525660041530703,
+          "mrr": 0.32728648618960643,
+          "hitsP50": 6.0,
+          "hitsP90": 563.0,
+          "pageP50Ms": 39.983958,
+          "pageP95Ms": 78.686208
+        },
+        "lucene": {
+          "recall": 0.9783447048353604,
+          "recallAt5": 0.5600711954909522,
+          "recallAt10": 0.6413527143280926,
+          "recallAt20": 0.7306437258973598,
+          "mrr": 0.4566997785847922,
+          "hitsP50": 22.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 4.743625,
+          "pageP95Ms": 17.911792
+        },
+        "luceneDate": {
+          "recall": 0.9783447048353604,
+          "recallAt5": 0.41619697419163454,
+          "recallAt10": 0.5093444081874815,
+          "recallAt20": 0.6093147433995847,
+          "mrr": 0.32417803016284247,
+          "hitsP50": 22.0,
+          "hitsP90": 448.0,
+          "pageP50Ms": 6.373875,
+          "pageP95Ms": 21.5385
+        }
+      },
+      "legacyAll": {
+        "cases": 1731,
+        "luceneOnly": 1363,
+        "likeOnly": 13,
+        "like": {
+          "recall": 0.1779318313113807,
+          "recallAt5": 0.13575967648757944,
+          "recallAt10": 0.14500288850375506,
+          "recallAt20": 0.15482380127094164,
+          "mrr": 0.11881723656640403,
+          "hitsP50": 0.0,
+          "hitsP90": 6.0,
+          "pageP50Ms": 27.245875,
+          "pageP95Ms": 32.588166
+        },
+        "likeAnd": {
+          "recall": 0.63316002310803,
+          "recallAt5": 0.4095898324667822,
+          "recallAt10": 0.44714038128249567,
+          "recallAt20": 0.49104563835932985,
+          "mrr": 0.33132237580884905,
+          "hitsP50": 2.0,
+          "hitsP90": 148.0,
+          "pageP50Ms": 40.050917,
+          "pageP95Ms": 81.068
+        },
+        "lucene": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.5880993645291739,
+          "recallAt10": 0.6551126516464472,
+          "recallAt20": 0.733102253032929,
+          "mrr": 0.4981000397657495,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 4.357209,
+          "pageP95Ms": 17.682167
+        },
+        "luceneDate": {
+          "recall": 0.9578278451761987,
+          "recallAt5": 0.37146158290005776,
+          "recallAt10": 0.45753899480069327,
+          "recallAt20": 0.5522819179664934,
+          "mrr": 0.28761314461606824,
+          "hitsP50": 30.0,
+          "hitsP90": 916.0,
+          "pageP50Ms": 6.449292,
+          "pageP95Ms": 21.526417
+        }
+      },
+      "identifierAll": {
+        "cases": 1640,
+        "luceneOnly": 0,
+        "likeOnly": 0,
+        "like": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 37.096125,
+          "pageP95Ms": 57.685458
+        },
+        "likeAnd": {
+          "recall": 1.0,
+          "recallAt5": 0.4030487804878049,
+          "recallAt10": 0.474390243902439,
+          "recallAt20": 0.5621951219512196,
+          "mrr": 0.3230266539146608,
+          "hitsP50": 30.0,
+          "hitsP90": 687.0,
+          "pageP50Ms": 36.937083,
+          "pageP95Ms": 57.713167
+        },
+        "lucene": {
+          "recall": 1.0,
+          "recallAt5": 0.5304878048780488,
+          "recallAt10": 0.6268292682926829,
+          "recallAt20": 0.7280487804878049,
+          "mrr": 0.4130023077895294,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 5.448792,
+          "pageP95Ms": 18.109042
+        },
+        "luceneDate": {
+          "recall": 1.0,
+          "recallAt5": 0.4634146341463415,
+          "recallAt10": 0.5640243902439024,
+          "recallAt20": 0.6695121951219513,
+          "mrr": 0.3627718209442229,
+          "hitsP50": 16.0,
+          "hitsP90": 298.0,
+          "pageP50Ms": 6.229291,
+          "pageP95Ms": 21.599791
+        }
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "before": "baseline-843",
+      "after": "stage1-843",
+      "identicalCasesIncludingMissing": 3391,
+      "existingNoriDocumentRankRegressions": 0,
+      "existingNoriRankRegressionCases": 0,
+      "existingNoriKnownItemRankRegressions": 0,
+      "changedMatchSetCases": 0,
+      "lostKnownItems": 0,
+      "previousIdentifierFailures": 57,
+      "resolvedPreviousIdentifierFailures": 0,
+      "remainingIdentifierFailures": 57,
+      "indexBytes": [
+        8375012,
+        8375012
+      ]
+    },
+    {
+      "before": "baseline-843",
+      "after": "proximity-a-843",
+      "identicalCasesIncludingMissing": 3391,
+      "existingNoriDocumentRankRegressions": 325572,
+      "existingNoriRankRegressionCases": 1230,
+      "existingNoriKnownItemRankRegressions": 180,
+      "changedMatchSetCases": 0,
+      "lostKnownItems": 0,
+      "previousIdentifierFailures": 57,
+      "resolvedPreviousIdentifierFailures": 0,
+      "remainingIdentifierFailures": 57,
+      "indexBytes": [
+        8375012,
+        8375012
+      ]
+    },
+    {
+      "before": "baseline-843",
+      "after": "proximity-b-843",
+      "identicalCasesIncludingMissing": 3391,
+      "existingNoriDocumentRankRegressions": 316836,
+      "existingNoriRankRegressionCases": 1196,
+      "existingNoriKnownItemRankRegressions": 189,
+      "changedMatchSetCases": 0,
+      "lostKnownItems": 0,
+      "previousIdentifierFailures": 57,
+      "resolvedPreviousIdentifierFailures": 0,
+      "remainingIdentifierFailures": 57,
+      "indexBytes": [
+        8375012,
+        8375012
+      ]
+    },
+    {
+      "before": "baseline-844",
+      "after": "proximity-b-844",
+      "identicalCasesIncludingMissing": 3412,
+      "existingNoriDocumentRankRegressions": 255305,
+      "existingNoriRankRegressionCases": 1268,
+      "existingNoriKnownItemRankRegressions": 165,
+      "changedMatchSetCases": 0,
+      "lostKnownItems": 0,
+      "previousIdentifierFailures": 65,
+      "resolvedPreviousIdentifierFailures": 0,
+      "remainingIdentifierFailures": 65,
+      "indexBytes": [
+        8375012,
+        8375012
+      ]
+    },
+    {
+      "before": "proximity-b-843",
+      "after": "stage3-843",
+      "identicalCasesIncludingMissing": 3391,
+      "existingNoriDocumentRankRegressions": 0,
+      "existingNoriRankRegressionCases": 0,
+      "existingNoriKnownItemRankRegressions": 0,
+      "changedMatchSetCases": 156,
+      "lostKnownItems": 0,
+      "previousIdentifierFailures": 57,
+      "resolvedPreviousIdentifierFailures": 57,
+      "remainingIdentifierFailures": 0,
+      "indexBytes": [
+        8375012,
+        4944547
+      ]
+    },
+    {
+      "before": "baseline-843",
+      "after": "stage3-843",
+      "identicalCasesIncludingMissing": 3391,
+      "existingNoriDocumentRankRegressions": 316836,
+      "existingNoriRankRegressionCases": 1196,
+      "existingNoriKnownItemRankRegressions": 189,
+      "changedMatchSetCases": 156,
+      "lostKnownItems": 0,
+      "previousIdentifierFailures": 57,
+      "resolvedPreviousIdentifierFailures": 57,
+      "remainingIdentifierFailures": 0,
+      "indexBytes": [
+        8375012,
+        4944547
+      ]
+    }
+  ],
+  "remainingIdentifierFailures": {
+    "before": {
+      "acronymBoundary": 50,
+      "adjacentKorean": 7
+    },
+    "after": {
+      "acronymBoundary": 0,
+      "adjacentKorean": 0
+    },
+    "classificationSource": "Prior documented classification of the same 57 failures; all 57 resolved"
+  },
+  "remainingKoreanFailures": {
+    "exact": 13,
+    "separated": 10,
+    "reordered": 19,
+    "inflected": 4,
+    "particle": 6,
+    "joined": 21
+  }
+}

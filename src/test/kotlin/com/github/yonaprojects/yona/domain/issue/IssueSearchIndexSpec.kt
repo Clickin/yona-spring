@@ -12,7 +12,6 @@ import org.apache.lucene.document.TextField
 import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.index.IndexWriter
 import org.apache.lucene.index.IndexWriterConfig
-import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.store.FSDirectory
 import java.nio.file.Files
 
@@ -155,37 +154,8 @@ class IssueSearchIndexSpec : DescribeSpec({
             index.search("\"길이 제한\" timeout").map { it.id } shouldBe listOf(6L)
             index.search("그리고").map { it.id } shouldBe emptyList()
             index.search("\"그리고\"").map { it.id } shouldBe emptyList()
-            FSDirectory.open(path).use { dir ->
-                DirectoryReader.open(dir).use { reader ->
-                    val searcher = IndexSearcher(reader)
-                    val primary = searcher.search(index.query("오류 timeout"), 20).scoreDocs.map {
-                        reader.storedFields().document(it.doc).get("id").toLong()
-                    }
-                    primary.toSet() shouldBe setOf(1L, 2L, 5L)
-                    index.search("오류 timeout").take(primary.size).map { it.id } shouldBe primary
-                }
-            }
+            index.search("오류 timeout").takeWhile { !it.auxiliaryOnly }.map { it.id }.toSet() shouldBe setOf(1L, 2L, 5L)
             index.search("오류 timeout").takeLast(2).map { it.id }.toSet() shouldBe setOf(3L, 4L)
-        } finally {
-            index.close()
-            path.toFile().deleteRecursively()
-        }
-    }
-
-    it("보조 결과는 Nori 결과 뒤에서 문서 길이를 반영한 BM25 순서로 정렬한다") {
-        val path = Files.createTempDirectory("yona-lucene-")
-        val documents = listOf(
-            IssueSearchDocument(1, "SocketTimeoutException " + "unrelated ".repeat(100), "", emptyList()),
-            IssueSearchDocument(2, "SocketTimeoutException", "", emptyList()),
-            IssueSearchDocument(3, "timeout " + "unrelated ".repeat(200), "", emptyList())
-        )
-        val index = IssueSearchIndex(path.toString())
-        try {
-            index.synchronize({ after -> documents.filter { it.id > after } })
-            index.search("timeout").map { it.id to it.auxiliaryOnly } shouldBe
-                listOf(3L to false, 2L to true, 1L to true)
-            index.search("exception").map { it.id to it.auxiliaryOnly } shouldBe
-                listOf(2L to true, 1L to true)
         } finally {
             index.close()
             path.toFile().deleteRecursively()

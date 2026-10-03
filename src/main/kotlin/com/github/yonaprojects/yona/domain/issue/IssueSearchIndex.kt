@@ -92,10 +92,8 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
      * Unquoted text is analyzed as one string, like indexed text: Nori splits a word differently without its
      * neighbours (`길이 제한` indexes `길`, but `길이` alone yields `길이`), so per-word analysis misses exact text.
      */
-    fun query(text: String): Query = queries(text).first
-
-    private fun queries(text: String): Pair<Query, Query?> {
-        if (text.isBlank()) return MatchAllDocsQuery() to null
+    fun query(text: String): Query {
+        if (text.isBlank()) return MatchAllDocsQuery()
         val builder = QueryBuilder(analyzer)
         val required = BooleanQuery.Builder()
         val fallback = BooleanQuery.Builder()
@@ -140,14 +138,14 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             add(requiredQuery, BooleanClause.Occur.MUST)
             for ((field, boost) in FIELDS) {
                 builder.createPhraseQuery(field, unquoted, 0)?.let {
-                    add(BoostQuery(it, boost * 3f), BooleanClause.Occur.SHOULD)
+                    add(BoostQuery(it, boost * 5f), BooleanClause.Occur.SHOULD)
                 }
-                builder.createPhraseQuery(field, unquoted, 4)?.let {
+                builder.createPhraseQuery(field, unquoted, 3)?.let {
                     add(BoostQuery(it, boost), BooleanClause.Occur.SHOULD)
                 }
             }
         }.build()
-        if (words.isEmpty()) return primary to null
+        if (words.isEmpty()) return primary
         contextualTerms.forEach { value -> anyField(fallback) { TermQuery(Term(it, value)) } }
         val identifierBuilder = QueryBuilder(identifiers)
         words.forEach { word ->
@@ -155,22 +153,22 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             anyField(fallback) { identifierBuilder.createPhraseQuery("${it}_ident", word.value) }
         }
         fallback.add(primary, BooleanClause.Occur.MUST_NOT)
-        return primary to fallback.build()
+        // ponytail: zero-score fallback preserves every Nori score/order, even arbitrarily small BM25 scores.
+        return BooleanQuery.Builder()
+            .add(primary, BooleanClause.Occur.SHOULD)
+            .add(BoostQuery(ConstantScoreQuery(fallback.build()), 0f), BooleanClause.Occur.SHOULD).build()
     }
 
     fun search(text: String, titleHead: String? = null): List<IssueIndexHit> = readers.read {
         check(status.ready) { "Search index is not ready" }
-        val (primary, fallback) = queries(text)
-        fun filtered(query: Query) = if (titleHead == null) query else BooleanQuery.Builder()
+        val query = query(text)
+        val filtered = if (titleHead == null) query else BooleanQuery.Builder()
             .add(query, BooleanClause.Occur.MUST)
             .add(TermQuery(Term("titleHead", titleHead)), BooleanClause.Occur.FILTER).build()
-        val current = checkNotNull(reader)
-        val result = hits(current, filtered(primary))
-        if (fallback != null) result.addAll(hits(current, filtered(fallback), auxiliaryOnly = true))
-        result
+        hits(checkNotNull(reader), filtered)
     }
 
-    private fun hits(reader: DirectoryReader, query: Query, auxiliaryOnly: Boolean = false): MutableList<IssueIndexHit> {
+    private fun hits(reader: DirectoryReader, query: Query): List<IssueIndexHit> {
         val searcher = IndexSearcher(reader)
         val result = mutableListOf<IssueIndexHit>()
         var after: ScoreDoc? = null
@@ -178,7 +176,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             val page = searcher.searchAfter(after, query, 500).scoreDocs
             page.forEach {
                 val document = searcher.storedFields().document(it.doc)
-                result.add(IssueIndexHit(document.get("id").toLong(), document.get("digest"), auxiliaryOnly))
+                result.add(IssueIndexHit(document.get("id").toLong(), document.get("digest"), it.score == 0f))
             }
             after = page.lastOrNull()
         } while (after != null)
