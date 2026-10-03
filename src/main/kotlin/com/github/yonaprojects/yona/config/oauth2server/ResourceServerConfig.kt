@@ -2,10 +2,7 @@ package com.github.yonaprojects.yona.config.oauth2server
 
 import com.github.yonaprojects.yona.config.ApiTokenAuthenticationFilter
 import com.github.yonaprojects.yona.config.SpaCsrfTokenRequestHandler
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository
-import org.springframework.security.web.csrf.CsrfFilter
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher
+import com.github.yonaprojects.yona.config.sessionApiMutationMatcher
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -19,6 +16,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository
 import java.security.interfaces.RSAPublicKey
 
 // yona 자신이 리소스 서버(Resource Server) 역할을 하는 설정. 원래 `/mcp/**` 하나만 담당했으나,
@@ -121,20 +119,9 @@ class ResourceServerConfig(
         http
             .securityMatcher("/api/v1/**")
             .csrf { csrf ->
-                val savedViews = PathPatternRequestMatcher.pathPattern(
-                    "/api/v1/projects/{owner}/{project}/issues/saved-views/**"
-                )
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(SpaCsrfTokenRequestHandler())
-                    .requireCsrfProtectionMatcher { request ->
-                        // Saved views accept browser sessions as well as stateless API tokens.
-                        // A token-shaped header must never exempt an existing session.
-                        CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request) &&
-                            savedViews.matches(request) &&
-                            request.getSession(false)?.getAttribute(
-                                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY
-                            ) != null
-                    }
+                    .requireCsrfProtectionMatcher(sessionApiMutationMatcher)
             }
             .authorizeHttpRequests { authorize ->
                 authorize
