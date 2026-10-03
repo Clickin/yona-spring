@@ -40,7 +40,7 @@ Forged PAT headers do not exempt a session. Stateless PAT/OAuth requests retain
 their existing authentication.
 
 After integrating the shared policy, `IssueDependencyIntegrationSpec` and
-`SessionApiCsrfSpec` passed on JDK 21/H2 (2026-10-03, `BUILD SUCCESSFUL in 1m 22s`).
+`SessionApiCsrfSpec` passed on JDK 21/H2 (2026-10-04, `BUILD SUCCESSFUL in 1m 22s`).
 
 The scoped REST API uses the existing `ISSUES` read/write and repository token
 scope authorization:
