@@ -177,7 +177,7 @@ class WatchServiceSpec @Autowired constructor(
             }
 
             describe("allowedWatchersOnly 권한 필터링 (P1-21, yona Watch.findActualWatchers 대응)") {
-                it("keeps every private issue assignee and author but excludes a removed nonmember") {
+                it("excludes private issue assignees who are not project members") {
                     val privateProject = projectRepository.save(
                         Project(name = "private-multi-assignees", owner = "user1", projectScope = ProjectScope.PRIVATE)
                     )
@@ -190,16 +190,17 @@ class WatchServiceSpec @Autowired constructor(
                         candidates, ResourceType.ISSUE_POST, assignedIssue.id.toString(), privateProject.id, true
                     ).map { it.id }.toSet()
 
-                    actualWatchers() shouldBe candidates.map { it.id }.toSet()
-                    assignedIssue.assignees.remove(user2)
-                    issueRepository.saveAndFlush(assignedIssue)
-                    actualWatchers() shouldBe setOf(user1.id, user3.id)
+                    actualWatchers() shouldBe setOf(user1.id)
                 }
 
                 it("notifies both private issue assignees of comments while honoring explicit unwatch") {
                     val privateProject = projectRepository.save(
                         Project(name = "private-comment-assignees", owner = "user1", projectScope = ProjectScope.PRIVATE)
                     )
+                    val memberRole = roleRepository.findById(RoleType.MEMBER.roleType)
+                        .orElseGet { roleRepository.save(Role(id = RoleType.MEMBER.roleType, name = "MEMBER")) }
+                    projectUserRepository.save(ProjectUser(project = privateProject, user = user2, role = memberRole))
+                    projectUserRepository.save(ProjectUser(project = privateProject, user = user3, role = memberRole))
                     val assignedIssue = issueRepository.saveAndFlush(
                         Issue(project = privateProject, title = "Private comments", authorId = user1.id,
                             assignees = mutableSetOf(user2, user3))

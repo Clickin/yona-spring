@@ -137,6 +137,7 @@ class IssueControllerSpec : DescribeSpec({
                     every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                     every { userRepository.findByLoginId("otheruser") } returns Optional.of(otherUser)
                     every { projectUserRepository.findByProjectIdAndUserId(1L, 30L) } returns Optional.empty()
+                    every { userRepository.findById(10L) } returns Optional.of(user)
                     every { userRepository.findById(20L) } returns Optional.of(managerUser)
                     every { userRepository.findById(30L) } returns Optional.of(otherUser)
                     every { userRepository.findById(999L) } returns Optional.empty()
@@ -152,14 +153,14 @@ class IssueControllerSpec : DescribeSpec({
 
                 it("adds idempotently, removes one user, and clears all") {
                     repeat(2) {
-                        mockMvc.perform(post("$path/assignees/30").principal(userAuth))
+                        mockMvc.perform(post("$path/assignees/10").principal(userAuth))
                             .andExpect(status().isOk)
-                            .andExpect(jsonPath("$.assignees[*].id", Matchers.containsInAnyOrder(20, 30)))
-                            .andExpect(jsonPath("$.assignee").doesNotExist())
+                            .andExpect(jsonPath("$.assignees[*].id", Matchers.containsInAnyOrder(20, 10)))
+                            .andExpect(jsonPath("$.assignee.id").value(20))
                     }
                     mockMvc.perform(delete("$path/assignees/20").principal(userAuth))
                         .andExpect(status().isOk)
-                        .andExpect(jsonPath("$.assignees[*].id", Matchers.contains(30)))
+                        .andExpect(jsonPath("$.assignees[*].id", Matchers.contains(10)))
                     mockMvc.perform(delete("$path/assignees").principal(userAuth))
                         .andExpect(status().isOk)
                         .andExpect(jsonPath("$.assignees").isEmpty)
@@ -184,6 +185,53 @@ class IssueControllerSpec : DescribeSpec({
                         .andExpect(status().isBadRequest)
                     verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any(), any()) }
                     verify(exactly = 0) { issueService.updateIssue(any(), any(), any(), any(), any(), any(), any()) }
+                }
+
+                it("rejects external assignment targets in add, create and replacement") {
+                    every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
+                    mockMvc.perform(post("$path/assignees/30").principal(userAuth))
+                        .andExpect(status().isForbidden)
+                    val body = """{"title":"Title","body":"Body","assigneeIds":[30]}"""
+                    mockMvc.perform(post(path.substringBeforeLast("/"))
+                        .principal(userAuth).contentType(MediaType.APPLICATION_JSON).content(body))
+                        .andExpect(status().isForbidden)
+                    val update = if (path.startsWith("/api/v1/")) patch(path) else put(path)
+                    mockMvc.perform(update.principal(userAuth).contentType(MediaType.APPLICATION_JSON).content(body))
+                        .andExpect(status().isForbidden)
+                    verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
+                    verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any(), any()) }
+                    verify(exactly = 0) { issueService.updateIssue(any(), any(), any(), any(), any(), any(), any()) }
+                }
+
+                it("accepts legacy IDs and gives an explicit plural list precedence") {
+                    every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
+                    val cases = listOf(
+                        """"assigneeId":20""" to listOf(managerUser),
+                        """"assigneeId":999,"assigneeIds":[10]""" to listOf(user),
+                        """"assigneeId":999,"assigneeIds":[]""" to emptyList()
+                    )
+                    for ((fields, expected) in cases) {
+                        every { issueService.createIssue(any(), user, expected, null, null, false) } returns issue
+                        every { issueService.updateIssue(5L, "Title", "Body", user, expected, null, null) } returns issue
+                        val body = """{"title":"Title","body":"Body",$fields}"""
+                        mockMvc.perform(post(path.substringBeforeLast("/"))
+                            .principal(userAuth).contentType(MediaType.APPLICATION_JSON).content(body))
+                            .andExpect(status().isCreated)
+                        val update = if (path.startsWith("/api/v1/")) patch(path) else put(path)
+                        mockMvc.perform(update.principal(userAuth).contentType(MediaType.APPLICATION_JSON).content(body))
+                            .andExpect(status().isOk)
+                        verify { issueService.createIssue(any(), user, expected, null, null, false) }
+                        verify { issueService.updateIssue(5L, "Title", "Body", user, expected, null, null) }
+                    }
+                }
+
+                it("does not let an external author change assignments") {
+                    val externalIssue = Issue(id = 5L, number = 5L, title = "External author", project = project,
+                        authorId = otherUser.id, assignees = mutableSetOf(managerUser))
+                    every { issueRepository.findByProjectAndNumber(project, 5L) } returns externalIssue
+                    mockMvc.perform(delete("$path/assignees").principal(otherAuth))
+                        .andExpect(status().isForbidden)
+                    verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
                 }
 
                 it("requires authentication and issue write permission for every mutation") {
@@ -606,10 +654,10 @@ class IssueControllerSpec : DescribeSpec({
                 every { projectRepository.findById(1L) } returns Optional.of(project)
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
-                every { userRepository.findById(30L) } returns Optional.of(otherUser)
-                every { issueService.createIssue(any(), user, listOf(otherUser), null, null, false) } returns issue
+                every { userRepository.findById(20L) } returns Optional.of(managerUser)
+                every { issueService.createIssue(any(), user, listOf(managerUser), null, null, false) } returns issue
 
-                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [30], "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [20], "labelIds": null }"""
 
                 mockMvc.perform(
                     post("/api/projects/1/issues")
@@ -619,7 +667,7 @@ class IssueControllerSpec : DescribeSpec({
                 )
                     .andExpect(status().isCreated)
 
-                verify(exactly = 1) { issueService.createIssue(any(), user, listOf(otherUser), null, null, false) }
+                verify(exactly = 1) { issueService.createIssue(any(), user, listOf(managerUser), null, null, false) }
             }
 
             it("body를 생략하면 빈 문자열로 이슈를 생성해야 한다") {
@@ -768,10 +816,10 @@ class IssueControllerSpec : DescribeSpec({
                 every { issueRepository.findByProjectAndNumber(project, 5L) } returns issue
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
                 every { projectUserRepository.findByProjectIdAndUserId(1L, 10L) } returns Optional.of(projectUser)
-                every { userRepository.findById(30L) } returns Optional.of(otherUser)
-                every { issueService.updateIssue(5L, "제목", "내용", user, listOf(otherUser), null, null) } returns issue
+                every { userRepository.findById(20L) } returns Optional.of(managerUser)
+                every { issueService.updateIssue(5L, "제목", "내용", user, listOf(managerUser), null, null) } returns issue
 
-                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [30], "labelIds": null }"""
+                val jsonContent = """{ "title": "제목", "body": "내용", "milestoneId": null, "assigneeIds": [20], "labelIds": null }"""
 
                 mockMvc.perform(
                     put("/api/projects/1/issues/5")
@@ -781,7 +829,7 @@ class IssueControllerSpec : DescribeSpec({
                 )
                     .andExpect(status().isOk)
 
-                verify(exactly = 1) { issueService.updateIssue(5L, "제목", "내용", user, listOf(otherUser), null, null) }
+                verify(exactly = 1) { issueService.updateIssue(5L, "제목", "내용", user, listOf(managerUser), null, null) }
             }
         }
 

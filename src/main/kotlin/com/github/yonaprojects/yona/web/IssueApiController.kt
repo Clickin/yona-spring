@@ -78,7 +78,7 @@ class IssueApiController(
     private fun isManagerOrAuthorOrAssignee(project: Project, issue: Issue, user: User?): Boolean {
         if (user == null) return false
         if (issue.authorId == user.id) return true
-        if (issue.hasAssignee(user.id)) return true
+        if (issue.hasAssignee(user.id) && accessControl.isAllowed(user, project, Operation.ASSIGN_ISSUE)) return true
         return projectUserRepository.findByProjectIdAndUserId(project.id!!, user.id!!)
             .map { it.role.id == RoleType.MANAGER.roleType }
             .orElse(false)
@@ -259,6 +259,7 @@ class IssueApiController(
             val loginId = ref.loginId ?: return ResponseEntity.badRequest().build()
             userRepository.findByLoginId(loginId).orElse(null) ?: return ResponseEntity.badRequest().build()
         }
+        assigneeUsers?.let { accessControl.requireIssueAssignment(user, project, it) }
         val milestoneId = request.milestoneTitle?.let { milestoneRepository.findByProjectAndTitle(project, it)?.id }
 
         var updated = issueService.updateIssue(
@@ -325,11 +326,17 @@ class IssueApiController(
             ?: return ResponseEntity.badRequest().build()
 
         val currentUser = getLoginUser(authentication) ?: return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()
+        if (!accessControl.isProjectResourceCreatable(currentUser, project, ResourceType.ISSUE_POST)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+        }
         val assignments = request.issues.map { item ->
             item.assignees.orEmpty().map { ref ->
                 val loginId = ref.loginId ?: return ResponseEntity.badRequest().build()
                 userRepository.findByLoginId(loginId).orElse(null) ?: return ResponseEntity.badRequest().build()
             }
+        }
+        assignments.filter { it.isNotEmpty() }.forEach {
+            accessControl.requireIssueAssignment(currentUser, project, it)
         }
 
         val created = request.issues.mapIndexed { index, item ->

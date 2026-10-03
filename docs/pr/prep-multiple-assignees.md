@@ -9,25 +9,28 @@ This is an unapproved preparation branch, not a release or PR-ready claim. No is
 - Issues hold a set of users through `issue_assignee(issue_id, user_id)` with a composite uniqueness constraint. There is no primary assignee, role, or arbitrary limit. Pull requests retain their existing singular assignment.
 - Before Hibernate schema update, startup copies each old issue assignment into the relation, drops the issue-only old FK/column, and leaves PR assignment data untouched. Restart does not restore assignments removed after migration. Back up the database before upgrade; rolling back to the singular model requires restoring that backup.
 - Creation/edit/detail support multiple selection, individual removal and clearing. Detail mutations keep the other assignees. Mass update supports replacement and clearing, while unrelated mass changes preserve assignments.
-- Every assignee participates in my issues, search, counts, dashboards and existing issue permissions. Queries use membership/EXISTS or DISTINCT rather than multiplying issues by the number of assignees.
+- Every eligible assignee participates in my issues, search, counts, dashboards and existing issue permissions. Assignment actors and targets must satisfy project `ASSIGN_ISSUE`; stale/ineligible assignees do not gain private-project issue or comment rights. Queries use membership/EXISTS or DISTINCT rather than multiplying issues by the number of assignees.
 - Assignment changes record each added/removed person separately and do not coalesce unrelated assignment events. Creation notifies all assigned users through the new-issue notification. Later assignment deltas, issue changes and comments include all assignees; existing unwatch behavior remains in effect, and the initiating user does not receive their own notification.
-- REST, legacy plural import/update, MCP, favorites, Excel, migration export/import mapping, project export and webhook assignment fields retain the whole collection. Database backup already discovers every table; the new join table is covered by a roundtrip regression.
+- REST, legacy plural import/update, MCP, favorites, Excel, migration export/import mapping, project export and webhook assignment fields retain the whole collection. Database backup discovers every table; the new join table is covered by a same-schema roundtrip regression. Pre-upgrade JSON backups containing `issue.assignee_id` cannot be imported into the upgraded schema: restore with the matching old version/schema, then upgrade that restored database. The startup JDBC migration is not a backup converter or a Flyway migration.
 
-## API contract and unapproved compatibility decision
+## API compatibility contract
 
-This branch follows the requested clean cutover, **not** the proposal's temporary singular compatibility option:
+The singular API contract remains available alongside the plural fields:
 
-- Issue create/update JSON: `assigneeIds: [12, 34]`.
-- Update omission preserves the set; `assigneeIds: []` clears it. Unknown user IDs are rejected before mutation.
-- Issue responses: `assignees: [{id, loginId, name}, ...]`; no singular `assignee` field.
+- Issue create/update JSON accepts `assigneeIds: [12, 34]` and legacy `assigneeId: 12`.
+- A non-null `assigneeIds` wins when both are supplied, including `[]` to clear. Otherwise a non-null `assigneeId` replaces the set with that one user. Omission/null of both fields on update preserves the set; on create it starts empty. Unknown user IDs are rejected before mutation.
+- Issue responses include `assignees: [{id, loginId, name}, ...]` and `assignee`, the first item or null. The compatibility field does not establish a primary assignee or promise persistent ordering.
 - Numeric `/api/projects/{projectId}/issues/{number}` and owner/project issue REST routes support `POST /assignees/{userId}`, `DELETE /assignees/{userId}`, and `DELETE /assignees`.
 - The single-user search selector remains `assignee`; it means membership, not a primary assignee.
 - Legacy plural imports retain all `assignees: [{loginId}, ...]` entries. Unknown mappings fail rather than dropping users.
-- MCP `create_issue` accepts optional `assigneeIds`; `add_issue_assignee`, `remove_issue_assignee`, and `clear_issue_assignees` use the existing issue WRITE permission scope.
+- MCP `create_issue` accepts the same optional `assigneeIds`/`assigneeId` precedence; `add_issue_assignee`, `remove_issue_assignee`, and `clear_issue_assignees` use the existing issue WRITE permission scope plus project assignment eligibility.
 
-**Approval required before release:** confirm the breaking API cutover/release coordination rather than retaining a temporary singular adapter. In-repository callers are migrated. `yona-cli` is a separate repository and its source is absent from this worktree; its implementation has not been changed or verified here. It must resolve repeatable issue `--assignee` values into `assigneeIds`, send `[]` to clear, omit the field to preserve assignments, and display every response `assignees` member without choosing a primary. PR CLI assignment remains singular. Other external REST consumers need the same coordinated update. This prerequisite is not hidden behind a compatibility shim.
+`yona-cli` is a separate repository and its source is absent from this worktree; its implementation has not been changed or verified here. Existing singular clients remain compatible. To expose multiple assignees, clients can resolve repeatable issue `--assignee` values into `assigneeIds`, send `[]` to clear, omit both fields to preserve assignments, and display every response `assignees` member. PR CLI assignment remains singular.
 
 ## Verification status
+
+The compatibility/security review fixes added after the run below have not yet been
+executed against these checks; the recorded passing run describes the earlier branch state.
 
 Verified on 2026-10-02 with JDK 21 and isolated H2: **36 affected specs, 1,560 tests, zero failures/errors/skips**. Production and test Kotlin compiled. The final scoped Gradle run completed successfully in 1m 2s. Initial compiler failures exposed positional inbound-mail/PR fixture callers and were fixed; a new watcher test incorrectly deleted notifications without mail markers and was corrected before the passing run.
 

@@ -97,8 +97,8 @@ class WatchServiceImpl(
                 resourceId.toLongOrNull()?.let { issueRepository.findById(it).orElse(null) }
             } else null
             actualWatchers.retainAll {
-                issue?.hasAssignee(it.id) == true ||
-                    (it.id != null && issue?.authorId == it.id) || hasReadPermission(it, projectId)
+                (issue?.hasAssignee(it.id) == true && !issue.project.isPrivate) ||
+                (it.id != null && issue?.authorId == it.id) || hasReadPermission(it, projectId)
             }
         }
 

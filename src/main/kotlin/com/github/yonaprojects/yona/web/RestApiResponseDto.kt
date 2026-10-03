@@ -120,7 +120,9 @@ data class IssueResponse(
     // projectId(숫자 PK)만으로는 owner/name을 조회할 API가 따로 없어 추가했다.
     val projectOwner: String?,
     val projectName: String?
-)
+) {
+    val assignee: UserRefResponse? get() = assignees.firstOrNull()
+}
 
 fun Issue.toResponse() = IssueResponse(
     id = id,

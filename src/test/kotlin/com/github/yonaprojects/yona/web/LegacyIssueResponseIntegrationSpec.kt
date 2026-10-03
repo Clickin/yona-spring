@@ -87,6 +87,7 @@ class LegacyIssueResponseIntegrationSpec @Autowired constructor(
                     roleRepository.save(Role(id = RoleType.MANAGER.roleType, name = "MANAGER"))
                 }
                 projectUserRepository.save(ProjectUser(user = owner, project = project, role = role))
+                projectUserRepository.save(ProjectUser(user = secondAssignee, project = project, role = role))
                 val category = issueLabelCategoryRepository.save(IssueLabelCategory(name = "kind", project = project))
                 val milestone = milestoneRepository.save(Milestone(title = "Release", project = project))
                 val created = Instant.parse("2026-01-02T03:04:05Z")
@@ -138,6 +139,7 @@ class LegacyIssueResponseIntegrationSpec @Autowired constructor(
                 result.path("author").path("email").asText() shouldBe owner.email
                 result.path("assignees").map { it.path("loginId").asText() }.toSet() shouldBe
                     setOf(owner.loginId, secondAssignee.loginId)
+                result.path("assignee") shouldBe result.path("assignees").first()
                 result.path("labels").single().path("labelName").asText() shouldBe "bug"
                 result.path("labels").single().path("labelColor").asText() shouldBe "#ff0000"
                 result.path("labels").single().path("category").asText() shouldBe "kind"

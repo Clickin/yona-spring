@@ -23,11 +23,26 @@ issue-only `assignee_id` column is removed after copying, so restarting cannot r
 a subsequently removed assignment. Take a full database backup first; reverting to the
 old singular version requires restoring that backup.
 
-Issue REST requests now use `assigneeIds` and responses use `assignees`. Omit the update
-field to preserve assignments, or send `[]` to clear all. Coordinate external clients
-before deployment: the separate `yona-cli` repository is not migrated by this branch.
-See [the preparation record](pr/prep-multiple-assignees.md) for the unapproved
-compatibility decision, executed checks and database/visual verification limits.
+This is a startup JDBC migration (`IssueAssigneesMigration`), not a Flyway migration
+or a backup-format converter. A pre-upgrade application JSON backup containing
+`issue.assignee_id` cannot be imported directly into the upgraded schema: restore
+inserts the original column names, and that column no longer exists. Restore such
+a backup with the matching pre-upgrade version/schema, stop that application, then
+upgrade the restored database. Post-upgrade backups include `issue_assignee` and
+can be restored to a matching post-upgrade schema. Keep the original database
+backup until the restored-and-upgraded copy has been checked.
+
+Issue REST requests accept both `assigneeIds` and legacy `assigneeId`. A non-null
+`assigneeIds` list takes precedence, including `[]` to clear; otherwise a non-null
+`assigneeId` selects one user. Omit both (or send null) on update to preserve the
+set. Responses include `assignees` and compatibility `assignee` (the first list
+entry, or null); this does not designate a primary assignee.
+Assignment changes require the actor and every target to satisfy the existing
+project `ASSIGN_ISSUE` permission. External users cannot gain private-project
+issue rights by being assigned.
+The separate `yona-cli` repository is not changed by this branch; legacy clients
+remain compatible, while multi-assignee UI requires client support.
+See [the preparation record](pr/prep-multiple-assignees.md) for checks and limits.
 
 #### Migrating from legacy Yona
 

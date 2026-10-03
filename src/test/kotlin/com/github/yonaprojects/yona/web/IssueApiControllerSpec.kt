@@ -302,5 +302,16 @@ class IssueApiControllerSpec : DescribeSpec({
             verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any(), any(), any(), any()) }
         }
 
+        it("rejects an ineligible target before creating any issue in the batch") {
+            io.mockk.clearMocks(issueService)
+            val outsider = User(id = 99L, loginId = "outsider")
+            every { userRepository.findByLoginId("outsider") } returns Optional.of(outsider)
+            mockMvc.perform(post("/-_-api/v1/owners/alice/projects/myproject/issues")
+                .contentType(MediaType.APPLICATION_JSON).principal(auth)
+                .content("""{"issues":[{"title":"valid"},{"title":"invalid","assignees":[{"loginId":"outsider"}]}]}"""))
+                .andExpect(status().isForbidden)
+            verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any(), any(), any(), any()) }
+        }
+
     }
 })

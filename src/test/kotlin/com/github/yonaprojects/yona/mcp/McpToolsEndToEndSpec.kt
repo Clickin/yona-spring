@@ -256,7 +256,7 @@ class McpToolsEndToEndSpec @Autowired constructor(
                     val listedIssue = objectMapper.readTree(text).first { it["number"].asLong() == issue.number }
                     listedIssue["assignees"].asSequence().map { it["id"].asLong() }.toSet() shouldBe
                         setOf(owner.id!!, assignee.id!!)
-                    listedIssue.has("assignee") shouldBe false
+                    listedIssue["assignee"] shouldBe listedIssue["assignees"].first()
                 } finally {
                     client.closeGracefully()
                 }

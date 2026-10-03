@@ -683,6 +683,7 @@ class IssueViewController(
             userRepository.findByLoginId(loginId).orElse(null)
                 ?: throw org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown assignee")
         }
+        if (assigneeUsers.isNotEmpty()) accessControl.requireIssueAssignment(loginUser, project, assigneeUsers)
 
         val saved = issueService.createIssue(
             issue = issue,
@@ -845,6 +846,7 @@ class IssueViewController(
             userRepository.findById(id).orElse(null)
                 ?: throw org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown assignee")
         }
+        assigneeUsers?.let { accessControl.requireIssueAssignment(loginUser, project, it) }
         val issueIds = form.issues.mapNotNull { it.id }
         if (issueIds.isNotEmpty()) {
             val issuesToUpdate = issueRepository.findAllById(issueIds)
@@ -1000,6 +1002,7 @@ class IssueViewController(
             userRepository.findByLoginId(loginId).orElse(null)
                 ?: throw org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown assignee")
         }
+        assigneeUsers?.let { accessControl.requireIssueAssignment(loginUser, project, it) }
 
         // yona editIssue()의 hasTargetProject()/isRequestedToOtherProject()/moveIssueToOtherProject()
         // 대응 — issue/edit.html의 targetProjectId select(다른 프로젝트로 이동)가 이 필드가 없어 실제로는
@@ -1017,6 +1020,8 @@ class IssueViewController(
                 model.addAttribute("project", targetProject)
                 return "error/forbidden"
             }
+            val movedAssignees = assigneeUsers ?: issue.assignees
+            if (movedAssignees.isNotEmpty()) accessControl.requireIssueAssignment(loginUser, targetProject, movedAssignees)
             issueService.moveIssue(issue.id!!, targetProject.id!!, loginUser)
             redirectProject = targetProject
         }

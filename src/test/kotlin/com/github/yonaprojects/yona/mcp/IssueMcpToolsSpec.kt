@@ -97,6 +97,19 @@ class IssueMcpToolsSpec : DescribeSpec({
             verify(exactly = 1) { scopeGuard.require(auth, ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, project) }
         }
 
+        it("forwards legacy assigneeId without hiding an explicitly empty assigneeIds list") {
+            val created = Issue(id = 7L, number = 7L, title = "Title", project = project)
+            every { projectRepository.findByOwnerAndName("yona", "yona") } returns Optional.of(project)
+            every { scopeGuard.require(auth, ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, project) } returns Unit
+            every { issueController.createIssue(1L, any(), auth) } returns ResponseEntity.ok(created)
+            tools.create_issue("yona", "yona", "Title", null, assigneeId = 2L)
+            tools.create_issue("yona", "yona", "Title", null, assigneeIds = emptyList(), assigneeId = 2L)
+            verify {
+                issueController.createIssue(1L, match { it.assigneeIds == null && it.assigneeId == 2L }, auth)
+                issueController.createIssue(1L, match { it.assigneeIds == emptyList<Long>() && it.assigneeId == 2L }, auth)
+            }
+        }
+
         it("WRITE 스코프가 없으면 거부되고 IssueController를 호출하지 않아야 한다") {
             every { projectRepository.findByOwnerAndName("yona", "yona") } returns Optional.of(project)
             every {

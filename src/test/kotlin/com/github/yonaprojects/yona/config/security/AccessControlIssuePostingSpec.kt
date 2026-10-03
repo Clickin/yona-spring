@@ -102,6 +102,26 @@ class AccessControlIssuePostingSpec : DescribeSpec({
             Optional.of(OrganizationUser(user = user, organization = organization, role = Role(id = roleType.roleType)))
     }
 
+    describe("assignment actor and target eligibility") {
+        it("allows members and rejects external targets or external actors including clear") {
+            accessControl.requireIssueAssignment(managerUser, privateProject, listOf(member))
+            for ((actor, targets) in listOf(
+                managerUser to listOf(stranger),
+                stranger to listOf(member),
+                stranger to emptyList()
+            )) {
+                val failure = io.kotest.assertions.throwables.shouldThrow<org.springframework.web.server.ResponseStatusException> {
+                    accessControl.requireIssueAssignment(actor, privateProject, targets)
+                }
+                failure.statusCode.value() shouldBe 403
+            }
+        }
+        it("retains ASSIGN_ISSUE eligibility for non-private organization members") {
+            stubOrgRole(org, groupMemberUser, RoleType.ORG_MEMBER)
+            accessControl.requireIssueAssignment(groupMemberUser, protectedProject, listOf(member))
+        }
+    }
+
     // ==================== ISSUE_POST ====================
     describe("isAllowed(user, project, issue, operation) - ISSUE_POST 미실행 분기 보강") {
         it("익명 접근 차단 설정에서 비로그인 사용자는 READ도 거부") {

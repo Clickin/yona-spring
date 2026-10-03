@@ -332,6 +332,7 @@ class ProjectApiController(
         )
 
         result["assignees"] = issue.assignees.map { composeUserJson(it) }
+        result["assignee"] = issue.assignees.firstOrNull()?.let { composeUserJson(it) }
         result["state"] = issue.state.name
         if (issue.labels.isNotEmpty()) {
             result["labels"] = issue.labels.map { composeLabelJson(it) }

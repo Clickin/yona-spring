@@ -417,6 +417,7 @@ class IssueServiceImpl(
                 eventType = event.eventType
             ).filterNot { it.id == updater?.id }.distinctBy { it.id }.toMutableSet()
             if (oldUser != null && oldUser.id != updater?.id &&
+                (!issue.project.isPrivate || oldUser.isSiteManager || oldUser.isMemberOf(issue.project)) &&
                 watchService.findUnwatchers(ResourceType.ISSUE_POST, issue.id.toString()).none { it.id == oldUser.id }) {
                 event.receivers.add(oldUser)
             }

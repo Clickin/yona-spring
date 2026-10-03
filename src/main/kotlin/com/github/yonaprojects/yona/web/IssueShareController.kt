@@ -89,6 +89,7 @@ class IssueShareController(
             }
             else -> return ResponseEntity.badRequest().build()
         }
+        accessControl.requireIssueAssignment(currentUser, project, assignees)
         val updatedIssue = issueService.changeAssignees(issue.id!!, assignees, currentUser.loginId!!)
         return ResponseEntity.ok(mapOf(
             "assignees" to updatedIssue.assignees.map {

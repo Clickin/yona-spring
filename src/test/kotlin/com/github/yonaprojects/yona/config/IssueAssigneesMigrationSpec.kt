@@ -29,6 +29,10 @@ class IssueAssigneesMigrationSpec : DescribeSpec({
                         val assigned = buildList { while (rows.next()) add(rows.getLong(1) to rows.getLong(2)) }
                         assigned shouldBe listOf(100L to 1L, 300L to 2L)
                     }
+                    // Pre-upgrade JSON restores still name this column and require the old schema.
+                    shouldThrow<SQLException> {
+                        sql.execute("INSERT INTO issue (id, assignee_id) VALUES (400, 10)")
+                    }
                     shouldThrow<SQLException> { sql.execute("INSERT INTO issue_assignee VALUES (100, 1)") }
                     sql.execute("INSERT INTO issue_assignee VALUES (100, 2)")
                     sql.execute("DELETE FROM issue_assignee WHERE issue_id = 100 AND user_id = 1")

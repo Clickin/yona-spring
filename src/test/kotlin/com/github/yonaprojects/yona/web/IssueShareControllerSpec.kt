@@ -52,6 +52,7 @@ class IssueShareControllerSpec : DescribeSpec({
             accessControl
         )
         every { accessControl.isAllowed(any(), any(), any<Issue>(), Operation.UPDATE) } returns true
+        every { accessControl.requireIssueAssignment(any(), any(), any()) } returns Unit
     }
 
     describe("IssueShareController 단위 테스트") {
@@ -272,6 +273,19 @@ class IssueShareControllerSpec : DescribeSpec({
                     .content("""{"assignees":[],"action":"clear"}"""))
                     .andExpect(status().isOk)
                     .andExpect(jsonPath("$.assignees").isEmpty)
+            }
+
+            it("rejects assignment when the actor or targets fail project eligibility") {
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+                every { projectRepository.findByOwnerAndNameOrPreviousPlace("testowner", "testproject") } returns Optional.of(project)
+                every { issueRepository.findByProjectAndNumber(project, 1L) } returns issue
+                every { accessControl.requireIssueAssignment(user, project, emptyList()) } throws
+                    org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN)
+                mockMvc.perform(post("/-_-api/v1/owners/testowner/projects/testproject/issues/1/assignees")
+                    .principal(auth).contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"assignees":[],"action":"clear"}"""))
+                    .andExpect(status().isForbidden)
+                verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
             }
 
             it("권한 없는 담당자 변경은 403을 반환한다") {

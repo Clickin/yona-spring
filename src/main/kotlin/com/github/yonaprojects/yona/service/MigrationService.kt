@@ -225,6 +225,7 @@ class MigrationService(
                 node["created_at"] = formatter.format(issue.createdDate)
             }
             node["assignees"] = issue.assignees.map { mapOf("loginId" to it.loginId) }
+            node["assignee"] = issue.assignees.firstOrNull()?.let { mapOf("loginId" to it.loginId) }
             node["milestone"] = issue.milestone?.title
             node["milestoneId"] = issue.milestone?.id
             node["closed"] = (issue.state == State.CLOSED)

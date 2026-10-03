@@ -1667,6 +1667,21 @@ class IssueViewControllerSpec : DescribeSpec({
                 verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any()) }
             }
 
+            it("rejects an external target before form creation or editing") {
+                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
+                every { userRepository.findByLoginId("outside") } returns Optional.of(User(id = 99L, loginId = "outside"))
+                every { issueRepository.findByProjectAndNumber(project, 5L) } returns issue
+                every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
+                for (path in listOf("/owner/TestProj/issues", "/owner/TestProj/issue/5/edit")) {
+                    mockMvc.perform(post(path).principal(userAuth)
+                        .param("title", "Title").param("body", "Body").param("assigneeLoginIds", "outside"))
+                        .andExpect(status().isForbidden)
+                }
+                verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any()) }
+                verify(exactly = 0) { issueService.updateIssue(any(), any(), any(), any(), any(), any(), any()) }
+            }
+
             it("isDraft=true이면 State.DRAFT로 생성되어야 한다") {
                 val savedIssue = Issue(id = 100L, number = 5L, title = "제목", project = project)
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
@@ -2066,6 +2081,27 @@ class IssueViewControllerSpec : DescribeSpec({
                     )
                 }
                 error.statusCode.value() shouldBe 400
+                verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
+            }
+
+            it("rejects an external bulk target before changing state or assignments") {
+                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
+                every { userRepository.findById(99L) } returns Optional.of(User(id = 99L, loginId = "outside"))
+                val form = IssueMassUpdateForm().apply {
+                    assigneeIds = listOf(99L)
+                    state = "CLOSED"
+                    issues = listOf(IssueIdForm().apply { id = 5L })
+                }
+                val error = io.kotest.assertions.throwables.shouldThrow<org.springframework.web.server.ResponseStatusException> {
+                    issueViewController.massUpdate(
+                        owner = "owner", projectName = "TestProj", form = form,
+                        authentication = userAuth, delete = false, isDueDateChanged = false, dueDate = null,
+                        accept = null, model = ExtendedModelMap()
+                    )
+                }
+                error.statusCode.value() shouldBe 403
+                verify(exactly = 0) { issueService.changeState(any(), any(), any()) }
                 verify(exactly = 0) { issueService.changeAssignees(any(), any(), any()) }
             }
 

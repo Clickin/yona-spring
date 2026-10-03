@@ -102,6 +102,11 @@ class IssueServiceImplSpec @Autowired constructor(
                 val first = mkUser("multiple-first")
                 val second = mkUser("multiple-second")
                 val project = mkProject("multiple-project", author.loginId, ProjectScope.PRIVATE)
+                val role = roleRepository.save(Role(id = RoleType.MEMBER.roleType))
+                for (member in listOf(author, first, second)) {
+                    val membership = projectUserRepository.save(ProjectUser(user = member, project = project, role = role))
+                    member.projectUsers.add(membership)
+                }
                 val issue = issueService.createIssue(
                     Issue(title = "Shared task", body = "Work together", project = project),
                     author, assigneeUsers = listOf(first, second, first)
@@ -130,6 +135,18 @@ class IssueServiceImplSpec @Autowired constructor(
                 issueService.changeAssignees(issue.id!!, emptyList(), author.loginId)
                 issue.assignees.shouldBeEmpty()
                 notificationEventRepository.findAll().count { it.eventType == EventType.ISSUE_ASSIGNEE_CHANGED } shouldBe 4
+            }
+
+            it("does not notify an ineligible former assignee about a private issue") {
+                val author = mkUser("private-author")
+                val outsider = mkUser("private-outsider")
+                val project = mkProject("private-assignment", author.loginId, ProjectScope.PRIVATE)
+                val issue = issueRepository.save(Issue(
+                    title = "Private issue", project = project, authorId = author.id,
+                    assignees = mutableSetOf(outsider)
+                ))
+                issueService.changeAssignees(issue.id!!, emptyList(), author.loginId)
+                notificationEventRepository.findAll().flatMap { it.receivers }.any { it.id == outsider.id } shouldBe false
             }
 
             describe("createIssue의 담당자/마일스톤/라벨 지정 및 본문 null 분기") {

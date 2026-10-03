@@ -70,7 +70,8 @@ class IssueMcpTools(
         @ToolParam(description = "저장소 이름") project: String,
         @ToolParam(description = "이슈 제목") title: String,
         @ToolParam(description = "이슈 본문(마크다운)", required = false) body: String?,
-        @ToolParam(description = "담당자 사용자 ID 목록, 생략 시 담당자 없음", required = false) assigneeIds: List<Long>? = null
+        @ToolParam(description = "담당자 사용자 ID 목록, assigneeId보다 우선", required = false) assigneeIds: List<Long>? = null,
+        @ToolParam(description = "단일 담당자 사용자 ID (이전 클라이언트 호환)", required = false) assigneeId: Long? = null
     ): Any {
         val found = findProject(owner, project)
         scopeGuard.require(currentAuth(), ApiTokenScopeGroup.ISSUES, ApiTokenPermission.WRITE, found)
@@ -78,8 +79,9 @@ class IssueMcpTools(
             title = title,
             body = body,
             milestoneId = null,
-            assigneeIds = assigneeIds.orEmpty(),
-            labelIds = null
+            assigneeIds = assigneeIds,
+            labelIds = null,
+            assigneeId = assigneeId
         )
         // IssueController.createIssue()가 이미 IssueResponse를 반환한다.
         return issueController.createIssue(found.id!!, request, currentAuth()).unwrapForMcp()

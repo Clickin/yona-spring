@@ -29,6 +29,8 @@ import com.github.yonaprojects.yona.domain.webhook.Webhook
 import com.github.yonaprojects.yona.domain.attachment.Attachment
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
 
 // 리소스 타입은 JPA 엔티티라 다형성을 가질 수 없어, `isGlobalResourceAllowed`/`isProjectResourceAllowed`를
 // 리소스 타입별 `isAllowed(...)` 오버로드로 분리한다(설계 근거: docs/P1-85_PLAN.md).
@@ -182,7 +184,7 @@ class AccessControl(
         if (isAnonymousNotAllowed() && user == null) return false
         if (user != null) {
             val isAuthor = issue.authorId != null && issue.authorId == user.id
-            val isAssignee = issue.hasAssignee(user.id)
+            val isAssignee = issue.hasAssignee(user.id) && isAllowed(user, project, Operation.ASSIGN_ISSUE)
             if (isAuthor || isAssignee || isAllowedIfSharer(issue, user)) return true
         }
         return isProjectResourceCreatable(user, project, ResourceType.ISSUE_COMMENT)
@@ -307,6 +309,13 @@ class AccessControl(
         return user?.isManagerOf(project) == true || isOrganizationAdmin(project.organization, user)
     }
 
+    fun requireIssueAssignment(actor: User, project: Project, targets: Collection<User>) {
+        if (!isAllowed(actor, project, Operation.ASSIGN_ISSUE) ||
+            targets.any { !isAllowed(it, project, Operation.ASSIGN_ISSUE) }) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Issue assignment requires eligible project users")
+        }
+    }
+
     // READ는 (프로젝트가 아닌 리소스는 누구나 읽을 수 있다는 legacy 규칙에 따라) 익명 포함 항상 true,
     // 그 외 모든 연산은 조직 관리자만 허용된다.
     fun isAllowed(user: User?, organization: Organization, operation: Operation): Boolean {
@@ -324,7 +333,7 @@ class AccessControl(
         if (isOrganizationAdmin(project.organization, user)) return true
 
         val isAuthor = user?.id != null && issue.authorId != null && issue.authorId == user.id
-        val isAssignee = issue.hasAssignee(user?.id)
+        val isAssignee = issue.hasAssignee(user?.id) && isAllowed(user, project, Operation.ASSIGN_ISSUE)
         if (user?.isManagerOf(project) == true || isAuthor || isAssignee) return true
 
         return when (operation) {

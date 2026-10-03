@@ -137,6 +137,7 @@ class FavoriteController(
                 "updatedDate" to issue.updatedDate?.let { DateTimeFormatter.ISO_INSTANT.format(it) },
                 "author" to authorNode,
                 "assignees" to assigneeNodes,
+                "assignee" to assigneeNodes.firstOrNull(),
                 "project" to projectNode,
                 "owner" to issue.project.owner,
                 "refUrl" to "$baseUrl/${issue.project.owner}/${issue.project.name}/issue/${issue.number}"

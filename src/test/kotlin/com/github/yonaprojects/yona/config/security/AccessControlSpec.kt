@@ -467,8 +467,10 @@ class AccessControlSpec : DescribeSpec({
         it("이슈 작성자는 비공개 프로젝트 비멤버라도 댓글을 달 수 있다") {
             accessControl.isIssueCommentCreatable(issueAuthor, privateProject, issueOnPrivate) shouldBe true
         }
-        it("이슈 담당자는 비공개 프로젝트 비멤버라도 댓글을 달 수 있다") {
-            accessControl.isIssueCommentCreatable(issueAssignee, privateProject, issueOnPrivate) shouldBe true
+        it("an ineligible assignee gains no private issue or comment permissions") {
+            accessControl.isIssueCommentCreatable(issueAssignee, privateProject, issueOnPrivate) shouldBe false
+            accessControl.isAllowed(issueAssignee, privateProject, issueOnPrivate, Operation.READ) shouldBe false
+            accessControl.isAllowed(issueAssignee, privateProject, issueOnPrivate, Operation.UPDATE) shouldBe false
         }
         it("이슈 공유대상은 비공개 프로젝트 비멤버라도 댓글을 달 수 있다") {
             accessControl.isIssueCommentCreatable(issueSharerUser, privateProject, issueOnPrivate) shouldBe true

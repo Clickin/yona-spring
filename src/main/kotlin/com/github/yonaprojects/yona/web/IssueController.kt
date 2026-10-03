@@ -79,7 +79,7 @@ class IssueController(
     private fun isManagerOrAuthorOrAssignee(project: Project, issue: Issue, user: User?): Boolean {
         if (user == null) return false
         if (issue.authorId == user.id) return true
-        if (issue.hasAssignee(user.id)) return true
+        if (issue.hasAssignee(user.id) && accessControl.isAllowed(user, project, Operation.ASSIGN_ISSUE)) return true
         return projectUserRepository.findByProjectIdAndUserId(project.id!!, user.id!!)
             .map { it.role.id == RoleType.MANAGER.roleType }
             .orElse(false)
@@ -219,9 +219,10 @@ class IssueController(
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
 
-        val assigneeUsers = request.assigneeIds.distinct().map {
+        val assigneeUsers = (request.assigneeIds ?: listOfNotNull(request.assigneeId)).distinct().map {
             userRepository.findById(it).orElse(null) ?: return ResponseEntity.badRequest().build()
         }
+        if (assigneeUsers.isNotEmpty()) accessControl.requireIssueAssignment(user, project, assigneeUsers)
 
         val issue = Issue(
             title = request.title,
@@ -259,9 +260,10 @@ class IssueController(
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
 
-        val assigneeUsers = request.assigneeIds?.distinct()?.map {
+        val assigneeUsers = (request.assigneeIds ?: request.assigneeId?.let { listOf(it) })?.distinct()?.map {
             userRepository.findById(it).orElse(null) ?: return ResponseEntity.badRequest().build()
         }
+        assigneeUsers?.let { accessControl.requireIssueAssignment(user, project, it) }
 
         val updated = issueService.updateIssue(
             issueId = issue.id!!,
@@ -323,6 +325,7 @@ class IssueController(
             add -> (issue.assignees.toList() + target).distinctBy { it.id }
             else -> issue.assignees.filter { it.id != target.id }
         }
+        accessControl.requireIssueAssignment(user, project, assignees)
         return ResponseEntity.ok(issueService.changeAssignees(issue.id!!, assignees, user.loginId).toResponse())
     }
 
@@ -351,6 +354,9 @@ class IssueController(
 
         if (!accessControl.isProjectResourceCreatable(user, targetProject, ResourceType.ISSUE_POST)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+        }
+        if (issue.assignees.isNotEmpty()) {
+            accessControl.requireIssueAssignment(user, targetProject, issue.assignees)
         }
 
         val moved = issueService.moveIssue(issue.id!!, request.targetProjectId, user)
@@ -588,10 +594,11 @@ class IssueController(
         val title: String,
         val body: String?,
         val milestoneId: Long?,
-        val assigneeIds: List<Long> = emptyList(),
+        val assigneeIds: List<Long>? = null,
         val labelIds: List<Long>?,
         // true면 초안(DRAFT)으로 생성한다.
-        val isDraft: Boolean = false
+        val isDraft: Boolean = false,
+        val assigneeId: Long? = null
     )
 
     data class UpdateIssueRequest(
@@ -599,7 +606,8 @@ class IssueController(
         val body: String,
         val milestoneId: Long?,
         val assigneeIds: List<Long>? = null,
-        val labelIds: List<Long>?
+        val labelIds: List<Long>?,
+        val assigneeId: Long? = null
     )
 
     data class MoveIssueRequest(
