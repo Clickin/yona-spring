@@ -148,20 +148,14 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
         if (words.isEmpty()) return primary
         contextualTerms.forEach { value -> anyField(fallback) { TermQuery(Term(it, value)) } }
         val identifierBuilder = QueryBuilder(identifiers)
-        val identifierMatches = BooleanQuery.Builder()
         words.forEach { word ->
             // A multi-part word must stay adjacent and ordered in one field, not match scattered fragments.
-            anyField(identifierMatches) { identifierBuilder.createPhraseQuery("${it}_ident", word.value) }
+            anyField(fallback) { identifierBuilder.createPhraseQuery("${it}_ident", word.value) }
         }
-        val identifierQuery = identifierMatches.build()
-        val rankedPrimary = BooleanQuery.Builder()
-            .add(primary, BooleanClause.Occur.MUST)
-            .add(BoostQuery(identifierQuery, 0.5f), BooleanClause.Occur.SHOULD).build()
-        fallback.add(identifierQuery, BooleanClause.Occur.MUST)
         fallback.add(primary, BooleanClause.Occur.MUST_NOT)
-        // ponytail: zero-score fallback preserves every primary score/order, even arbitrarily small BM25 scores.
+        // ponytail: zero-score fallback preserves every Nori score/order, even arbitrarily small BM25 scores.
         return BooleanQuery.Builder()
-            .add(rankedPrimary, BooleanClause.Occur.SHOULD)
+            .add(primary, BooleanClause.Occur.SHOULD)
             .add(BoostQuery(ConstantScoreQuery(fallback.build()), 0f), BooleanClause.Occur.SHOULD).build()
     }
 

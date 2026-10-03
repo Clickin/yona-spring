@@ -185,27 +185,6 @@ class IssueSearchIndexSpec : DescribeSpec({
         }
     }
 
-    it("식별자 일치를 Nori 결과의 점수에 반영하되 보조 결과와 구문 조건은 유지한다") {
-        val path = Files.createTempDirectory("yona-lucene-")
-        val documents = listOf(
-            IssueSearchDocument(1, "socket timeout SocketTimeoutException", "", emptyList()),
-            IssueSearchDocument(2, "socket timeout SocketTimeout", "", emptyList()),
-            IssueSearchDocument(3, "SocketTimeout", "", emptyList()),
-            IssueSearchDocument(4, "socket", "", emptyList())
-        )
-        val index = IssueSearchIndex(path.toString())
-        try {
-            index.synchronize({ after -> documents.filter { it.id > after } })
-            index.search("socket timeout").map { it.id to it.auxiliaryOnly } shouldBe
-                listOf(2L to false, 1L to false, 3L to true)
-            index.search("\"socket timeout\"").map { it.id }.toSet() shouldBe setOf(1L, 2L)
-            index.search("socket missing").map { it.id } shouldBe emptyList()
-        } finally {
-            index.close()
-            path.toFile().deleteRecursively()
-        }
-    }
-
     it("약어 경계와 한글에 붙은 식별자를 색인과 검색어에서 같은 방식으로 나눈다") {
         val path = Files.createTempDirectory("yona-lucene-")
         val documents = listOf(
