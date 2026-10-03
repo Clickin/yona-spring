@@ -33,13 +33,14 @@ issue states, active/inactive status, an issue-number add form with direction,
 and per-edge removal. Native server-rendered forms use the existing CSRF
 protection and redirects; no frontend framework or new JavaScript is required.
 
-The new dependency REST mutation routes additionally require CSRF when an
-authenticated ambient session exists. This is a narrowly scoped correction to
-the API chain, not a policy change for older REST routes. A decoded Spring path
-matcher covers the dependency endpoints; forged PAT headers do not exempt a
-session. Stateless PAT/OAuth requests retain their existing authentication.
-Spring's standard Bearer handling rejects an invalid Bearer with 401, while a
-valid Bearer is treated as an explicit credential.
+The prerequisite `fix/session-api-csrf` requires CSRF for all `/api/v1/**`
+mutations carrying an authenticated ambient session, including dependency routes.
+Feature branches no longer replace the API chain with competing endpoint matchers.
+Forged PAT headers do not exempt a session. Stateless PAT/OAuth requests retain
+their existing authentication.
+
+After integrating the shared policy, `IssueDependencyIntegrationSpec` and
+`SessionApiCsrfSpec` passed on JDK 21/H2 (2026-10-03, `BUILD SUCCESSFUL in 1m 22s`).
 
 The scoped REST API uses the existing `ISSUES` read/write and repository token
 scope authorization:
