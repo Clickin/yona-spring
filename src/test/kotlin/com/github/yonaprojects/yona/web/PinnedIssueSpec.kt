@@ -25,6 +25,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
@@ -82,7 +83,15 @@ class PinnedIssueSpec @Autowired constructor(
                 issues.findById(issue.id!!).orElseThrow().pinnedAt shouldBe pinnedAt
                 mvc.perform(post("/${project.owner}/${project.name}/issue/1/pin").principal(managerAuth).param("pinned", "false"))
                     .andExpect(status().isSeeOther)
+                    .andExpect(header().string("Location", "/${project.owner}/${project.name}/issue/1"))
                 issues.findById(issue.id!!).orElseThrow().pinnedAt shouldBe null
+                for (pin in listOf(true, false)) {
+                    mvc.perform(post("/yona/${project.owner}/${project.name}/issue/1/pin")
+                        .contextPath("/yona").principal(managerAuth).param("pinned", pin.toString()))
+                        .andExpect(status().isSeeOther)
+                        .andExpect(header().string("Location", "/yona/${project.owner}/${project.name}/issue/1"))
+                    (issues.findById(issue.id!!).orElseThrow().pinnedAt != null) shouldBe pin
+                }
                 val privateProject = projects.save(Project(owner = manager.loginId!!, name = "pin-hidden", projectScope = ProjectScope.PRIVATE))
                 issues.save(Issue(project = privateProject, number = 1, title = "Private pin", pinnedAt = Instant.now()))
                 mvc.perform(put("/api/v1/projects/${privateProject.owner}/${privateProject.name}/issues/1/pin")
