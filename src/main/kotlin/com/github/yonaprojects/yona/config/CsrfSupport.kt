@@ -2,6 +2,10 @@ package com.github.yonaprojects.yona.config
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.security.authentication.AnonymousAuthenticationToken
+import org.springframework.security.core.context.SecurityContext
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository
+import org.springframework.security.web.csrf.CsrfFilter
 import org.springframework.security.web.csrf.CsrfToken
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler
 import org.springframework.security.web.csrf.CsrfTokenRequestHandler
@@ -22,6 +26,17 @@ import java.util.function.Supplier
 // 체인을 타기 때문이다.
 val tokenAuthenticatedRequestMatcher = RequestMatcher { request ->
     ApiTokenAuthenticationFilter.extractToken(request) != null
+}
+
+// Apply within the /api/v1 filter chain. Token-shaped headers cannot exempt
+// requests carrying an authenticated browser session.
+val sessionApiMutationMatcher = RequestMatcher { request ->
+    val context = request.getSession(false)?.getAttribute(
+        HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY
+    ) as? SecurityContext
+    val authentication = context?.authentication
+    CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request) &&
+        authentication?.isAuthenticated == true && authentication !is AnonymousAuthenticationToken
 }
 
 /**
