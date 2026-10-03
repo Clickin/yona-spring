@@ -2,6 +2,7 @@ package com.github.yonaprojects.yona.config.oauth2server
 
 import com.github.yonaprojects.yona.config.ApiTokenAuthenticationFilter
 import com.github.yonaprojects.yona.config.SpaCsrfTokenRequestHandler
+import com.github.yonaprojects.yona.config.sessionApiMutationMatcher
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -10,17 +11,12 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
-import org.springframework.security.authentication.AnonymousAuthenticationToken
-import org.springframework.security.core.context.SecurityContext
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
 import org.springframework.security.web.SecurityFilterChain
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository
-import org.springframework.security.web.csrf.CsrfFilter
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher
 import java.security.interfaces.RSAPublicKey
 
 // yona 자신이 리소스 서버(Resource Server) 역할을 하는 설정. 원래 `/mcp/**` 하나만 담당했으나,
@@ -44,9 +40,6 @@ class ResourceServerConfig(
     private val mcpResourceUri get() = ProtectedResource.MCP.uri(baseUrl)
     private val apiResourceUri get() = ProtectedResource.API.uri(baseUrl)
     private val resourceMetadataUri get() = "$baseUrl/.well-known/oauth-protected-resource/mcp"
-    private val dependencyApi = PathPatternRequestMatcher.pathPattern(
-        "/api/v1/projects/{owner}/{project}/issues/{number}/dependencies/**"
-    )
 
     private fun jwtDecoderFor(resourceUri: String): JwtDecoder {
         val decoder = NimbusJwtDecoder.withPublicKey(jwkKeyPairProvider.keyPair.public as RSAPublicKey).build()
@@ -128,17 +121,7 @@ class ResourceServerConfig(
             .csrf { csrf ->
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(SpaCsrfTokenRequestHandler())
-                    .requireCsrfProtectionMatcher { request ->
-                        val sessionContext = request.getSession(false)?.getAttribute(
-                            HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY
-                        ) as? SecurityContext
-                        val authentication = sessionContext?.authentication
-                        // Only new dependency routes change policy. An ambient authenticated
-                        // browser session cannot bypass CSRF by supplying a forged PAT header.
-                        // Stateless PAT/OAuth clients retain their existing authentication.
-                        CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request) && dependencyApi.matches(request) &&
-                            authentication?.isAuthenticated == true && authentication !is AnonymousAuthenticationToken
-                    }
+                    .requireCsrfProtectionMatcher(sessionApiMutationMatcher)
             }
             .authorizeHttpRequests { authorize ->
                 authorize
