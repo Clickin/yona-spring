@@ -254,10 +254,9 @@ class WebhookServiceImpl(
                 fields.add(buildTitleValueJSON(objectMapper, "코드 보내는 곳", resource.fromBranch, true))
                 fields.add(buildTitleValueJSON(objectMapper, "코드 받을 곳", resource.toBranch, true))
             }
-            is IssueComment -> text = resource.contents
-            is PostingComment -> text = resource.contents
-            is ReviewComment -> text = resource.contents
-            is CommitComment -> text = resource.contents
+            is IssueComment, is PostingComment, is ReviewComment, is CommitComment ->
+                text = commentBody(resource).orEmpty()
+                    .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             else -> text = ""
         }
 
@@ -520,7 +519,8 @@ class WebhookServiceImpl(
             return "[$projectName] ${sender.name}님이 $actionMessage. $resourceInfo"
         }
 
-        val body = if (eventType == EventType.NEW_COMMENT || eventType == EventType.NEW_REVIEW_COMMENT) {
+        val body = if (webhook.webhookType != WebhookType.DETAIL_SLACK &&
+            (eventType == EventType.NEW_COMMENT || eventType == EventType.NEW_REVIEW_COMMENT)) {
             commentBody(resource)?.let { "\n$it" } ?: ""
         } else ""
         return "[$projectName] ${sender.name}님이 $actionMessage.${buildResourceLink(webhook, resource)}$body"

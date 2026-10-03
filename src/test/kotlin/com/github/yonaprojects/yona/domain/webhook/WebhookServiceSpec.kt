@@ -219,6 +219,37 @@ class WebhookServiceSpec : DescribeSpec({
             }
         }
 
+        it("Slack escapes comment syntax and renders the body only in its attachment") {
+            val sender = User(id = 2L, loginId = "sender", name = "Comment author")
+            val body = "*bold*\nA & B <!channel> <!here> <https://evil.example|label> &lt;literal&gt;"
+            val escaped = "*bold*\nA &amp; B &lt;!channel&gt; &lt;!here&gt; &lt;https://evil.example|label&gt; &amp;lt;literal&amp;gt;"
+            val issue = Issue(id = 10L, project = project, number = 17, title = "Parent")
+            val posting = Posting(id = 11L, project = project, number = 18, title = "Parent")
+            val comments = listOf(
+                IssueComment(id = 20L, issue = issue, contents = body),
+                PostingComment(id = 21L, posting = posting, contents = body),
+                ReviewComment(id = 22L, contents = body, thread = CodeCommentThread(project = project, commitId = "abc123")),
+                CommitComment(id = 23L, project = project, commitId = "abc123", contents = body)
+            )
+            every { notificationUrlResolver.getUrl(any(), any()) } returns "https://yona.example.com/comment"
+            for (comment in comments) {
+                val event = if (comment is ReviewComment) EventType.NEW_REVIEW_COMMENT else EventType.NEW_COMMENT
+                val hook = Webhook(project = project, payloadUrl = "http://localhost/hook", webhookType = WebhookType.DETAIL_SLACK)
+                val json = ObjectMapper().readTree(webhookService.buildPayload(hook, event, sender, comment))
+                json.path("attachments").get(0).path("text").asText() shouldBe escaped
+                val text = json.path("text").asText()
+                text.contains("*bold*") shouldBe false
+                text.contains(" <https://yona.example.com/") shouldBe true
+                text.endsWith(">") shouldBe true
+                hook.webhookType = WebhookType.SIMPLE
+                ObjectMapper().readTree(webhookService.buildPayload(hook, event, sender, comment))
+                    .path("text").asText().endsWith("\n$body") shouldBe true
+                hook.webhookType = WebhookType.JSON
+                ObjectMapper().readTree(webhookService.buildPayload(hook, event, sender, comment))
+                    .path("comment").path("body").asText() shouldBe body
+            }
+        }
+
         it("Slack delivers the review itself and commit location rather than the parent PR body") {
             val sender = User(id = 2L, loginId = "sender", name = "Comment author")
             val pr = PullRequest(id = 10L, toProject = project, fromProject = project, contributor = sender,
