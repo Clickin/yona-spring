@@ -174,7 +174,9 @@ class IssueViewController(
             page
         }
 
-        val sort = if (orderDir.equals("asc", ignoreCase = true)) {
+        val sort = if (orderBy == "relevance") {
+            Sort.by(Sort.Direction.DESC, "createdDate")
+        } else if (orderDir.equals("asc", ignoreCase = true)) {
             Sort.by(Sort.Direction.ASC, orderBy)
         } else {
             Sort.by(Sort.Direction.DESC, orderBy)
