@@ -52,7 +52,7 @@ class IssueCreateRedisplaySpec @Autowired constructor(
     init {
         it("renders a recoverable default form after template deletion and retains all submitted state") {
             val author = users.save(User(loginId = "redisplay-author", name = "Author", email = "redisplay@example.test"))
-            val project = projects.save(Project(owner = author.loginId, name = "redisplay", projectScope = ProjectScope.PUBLIC))
+            val project = projects.save(Project(owner = author.loginId, name = "redisplay", projectScope = ProjectScope.PUBLIC, lastIssueNumber = 1L))
             val role = roles.findById(RoleType.MEMBER.roleType).orElseGet {
                 roles.save(Role(id = RoleType.MEMBER.roleType, name = "MEMBER"))
             }

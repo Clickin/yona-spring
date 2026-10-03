@@ -711,8 +711,6 @@ class IssueViewController(
             body = submittedBody,
             project = project
         )
-        issue.isDraft = isDraft
-        issue.state = if (isDraft) State.DRAFT else State.OPEN
 
         if (parentIssueId != null) {
             val parentIssue = issueRepository.findById(parentIssueId).orElse(null)
@@ -735,7 +733,8 @@ class IssueViewController(
             author = loginUser,
             assigneeUser = assigneeUser,
             milestoneId = milestoneId,
-            labelIds = labelIds
+            labelIds = labelIds,
+            isDraft = isDraft
         )
 
         if (!temporaryUploadFiles.isNullOrBlank()) {

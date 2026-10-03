@@ -1741,8 +1741,7 @@ class IssueViewControllerSpec : DescribeSpec({
                 val savedIssue = Issue(id = 100L, number = 5L, title = "제목", project = project)
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
-                val issueSlot = slot<Issue>()
-                every { issueService.createIssue(capture(issueSlot), any(), any(), any(), any()) } returns savedIssue
+                every { issueService.createIssue(any(), any(), any(), any(), any(), isDraft = true) } returns savedIssue
 
                 issueViewController.createIssue(
                     owner = "owner", projectName = "TestProj", title = "제목", body = "본문",
@@ -1751,8 +1750,7 @@ class IssueViewControllerSpec : DescribeSpec({
                     temporaryUploadFiles = null, authentication = userAuth, model = ExtendedModelMap()
                 )
 
-                issueSlot.captured.state shouldBe State.DRAFT
-                issueSlot.captured.isDraft shouldBe true
+                verify(exactly = 1) { issueService.createIssue(any(), memberUser, null, null, null, isDraft = true) }
             }
         }
 
