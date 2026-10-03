@@ -97,3 +97,23 @@ The targeted H2 regression suites (`IssueSearchIndexSpec`, `IssueSearchQueueSpec
 writes, bounded SQL candidate lists, exact paging/counts/ACL, reader publication, snippets
 and search-page reuse. Other database engines require their own verification.
 
+#### Standalone runtime evidence (2026-10-04)
+
+A temporary Java entry point launched the compiled `YonaApplication` on its **main runtime
+classpath**, with Java 21, an isolated H2 database (`NON_KEYWORDS=VALUE`), a temporary data/index
+directory and a random HTTP port. No test framework, mocks or test-profile beans were used.
+The entry point used real JPA transactions and the registered change recorder/index beans:
+
+1. Writer A changed an issue and flushed, then held its transaction open.
+2. Writer B changed a different issue and committed while A remained blocked on a latch.
+3. The worker snapshot contained only B's committed event; its index update was published
+   and acknowledged before A was released.
+4. After A committed, its event remained pending. Processing it made both updated titles
+   searchable and left no pending events.
+
+Observed output: `LIVE_SMOKE_PASS independent_writer_ms=1 held_transaction=true
+late_event_retained=true published_matches=2 pending_events=0`. The 1 ms value records this
+local run, not a latency guarantee. The application, temporary data and runner were cleaned
+up afterward. This supplements the 68 passing targeted H2 tests; it does not certify other
+database engines.
+
