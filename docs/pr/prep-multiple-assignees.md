@@ -29,8 +29,48 @@ The singular API contract remains available alongside the plural fields:
 
 ## Verification status
 
-The compatibility/security review fixes added after the run below have not yet been
-executed against these checks; the recorded passing run describes the earlier branch state.
+### Review verification — 2026-10-04
+
+JDK 21, isolated H2: **19 specs, 823 tests, zero failures/errors/skips**.
+Production and test Kotlin compiled; the final scoped run completed in 34 seconds.
+The real Spring Security/MVC/JPA path in `LegacyIssueResponseIntegrationSpec`
+persisted a singular create assignment, preserved an omitted update, applied plural
+precedence (including empty-list clearing), accepted a singular replacement, and
+rejected foreign private-project targets with HTTP 403 and no database mutation.
+This is in-process application request coverage, not a separate browser smoke.
+
+The initial wildcard `--tests '*…Spec'` invocation initialized an unrelated PostgreSQL
+Testcontainer during Kotest discovery and failed without Docker. Exact class names
+below avoid that discovery problem. The next run exposed four old positive ACL
+fixtures using nonmember private-project assignees; those now use eligible members,
+including destination membership for moves. No production changes were required
+after this verification began.
+
+```sh
+JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem \
+./gradlew test -Dyona.it.db=h2 -Pkotlin.daemon.jvmargs=-Xmx4g --no-daemon --max-workers=1 \
+  --tests com.github.yonaprojects.yona.config.IssueAssigneesMigrationSpec \
+  --tests com.github.yonaprojects.yona.domain.issue.IssueServiceImplSpec \
+  --tests com.github.yonaprojects.yona.domain.issue.IssueServiceSpec \
+  --tests com.github.yonaprojects.yona.web.IssueControllerSpec \
+  --tests com.github.yonaprojects.yona.web.IssueRestApiControllerSpec \
+  --tests com.github.yonaprojects.yona.web.IssueApiControllerSpec \
+  --tests com.github.yonaprojects.yona.web.IssueShareControllerSpec \
+  --tests com.github.yonaprojects.yona.web.IssueViewControllerSpec \
+  --tests com.github.yonaprojects.yona.web.LegacyIssueResponseIntegrationSpec \
+  --tests com.github.yonaprojects.yona.config.security.AccessControlSpec \
+  --tests com.github.yonaprojects.yona.config.security.AccessControlIssuePostingSpec \
+  --tests com.github.yonaprojects.yona.config.security.AccessControlFinalSpec \
+  --tests com.github.yonaprojects.yona.domain.watch.WatchServiceSpec \
+  --tests com.github.yonaprojects.yona.mcp.IssueMcpToolsSpec \
+  --tests com.github.yonaprojects.yona.mcp.McpToolsEndToEndSpec \
+  --tests com.github.yonaprojects.yona.service.MigrationServiceSpec \
+  --tests com.github.yonaprojects.yona.web.ProjectApiControllerSpec \
+  --tests com.github.yonaprojects.yona.web.FavoriteControllerSpec \
+  --tests com.github.yonaprojects.yona.domain.site.DataBackupServiceH2IntegrationSpec
+```
+
+### Earlier branch verification
 
 Verified on 2026-10-02 with JDK 21 and isolated H2: **36 affected specs, 1,560 tests, zero failures/errors/skips**. Production and test Kotlin compiled. The final scoped Gradle run completed successfully in 1m 2s. Initial compiler failures exposed positional inbound-mail/PR fixture callers and were fixed; a new watcher test incorrectly deleted notifications without mail markers and was corrected before the passing run.
 
