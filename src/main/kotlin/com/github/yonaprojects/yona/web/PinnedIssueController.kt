@@ -6,6 +6,7 @@ import com.github.yonaprojects.yona.domain.enumeration.State
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.user.UserRepository
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
@@ -44,11 +45,13 @@ class PinnedIssueController(
         @PathVariable projectName: String,
         @PathVariable number: Long,
         @RequestParam pinned: Boolean,
-        authentication: Authentication?
+        authentication: Authentication?,
+        request: HttpServletRequest
     ): ResponseEntity<*> {
         val result = setPin(owner, projectName, number, pinned, authentication)
         if (!result.statusCode.is2xxSuccessful) return result
-        val location = UriComponentsBuilder.fromPath("/{owner}/{projectName}/issue/{number}")
+        val location = UriComponentsBuilder.fromPath(request.contextPath)
+            .path("/{owner}/{projectName}/issue/{number}")
             .buildAndExpand(owner, projectName, number).encode().toUri()
         return ResponseEntity.status(HttpStatus.SEE_OTHER).location(location).build<Void>()
     }

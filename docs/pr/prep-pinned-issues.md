@@ -82,6 +82,9 @@ JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem \
 - 실제 앱(격리 H2, `18109`, Lucene 활성화)에서 댓글만 `needle`과 일치하는 고정 `#1`, 무관한 고정 `#2`, 일반 결과 `#3`을 생성했다. 관련도/생성일 정렬 모두 고정 영역에는 `#1`만, 일반 영역에는 `#3`만 표시됐다. API는 `X-Yona-Search-Backend: lucene`, 전체 2건을 반환했다.
 - 해당 목록에서 저장된 보기로 이동·저장·다시 열기가 성공했고 `filter=needle&literalFilter=true&orderBy=relevance`와 고정/일반 결과가 유지됐다. 실제 API 생성/재조회에서 `assigneeId=1`은 담당자를 보존했고 `assigneeIds=[]`는 단일 필드보다 우선했다.
 - 브라우저 DOM/입력/이동과 HTTP 응답은 검증했다. screenshot helper와 raw Chromium screenshot은 모두 timeout으로 이미지 증거를 남기지 못했다. 비-H2 DB 및 전체 테스트 묶음은 이번에 실행하지 않았다.
+- 후속 다중 모델 리뷰에서 `/yona` 아래 고정 요청의 `303 Location`에 context path가 빠지는 결함을 재현했다. `pinWeb`은 이제 요청의 context path를 URI 앞에 붙이며 기존 303 상태를 유지한다.
+- 수정 후 `PinnedIssueSpec`, `PinnedIssueSecuritySpec`이 통과했다 (`BUILD SUCCESSFUL in 26s`). 루트 경로와 `/yona`의 고정·해제 Location 및 저장 상태를 검사한다.
+- 테스트와 별도로 기존 Java source-launcher를 실제 앱·보안 필터·MVC·H2에 다시 실행했다. 수정 전 `PIN_PROBE status=303 location=/review-owner/pin-probe/issue/1 persisted=true`였고, 수정 후 `PIN_PROBE status=303 location=/yona/review-owner/pin-probe/issue/1 persisted=true`였다.
 
 ## 이슈 승인 후 PR 준비
 
