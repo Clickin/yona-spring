@@ -155,6 +155,7 @@ class IssueViewControllerSpec : DescribeSpec({
         every { issueEventRepository.findByIssueOrderByCreatedAsc(any()) } returns emptyList()
         every { projectUserRepository.findByProjectIdAndUserId(any(), any()) } returns Optional.empty()
         every { userRepository.findAllById(any()) } returns emptyList()
+        every { issueRepository.findAll(any<Specification<Issue>>(), any<Sort>()) } returns emptyList()
     }
 
     describe("IssueViewController 템플릿 연동 테스트") {

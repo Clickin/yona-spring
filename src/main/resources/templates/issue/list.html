@@ -246,8 +246,22 @@
                         </li>
                     </ul>
 
+                    <section id="pinned-issues" th:if="${pinnedIssues != null && !pinnedIssues.isEmpty()}" aria-labelledby="pinned-issues-heading">
+                        <h3 id="pinned-issues-heading">[[#{issue.pinned}]] <span class="num-badge" th:text="${pinnedIssues.size()}">0</span></h3>
+                        <p th:text="#{issue.pinned.description}">Shared project pins matching these filters.</p>
+                        <ul class="post-list-wrap">
+                            <li class="post-item title" th:each="pinnedIssue : ${pinnedIssues}">
+                                <a th:href="@{/{owner}/{projectName}/issue/{number}(owner=${project.owner}, projectName=${project.name}, number=${pinnedIssue.number})}">
+                                    <span th:text="'#' + ${pinnedIssue.number}">#1</span>
+                                    <span th:text="${pinnedIssue.title}">Issue</span>
+                                </a>
+                            </li>
+                        </ul>
+                        <h3>[[#{issue.pinned.other}]] <span class="num-badge" th:text="${issuePage.totalElements}">0</span></h3>
+                    </section>
+
                     <!-- 이슈가 없을 때 -->
-                    <div class="error-wrap" th:if="${issuePage.content.isEmpty()}">
+                    <div class="error-wrap" th:if="${issuePage.content.isEmpty() && (pinnedIssues == null || pinnedIssues.isEmpty())}">
                         <i class="ico ico-err1"></i>
                         <p th:text="#{issue.is.empty}">등록된 이슈가 없습니다.</p>
                     </div>
@@ -386,6 +400,9 @@
 
                         <div th:replace="~{issue/partial_list :: list(${project}, ${issuePage.content}, ${currentUser})}"></div>
 
+                        <div id="pagination" th:data-total="${issuePage.totalPages}"><!-- pagination.js가 채움 --></div>
+                        </div>
+                    </th:block>
                         <!-- 엑셀 다운로드 버튼 -->
                         <div class="pull-left" style="padding:10px;">
                             <a th:href="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name}, format='xls', state=${state}, filter=${filter}, literalFilter=true, titleHead=${titleHead}, authorId=${authorId}, assigneeId=${assigneeId}, milestoneId=${milestoneId}, commenterId=${commenterId}, labelIds=${labelIds}, dueDate=${dueDate})}" class="ybtn small">
@@ -393,9 +410,6 @@
                             </a>
                         </div>
 
-                        <div id="pagination" th:data-total="${issuePage.totalPages}"><!-- pagination.js가 채움 --></div>
-                        </div>
-                    </th:block>
 
                     <!-- 하드코딩 복제였던 단축키 모달을 help/keymap :: keymap fragment로 교체.
                          복제본은 권한 게이트도 틀려 있었다(설정 메뉴가 매니저 여부와 무관하게 노출,

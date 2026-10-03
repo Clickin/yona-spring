@@ -1,6 +1,8 @@
 package com.github.yonaprojects.yona.config.oauth2server
 
 import com.github.yonaprojects.yona.config.ApiTokenAuthenticationFilter
+import com.github.yonaprojects.yona.config.SpaCsrfTokenRequestHandler
+import com.github.yonaprojects.yona.config.sessionApiMutationMatcher
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -14,6 +16,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository
 import java.security.interfaces.RSAPublicKey
 
 // yona 자신이 리소스 서버(Resource Server) 역할을 하는 설정. 원래 `/mcp/**` 하나만 담당했으나,
@@ -115,7 +118,11 @@ class ResourceServerConfig(
     ): SecurityFilterChain {
         http
             .securityMatcher("/api/v1/**")
-            .csrf { it.disable() }
+            .csrf { csrf ->
+                csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    .csrfTokenRequestHandler(SpaCsrfTokenRequestHandler())
+                    .requireCsrfProtectionMatcher(sessionApiMutationMatcher)
+            }
             .authorizeHttpRequests { authorize ->
                 authorize
                     .requestMatchers(HttpMethod.GET, "/api/v1/projects/**").permitAll()

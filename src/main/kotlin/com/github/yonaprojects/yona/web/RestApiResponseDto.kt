@@ -120,7 +120,8 @@ data class IssueResponse(
     // projectId(숫자 PK)만으로는 owner/name을 조회할 API가 따로 없어 추가했다.
     val projectOwner: String?,
     val projectName: String?,
-    val searchSnippet: com.github.yonaprojects.yona.domain.issue.IssueSearchSnippet? = null
+    val searchSnippet: com.github.yonaprojects.yona.domain.issue.IssueSearchSnippet? = null,
+    val pinnedAt: Instant? = null
 )
 
 fun Issue.toResponse() = IssueResponse(
@@ -129,6 +130,7 @@ fun Issue.toResponse() = IssueResponse(
     title = title,
     body = body,
     state = state,
+    pinnedAt = pinnedAt,
     createdDate = createdDate,
     updatedDate = updatedDate,
     authorId = authorId,

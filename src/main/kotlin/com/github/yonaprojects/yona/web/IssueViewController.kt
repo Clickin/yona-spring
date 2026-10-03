@@ -5,6 +5,7 @@ import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.enumeration.EventType
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
+import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.enumeration.State
 import com.github.yonaprojects.yona.domain.support.sha1Hex
 import com.github.yonaprojects.yona.domain.issue.Issue
@@ -203,7 +204,7 @@ class IssueViewController(
             commenterId = commenterId,
             labelIds = labelIds,
             dueDate = dueDate
-        )
+        ).and(IssueSpecification.published())
 
         if (format == "xls") {
             val allIssues = issueSearchService.search(spec, searchText, loginUser, org.springframework.data.domain.Pageable.unpaged(), titleHead).content
@@ -222,7 +223,14 @@ class IssueViewController(
                 .body(excelData)
         }
 
-        val issuePage = issueSearchService.search(spec, searchText, loginUser, pageable, titleHead)
+        val pinnedIssues = issueSearchService.search(
+            spec.and(IssueSpecification.pinned(true)), searchText, loginUser,
+            org.springframework.data.domain.Pageable.unpaged(sort), titleHead
+        ).content
+        val issuePage = issueSearchService.search(
+            spec.and(IssueSpecification.pinned(false)), searchText, loginUser, pageable, titleHead
+        )
+        model.addAttribute("pinnedIssues", pinnedIssues)
 
         val openIssuesCount = issueRepository.countByProjectAndState(project, State.OPEN)
         val closedIssuesCount = issueRepository.countByProjectAndState(project, State.CLOSED)
@@ -411,6 +419,8 @@ class IssueViewController(
         model.addAttribute("isWatchingProject", isWatchingProject)
         model.addAttribute("isFavoriteIssue", isFavoriteIssue)
         model.addAttribute("isAllowedUpdate", isAllowedUpdate)
+        model.addAttribute("canPinIssue", loginUser?.isGuest == false && loginUser.isManagerOf(project) &&
+            !issue.isDraft && issue.state != State.DRAFT)
         model.addAttribute("attachmentsJson", attachmentsJson)
         model.addAttribute("openMilestones", openMilestones)
         model.addAttribute("closedMilestones", closedMilestonesForIssue)

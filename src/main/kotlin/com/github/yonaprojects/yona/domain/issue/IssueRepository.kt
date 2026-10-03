@@ -30,6 +30,19 @@ interface IssueRepository : JpaRepository<Issue, Long>, JpaSpecificationExecutor
     // 대응 — 열림/닫힘 상태 탭 배지 카운트.
     fun countByProjectInAndState(projects: List<Project>, state: State): Long
     fun findByProjectAndNumber(project: Project, number: Long): Issue?
+
+    // Keep the project predicate in the write: a concurrent transfer must not pin in its destination.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+        UPDATE Issue i SET i.pinnedAt = :pinnedAt
+        WHERE i.id = :issueId AND i.project.id = :projectId
+          AND i.isDraft = false AND i.state <> com.github.yonaprojects.yona.domain.enumeration.State.DRAFT
+    """)
+    fun updatePin(
+        @Param("issueId") issueId: Long,
+        @Param("projectId") projectId: Long,
+        @Param("pinnedAt") pinnedAt: Instant?
+    ): Int
     fun findByMilestone(milestone: Milestone): List<Issue>
     fun findByMilestoneAndState(milestone: Milestone, state: State): List<Issue>
     fun findByAuthorId(authorId: Long): List<Issue>

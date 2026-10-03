@@ -42,6 +42,12 @@
                     </div>
                 </div>
             </div>
+            <form th:if="${canPinIssue == true}" method="post" data-turbo="false"
+                  th:action="@{/{owner}/{projectName}/issue/{number}/pin(owner=${project.owner}, projectName=${project.name}, number=${issue.number})}">
+                <input type="hidden" name="pinned" th:value="${issue.pinnedAt == null}">
+                <button type="submit" class="ybtn" th:text="${issue.pinnedAt == null ? #messages.msg('issue.pin') : #messages.msg('issue.unpin')}">Pin for project</button>
+            </form>
+            <p th:if="${issue.pinnedAt != null}" class="badge" th:text="#{issue.pinned}">Pinned issues</p>
 
             <!-- Content body -->
             <div class="board-body row-fluid">

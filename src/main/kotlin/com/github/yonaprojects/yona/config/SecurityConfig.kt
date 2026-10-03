@@ -24,6 +24,7 @@ import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.web.firewall.HttpFirewall
 import org.springframework.security.web.firewall.StrictHttpFirewall
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository
+import org.springframework.security.web.util.matcher.RequestMatcher
 import org.springframework.security.web.authentication.logout.SimpleUrlLogoutSuccessHandler
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -185,7 +186,9 @@ class SecurityConfig(
                     .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(SpaCsrfTokenRequestHandler())
                     .ignoringRequestMatchers("/git/**", "/svn/**", "/hg/**", "/internal/**", "/login/saml2/sso/**")
-                    .ignoringRequestMatchers(tokenAuthenticatedRequestMatcher)
+                    .ignoringRequestMatchers(RequestMatcher { request ->
+                        tokenAuthenticatedRequestMatcher.matches(request) && !pinnedIssueSessionMutationMatcher.matches(request)
+                    })
             }
             .headers { headers ->
                 headers.frameOptions { frameOptions ->

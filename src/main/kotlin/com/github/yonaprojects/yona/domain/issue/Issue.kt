@@ -56,6 +56,9 @@ class Issue(
     var weight: Int = 0,
     var isDraft: Boolean = false,
 
+    // Nullable so Hibernate schema update also leaves existing issues unpinned.
+    var pinnedAt: Instant? = null,
+
     @ManyToMany(cascade = [CascadeType.PERSIST, CascadeType.MERGE])
     @JoinTable(
         name = "issue_issue_label",
