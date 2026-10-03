@@ -1,6 +1,6 @@
 {
-  "implementationCommit": "923fd641106467f56d85bfecf9bca2da688a270c",
-  "implementationBase": "8c6675e64118fc0fef927f49f418136a30e88cde",
+  "implementationCommit": "2ee28a5a1510ff68d6a1fee7db606a04362b8053",
+  "implementationBase": "1b0e519a8ab16dd94982dd02f112e8df7e690769",
   "implementationBranch": "poc/issue-843-lucene-search",
   "documentationBranch": "docs/issue-843-lucene-poc",
   "remote": "https://github.com/Clickin/yona-spring.git",
@@ -8,5 +8,5 @@
     "h2": 500,
     "failures": 0
   },
-  "measurementCaveat": "Speed and resource measurements were taken at 4e7fb579 (before title-head projection and query-analysis fix). Search quality was measured at both 4e7fb579 and 923fd641."
+  "measurementCaveat": "Speed and resource measurements were taken at c1d6aa89 (before title-head projection and query-analysis fix). Search quality was measured at both c1d6aa89 and 2ee28a5a."
 }

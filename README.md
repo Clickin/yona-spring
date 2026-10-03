@@ -2,7 +2,7 @@
 
 [#843](https://github.com/yona-projects/yona/issues/843) 제안(이슈 전문 검색, 기본은 DB, 선택으로 Lucene)을 구현하고 측정한 기록이다. 구현 코드는 [`poc/issue-843-lucene-search`](https://github.com/Clickin/yona-spring/tree/poc/issue-843-lucene-search)에 있고, 이 브랜치에는 문서와 측정 도구만 둔다. upstream에 merge하지 않는다.
 
-- 구현 커밋: [`923fd64`](https://github.com/Clickin/yona-spring/commit/923fd641106467f56d85bfecf9bca2da688a270c)
+- 구현 커밋: [`2ee28a5`](https://github.com/Clickin/yona-spring/commit/2ee28a5a1510ff68d6a1fee7db606a04362b8053)
 - 테스트: H2 통합·회귀 500개 통과 (2026-10-03)
 - 측정 데이터: 평가 데이터. 이슈 4,882건, 댓글 6,335건, 검색 대상 텍스트 8.94 MiB
 
@@ -77,7 +77,7 @@ Lucene의 약점은 두 가지다. 식별자 일부로는 찾지 못한다. 결�
 
 ```sh
 git fetch origin docs/issue-843-lucene-poc poc/issue-843-lucene-search
-git worktree add --detach /tmp/yona-search-benchmark 923fd641106467f56d85bfecf9bca2da688a270c
+git worktree add --detach /tmp/yona-search-benchmark 2ee28a5a1510ff68d6a1fee7db606a04362b8053
 git -C /tmp/yona-search-benchmark restore --source=origin/docs/issue-843-lucene-poc --worktree -- \
   src/test/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchResourceProbe.kt \
   src/test/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchQualityProbe.kt \

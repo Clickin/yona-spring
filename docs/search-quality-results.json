@@ -7,7 +7,7 @@
     "after"
   ],
   "before": {
-    "implementationCommit": "4e7fb579504c39907bdf70f7a71cb4beb0abb5f3",
+    "implementationCommit": "c1d6aa89fe92cfa01d63c190b47fde3e654eb6e8",
     "database": "mariadb",
     "java": "21.0.6",
     "seed": 843,
@@ -425,7 +425,7 @@
     }
   },
   "after": {
-    "implementationCommit": "923fd641106467f56d85bfecf9bca2da688a270c",
+    "implementationCommit": "2ee28a5a1510ff68d6a1fee7db606a04362b8053",
     "database": "mariadb",
     "java": "21.0.6",
     "seed": 843,

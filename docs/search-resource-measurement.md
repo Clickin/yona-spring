@@ -59,7 +59,7 @@ H2 검색·큐·백업·웹/API 회귀 **496개 통과**. 2,105개 hit의 20건 
 
 ## 1차 후속 최적화 결과 — 전체 hit 지문 검증 당시
 
-2026-10-02 후속 변경은 [IssueSearchService](https://github.com/Clickin/yona-spring/blob/4e7fb579504c39907bdf70f7a71cb4beb0abb5f3/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchService.kt)의 DB 후보 조회를 Lucene hit ID로 제한하고, [댓글 조회](https://github.com/Clickin/yona-spring/blob/4e7fb579504c39907bdf70f7a71cb4beb0abb5f3/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueCommentRepository.kt)를 200개 이슈씩 묶으며, snippet을 최종 페이지에만 생성하도록 바꿨다. 0 hit이면 후보·댓글 DB 조회를 하지 않는다. 명시적 DB 정렬을 전체 hit에 적용하고 권한·현재 내용을 페이지 분할 전에 검증하므로 페이지별 순서와 정확한 전체 건수를 유지한다. 숫자 ID는 Criteria literal로 전달하고 IN 목록을 500개씩 나누어 hit 수가 SQL Server의 바인딩 매개변수 제한을 소진하지 않게 했다. H2와 MariaDB에서 실행했으며 나머지 DB의 실행 검증은 별도다.
+2026-10-02 후속 변경은 [IssueSearchService](https://github.com/Clickin/yona-spring/blob/c1d6aa89fe92cfa01d63c190b47fde3e654eb6e8/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchService.kt)의 DB 후보 조회를 Lucene hit ID로 제한하고, [댓글 조회](https://github.com/Clickin/yona-spring/blob/c1d6aa89fe92cfa01d63c190b47fde3e654eb6e8/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueCommentRepository.kt)를 200개 이슈씩 묶으며, snippet을 최종 페이지에만 생성하도록 바꿨다. 0 hit이면 후보·댓글 DB 조회를 하지 않는다. 명시적 DB 정렬을 전체 hit에 적용하고 권한·현재 내용을 페이지 분할 전에 검증하므로 페이지별 순서와 정확한 전체 건수를 유지한다. 숫자 ID는 Criteria literal로 전달하고 IN 목록을 500개씩 나누어 hit 수가 SQL Server의 바인딩 매개변수 제한을 소진하지 않게 했다. H2와 MariaDB에서 실행했으며 나머지 DB의 실행 검증은 별도다.
 
 같은 평가 데이터·JDK·heap·검색어·20건 페이지·예열/관측 횟수로 **Lucene → DB → Lucene** 순서의 새 JVM/DB 3회 측정을 수행했다. 원시 결과는 [JSON의 `optimizedRuns`](search-resource-results.json)에 추가했고 최적화 전 수치는 그대로 보존했다. 아래 시간은 네트워크·렌더링을 제외한 실제 서비스 호출이다.
 
@@ -112,7 +112,7 @@ H2 검색·큐·백업·웹/API 회귀 **496개 통과**. 2,105개 hit의 20건 
 | 수정 | 1,539 / 1,533 | 36.0–40.2 / 40.5–42.7ms | 745.2–822.5 / 824.0–1,055.3ms | **8.41 / 9.21ms** |
 | 불일치 검색어 | 0 / 0 | 28.6–29.6 / 29.3–30.9ms | 42.9–44.1 / 45.2–54.2ms | **0.18 / 0.24ms** |
 
-최적화 전 [서비스 구현](https://github.com/Clickin/yona-spring/blob/4e7fb579504c39907bdf70f7a71cb4beb0abb5f3/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchService.kt)은 다음 비용을 매 요청마다 지불한다. 아래 원인 구분은 코드 경로와 위 측정에 근거한 해석이며, 모든 단계를 독립 profiler로 계측한 결과는 아니다.
+최적화 전 [서비스 구현](https://github.com/Clickin/yona-spring/blob/c1d6aa89fe92cfa01d63c190b47fde3e654eb6e8/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchService.kt)은 다음 비용을 매 요청마다 지불한다. 아래 원인 구분은 코드 경로와 위 측정에 근거한 해석이며, 모든 단계를 독립 profiler로 계측한 결과는 아니다.
 
 1. Lucene hit가 있어도 DB 조건에 맞는 후보 전체를 가져온 뒤 메모리에서 ID를 거른다. 0 hit 검색도 이 후보 조회를 수행한다.
 2. 매칭된 이슈마다 댓글 쿼리를 실행하고 현재 문서 digest를 계산한다. 이는 내용이 변경된 문서를 제외하기 위한 비용이었다. 삭제된 이슈와 권한 변경의 제외는 별도의 현재 DB 조회·ACL 검사에서 처리한다.

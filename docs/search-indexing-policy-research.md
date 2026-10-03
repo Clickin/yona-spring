@@ -66,7 +66,7 @@ Solr는 hard commit과 검색 가시성을 위한 soft commit을 구분한다. `
 
 ## Yona에 적용할 판단
 
-현재 코드는 원본 변경과 함께 dirty ID를 DB에 기록하고, 전역 `last + 2초` 또는 `first + 10초` 조건을 500ms마다 확인한다. 이미 진행 중인 sync job은 재사용하고, 처리한 generation만 ack한다. 이 조사에서는 구현을 그대로 두었다. [현재 debounce·job 코드](https://github.com/Clickin/yona-spring/blob/4e7fb579504c39907bdf70f7a71cb4beb0abb5f3/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchJobs.kt), [현재 변경 집합·window 코드](https://github.com/Clickin/yona-spring/blob/4e7fb579504c39907bdf70f7a71cb4beb0abb5f3/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchChanges.kt)
+현재 코드는 원본 변경과 함께 dirty ID를 DB에 기록하고, 전역 `last + 2초` 또는 `first + 10초` 조건을 500ms마다 확인한다. 이미 진행 중인 sync job은 재사용하고, 처리한 generation만 ack한다. 이 조사에서는 구현을 그대로 두었다. [현재 debounce·job 코드](https://github.com/Clickin/yona-spring/blob/c1d6aa89fe92cfa01d63c190b47fde3e654eb6e8/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchJobs.kt), [현재 변경 집합·window 코드](https://github.com/Clickin/yona-spring/blob/c1d6aa89fe92cfa01d63c190b47fde3e654eb6e8/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchChanges.kt)
 
 추천하는 다음 비교 실험은 다음과 같다. 아래 값과 우선순위는 외부 제품의 보장값이 아니라 Yona에 대한 판단이다.
 
