@@ -6,6 +6,8 @@ import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import org.springframework.web.servlet.ModelAndView
+import com.github.yonaprojects.yona.web.IssueController
+import com.github.yonaprojects.yona.web.MarkdownController
 import com.github.yonaprojects.yona.web.ProjectArchiveController
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -24,17 +26,25 @@ class ProjectArchiveInterceptor(
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
         if (handler is HandlerMethod && ProjectArchiveController::class.java.isAssignableFrom(handler.beanType)) return true
         // VCS protocols classify reads by command, not HTTP verb; their authorization filters guard writes.
-        if (request.requestURI.startsWith("/hg/") || request.requestURI.startsWith("/svn/")) return true
+        val path = request.requestURI.removePrefix(request.contextPath)
+        if (path.startsWith("/hg/") || path.startsWith("/svn/")) return true
         if (request.method in setOf("GET", "HEAD", "OPTIONS")) return true
         // These POST handlers only compute a response; archived reads remain available.
-        if (handler is HandlerMethod && handler.method.name in setOf("render", "detectChange", "commentNotiReceivers")) return true
+        if (request.method == "POST" && handler is HandlerMethod) {
+            val readOnly = when (handler.method.declaringClass) {
+                MarkdownController::class.java -> handler.method.name == "render"
+                IssueController::class.java -> handler.method.name == "detectChange" || handler.method.name == "commentNotiReceivers"
+                else -> false
+            }
+            if (readOnly) return true
+        }
         @Suppress("UNCHECKED_CAST")
         val variables = request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE) as? Map<String, String>
             ?: emptyMap()
         val project = variables["projectId"]?.toLongOrNull()?.let { projects.findById(it).orElse(null) }
             ?: variables["issueId"]?.toLongOrNull()?.let { issues.findById(it).orElse(null)?.project?.id }
                 ?.let { projects.findById(it).orElse(null) }
-            ?: (if (request.requestURI.startsWith("/files/")) {
+            ?: (if (path.startsWith("/files/")) {
                 variables["id"]?.toLongOrNull()?.let { attachments.findById(it).orElse(null) }
                     ?.takeIf { it.containerType == ResourceType.PROJECT }
                     ?.containerId?.toLongOrNull()?.let { projects.findById(it).orElse(null) }

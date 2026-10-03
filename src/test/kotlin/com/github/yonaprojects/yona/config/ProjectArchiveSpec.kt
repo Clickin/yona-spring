@@ -13,6 +13,8 @@ import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.user.UserState
 import com.github.yonaprojects.yona.domain.vcs.ArchivedProjectPreReceiveHook
+import com.github.yonaprojects.yona.web.IssueController
+import com.github.yonaprojects.yona.web.MarkdownController
 import com.github.yonaprojects.yona.web.ProjectArchiveController
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.DescribeSpec
@@ -24,6 +26,7 @@ import org.eclipse.jgit.transport.ReceiveCommand
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.web.method.HandlerMethod
 import org.springframework.web.servlet.HandlerMapping
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
@@ -80,18 +83,89 @@ class ProjectArchiveSpec : DescribeSpec({
         }
     }
 
-    it("global logo deletion resolves its owning archived project") {
+    it("global logo deletion resolves its archived project regardless of servlet context path") {
         val project = archivedProject()
         val projects = mockk<ProjectRepository>()
         val attachments = mockk<com.github.yonaprojects.yona.domain.attachment.AttachmentRepository>()
         every { projects.findById(1) } returns Optional.of(project)
         every { attachments.findById(9) } returns Optional.of(
             com.github.yonaprojects.yona.domain.attachment.Attachment(id = 9, containerType = ResourceType.PROJECT, containerId = "1"))
-        val request = MockHttpServletRequest("POST", "/files/9")
-        request.setAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE, mapOf("id" to "9"))
-        val response = MockHttpServletResponse()
-        ProjectArchiveInterceptor(projects, mockk(), attachments).preHandle(request, response, Any()) shouldBe false
-        response.status shouldBe 403
+        val interceptor = ProjectArchiveInterceptor(projects, mockk(), attachments)
+        for (contextPath in listOf("", "/yona", "/hg", "/svn", "/files")) {
+            val request = MockHttpServletRequest("POST", "$contextPath/files/9")
+            request.contextPath = contextPath
+            request.servletPath = "/files/9"
+            request.setAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE, mapOf("id" to "9"))
+            val response = MockHttpServletResponse()
+            interceptor.preHandle(request, response, Any()) shouldBe false
+            response.status shouldBe 403
+            request.method = "GET"
+            interceptor.preHandle(request, MockHttpServletResponse(), Any()) shouldBe true
+            project.archivedAt = null
+            request.method = "POST"
+            interceptor.preHandle(request, MockHttpServletResponse(), Any()) shouldBe true
+            project.archivedAt = Instant.EPOCH
+        }
+    }
+
+    it("Mercurial POST and SVN DAV reads remain delegated to protocol filters under a context path") {
+        val interceptor = ProjectArchiveInterceptor(mockk(), mockk(), mockk())
+        for (contextPath in listOf("", "/yona")) {
+            for ((method, path) in listOf("POST" to "/hg/owner/repo", "REPORT" to "/svn/owner/repo", "PROPFIND" to "/svn/owner/repo")) {
+                val request = MockHttpServletRequest(method, "$contextPath$path")
+                request.contextPath = contextPath
+                request.servletPath = path
+                request.setAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE, mapOf("owner" to "owner", "projectName" to "repo"))
+                interceptor.preHandle(request, MockHttpServletResponse(), Any()) shouldBe true
+            }
+        }
+    }
+
+    it("only the intended controllers can exempt read-only POST handlers") {
+        val projects = mockk<ProjectRepository>()
+        every { projects.findById(1) } returns Optional.of(archivedProject())
+        val interceptor = ProjectArchiveInterceptor(projects, mockk(), mockk())
+        val markdown = mockk<MarkdownController>()
+        val issues = mockk<IssueController>()
+        val unrelated = ArchivePreviewNameCollision()
+        for ((controller, controllerType, methodName) in listOf(
+            Triple(markdown, MarkdownController::class.java, "render"),
+            Triple(issues, IssueController::class.java, "detectChange"),
+            Triple(issues, IssueController::class.java, "commentNotiReceivers")
+        )) {
+            val handler = HandlerMethod(controller, controllerType.methods.single { it.name == methodName })
+            val request = MockHttpServletRequest("POST", "/api/projects/1/preview")
+            request.setAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE, mapOf("projectId" to "1"))
+            interceptor.preHandle(request, MockHttpServletResponse(), handler) shouldBe true
+            val collision = HandlerMethod(unrelated, methodName)
+            val response = MockHttpServletResponse()
+            interceptor.preHandle(request, response, collision) shouldBe false
+            response.status shouldBe 403
+            request.method = "DELETE"
+            interceptor.preHandle(request, MockHttpServletResponse(), handler) shouldBe false
+        }
+    }
+
+    it("watch unwatch star leave and fork remain frozen even when they only affect the current user") {
+        val projects = mockk<ProjectRepository>()
+        every { projects.findById(1) } returns Optional.of(archivedProject())
+        every { projects.findByOwnerAndNameOrPreviousPlace("owner", "repo") } returns Optional.of(archivedProject())
+        val interceptor = ProjectArchiveInterceptor(projects, mockk(), mockk())
+        for ((method, path, variables) in listOf(
+            Triple("POST", "/owner/repo/watch", mapOf("owner" to "owner", "projectName" to "repo")),
+            Triple("POST", "/owner/repo/unwatch", mapOf("owner" to "owner", "projectName" to "repo")),
+            Triple("POST", "/-_-api/v1/favoriteProjects/1", mapOf("projectId" to "1")),
+            Triple("DELETE", "/api/projects/1/members/2", mapOf("projectId" to "1", "userId" to "2")),
+            Triple("POST", "/api/owner/repo/fork", mapOf("owner" to "owner", "projectName" to "repo"))
+        )) {
+            val request = MockHttpServletRequest(method, "/yona$path")
+            request.contextPath = "/yona"
+            request.servletPath = path
+            request.setAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE, variables)
+            val response = MockHttpServletResponse()
+            interceptor.preHandle(request, response, Any()) shouldBe false
+            response.status shouldBe 403
+        }
     }
 
     it("only managers can archive or restore and repeated archive keeps its timestamp") {
@@ -188,3 +262,9 @@ class ProjectArchiveSpec : DescribeSpec({
         restored.result shouldBe ReceiveCommand.Result.NOT_ATTEMPTED
     }
 })
+
+private class ArchivePreviewNameCollision {
+    fun render() = Unit
+    fun detectChange() = Unit
+    fun commentNotiReceivers() = Unit
+}
