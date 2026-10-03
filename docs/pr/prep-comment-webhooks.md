@@ -22,7 +22,7 @@ Exactly once here means one dispatch per committed creation through the applicat
 
 ## Verification
 
-Review repair verified on 2026-10-03 with JDK 21: `JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem ./gradlew test -Dyona.it.db=h2 --no-daemon --max-workers=1 --tests com.github.yonaprojects.yona.domain.webhook.WebhookServiceSpec` completed with `BUILD SUCCESSFUL in 1m 40s`. The new payload regression covers issue, posting, review, and commit comments, including unchanged SIMPLE/JSON bodies.
+Review repair verified on 2026-10-04: `./gradlew test -Dyona.it.db=h2 --no-daemon --max-workers=1 --tests com.github.yonaprojects.yona.domain.webhook.WebhookServiceSpec` completed with `BUILD SUCCESSFUL in 1m 40s`. The new payload regression covers issue, posting, review, and commit comments, including unchanged SIMPLE/JSON bodies.
 
 A separate temporary Java source-launcher smoke invoked the compiled `WebhookServiceImpl.sendWebhook` with a commit comment and captured its real HTTP POST on a loopback receiver returning 204. Repository dependencies supplied an in-memory webhook; no application database or external Slack endpoint was used. The captured attachment contained `*bold*\nA &amp; B &lt;!channel&gt; &lt;!here&gt; &lt;https://evil.example|label&gt; &amp;lt;literal&amp;gt;`, while top-level text retained `<https://yona.example.com/owner/smoke/commit/abc123#commit-comment-3|abc123>`. Assertions passed for escaped injected syntax, preserved formatting/link construction, and exactly one body occurrence. The receiver was stopped and temporary source/runtime files removed afterward.
 
