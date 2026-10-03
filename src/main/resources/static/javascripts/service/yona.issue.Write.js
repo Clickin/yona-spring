@@ -92,7 +92,7 @@
                 }
             });
 
-            temporarySaveHandler(htElement.welTextarea);
+            temporarySaveHandler(htElement.welTextarea, htElement.welInputTitle.form.dataset.validationRedisplay !== "true");
 
             // 인스턴스는 htElement.welAssignee.tomselect로 접근한다(yona.issue.Assginee.js가
             // 생성). weEvt.val은 yona.ui.TomSelect.js의 bridgeChangeEvent가 원본 select2

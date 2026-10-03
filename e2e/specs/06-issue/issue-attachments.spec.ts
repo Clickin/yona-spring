@@ -67,3 +67,56 @@ test('deleting an uploaded attachment removes it from the widget', async ({ page
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('validation redisplay retains uploaded files through hydration, removal and retry', async ({ page }) => {
+  const owner = requireSeed('projectOwner');
+  const name = requireSeed('projectName');
+  const title = `redisplay-${uniqueSuffix()}`;
+  await page.goto(`/${owner}/${name}/issueform`);
+  const widget = page.locator('yona-attachments#upload');
+  await widget.locator('input[type="file"]').setInputFiles([
+    { name: `${title}-keep.txt`, mimeType: 'text/plain', buffer: Buffer.from('keep') },
+    { name: `${title}-remove.txt`, mimeType: 'text/plain', buffer: Buffer.from('remove') },
+  ]);
+  await expect(widget.locator('.attached-file.complete')).toHaveCount(2);
+  const initialIds = (await widget.locator('input[name=temporaryUploadFiles]').inputValue()).split(',').sort();
+  await page.locator('#title').fill(title);
+  await page.evaluate(() => {
+    const form = document.querySelector<HTMLFormElement>('#issue-form')!;
+    localStorage.setItem(new URL(form.action).pathname, 'Stale draft must not replace submitted answers');
+    (form.querySelector('#isDraft') as HTMLInputElement).value = 'true';
+    (form.querySelector('#issueDueDate') as HTMLInputElement).value = '2027-04-05';
+    for (const [name, value] of Object.entries({
+      templateId: 'deleted-template-regression',
+      'answer.steps': 'Keep this answer after template deletion',
+    })) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    }
+    form.submit();
+  });
+  await page.waitForURL(`**/${owner}/${name}/issues`);
+  await expect(page.locator('#issue-form [role=alert]')).toBeVisible();
+  await expect(page.locator('#title')).toHaveValue(title);
+  await expect(page.locator('#isDraft')).toHaveValue('true');
+  await expect(page.locator('#issueDueDate')).toHaveValue('2027-04-05');
+  await expect(page.locator('#issue-form input[name=templateId]')).toHaveCount(0);
+  await expect(page.locator('textarea[name=body]')).toHaveValue(/Keep this answer after template deletion/);
+  await expect(widget.locator('.attached-file.complete')).toHaveCount(2);
+  expect((await widget.locator('input[name=temporaryUploadFiles]').inputValue()).split(',').sort()).toEqual(initialIds);
+  const removed = widget.locator('.attached-file.complete', { hasText: `${title}-remove.txt` });
+  await removed.locator('.btn-delete').click();
+  await expect(removed).toHaveCount(0);
+  const retainedId = await widget.locator('input[name=temporaryUploadFiles]').inputValue();
+  expect(initialIds).toContain(retainedId);
+  expect(retainedId).not.toContain(',');
+  await page.locator('#button-save').click();
+  await page.waitForURL(new RegExp(`/${owner}/${name}/issue/\\d+$`));
+  await page.evaluate(key => localStorage.removeItem(key), `/${owner}/${name}/issues`);
+  await page.goto(`${page.url()}/editform`);
+  await expect(widget.locator('.attached-file.complete', { hasText: `${title}-keep.txt` })).toBeVisible();
+  await expect(widget.locator('input[name=temporaryUploadFiles]')).toHaveValue('');
+});

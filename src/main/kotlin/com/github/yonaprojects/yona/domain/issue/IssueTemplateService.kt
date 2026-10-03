@@ -43,7 +43,6 @@ class IssueTemplateService(
     fun select(catalog: Catalog, templateId: String?): Template? {
         if (templateId.isNullOrBlank()) return null
         return catalog.templates.find { it.id == templateId }
-            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown issue template; reload the form")
     }
 
     fun submission(project: Project, templateId: String?, answers: Map<String, String>, body: String): String {
@@ -51,7 +50,8 @@ class IssueTemplateService(
             if (answers.isNotEmpty()) invalid("Answers require a template")
             return body
         }
-        val template = select(catalog(project), templateId)!!
+        val template = select(catalog(project), templateId)
+            ?: invalid("Unknown issue template; review the default form")
         if (answers.keys.any { key -> template.fields.none { it.id == key } }) invalid("Unknown answer field")
         val sections = template.fields.map { field ->
             val answer = answers[field.id].orEmpty()

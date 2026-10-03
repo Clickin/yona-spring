@@ -421,6 +421,52 @@ class IssueViewControllerSpec : DescribeSpec({
             }
         }
 
+        describe("issue template validation redisplay") {
+            it("preserves the submitted form and only rehydrates the author's temporary attachments") {
+                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
+                val repository = mockk<PlayRepository>()
+                every { repositoryService.getRepository(project) } returns repository
+                every { repository.getRawFile("HEAD", "ISSUE_TEMPLATE.md") } returns "Legacy".toByteArray()
+                every { repository.getRawFile("HEAD", ".yona/issue-templates.json") } returns
+                    """[{"id":"bug","name":"Bug","fields":[{"id":"steps","label":"Steps","type":"text","required":true}]}]""".toByteArray()
+                every { milestoneService.getMilestones(project.id!!, State.OPEN) } returns emptyList()
+                every { projectUserRepository.findByProjectId(project.id!!) } returns emptyList()
+                every { projectUserRepository.findByUserId(memberUser.id!!) } returns emptyList()
+                every { issueLabelRepository.findByProject(project) } returns emptyList()
+                every { issueRepository.findByProjectAndParentIsNullOrderByCreatedDateDesc(any(), any()) } returns emptyList()
+                every { issueRepository.findById(7L) } returns Optional.of(Issue(id = 7L, project = project, title = "Parent"))
+                val own = Attachment(id = 900L, name = "own.txt", ownerLoginId = memberUser.loginId,
+                    containerType = ResourceType.NOT_A_RESOURCE, containerId = "")
+                val foreign = Attachment(id = 901L, name = "foreign.txt", ownerLoginId = "someone-else",
+                    containerType = ResourceType.NOT_A_RESOURCE, containerId = "")
+                val attached = Attachment(id = 902L, name = "attached.txt", ownerLoginId = memberUser.loginId,
+                    containerType = ResourceType.ISSUE_POST, containerId = "100")
+                every { attachmentRepository.findAllById(listOf(900L, 901L, 902L, 999L)) } returns listOf(own, foreign, attached)
+
+                val result = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/owner/TestProj/issues")
+                    .principal(userAuth).param("title", "Keep title").param("body", "Keep body")
+                    .param("templateId", "bug").param("answer.steps", " ")
+                    .param("assigneeLoginId", memberUser.loginId).param("milestoneId", "21")
+                    .param("labelIds", "31", "32").param("dueDate", "2027-04-05").param("isDraft", "true")
+                    .param("parentIssueId", "7").param("targetProjectId", "2").param("isFromGlobalMenuNew", "true")
+                    .param("temporaryUploadFiles", "900,901,902,999"))
+                    .andExpect(status().isBadRequest).andExpect(view().name("issue/create"))
+                    .andReturn().modelAndView!!.model
+
+                result["issueForm"] shouldBe IssueForm("Keep title", "Keep body", memberUser.loginId,
+                    21L, "2027-04-05", listOf(31L, 32L), 7L, 2L)
+                result["isDraft"] shouldBe true
+                result["isFromGlobalMenuNew"] shouldBe true
+                result["answers"] shouldBe mapOf("steps" to " ")
+                result["issueTemplate"] shouldBe "Keep body"
+                result["temporaryAttachments"] shouldBe listOf(own)
+                result["temporaryUploadFiles"] shouldBe "900"
+                verify(exactly = 0) { issueService.createIssue(any(), any(), any(), any(), any()) }
+                verify(exactly = 0) { attachmentService.moveOnlySelected(any(), any(), any(), any(), any(), any()) }
+            }
+        }
+
         // yona Attachment.moveOnlySelected() 대응 (P0-22) — 요청받은 첨부파일 ID를 검증 없이 그대로
         // 재배선하지 않고, 실제로 이 로그인 사용자가 업로드한 임시 첨부만 옮기는지 검증한다.
         describe("POST /{owner}/{projectName}/issues - 임시 업로드 첨부파일 연결") {

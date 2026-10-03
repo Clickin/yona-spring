@@ -544,6 +544,10 @@ class IssueViewController(
         model.addAttribute("invalidTemplateConfiguration", catalog.invalidConfiguration)
         model.addAttribute("selectedTemplate", selectedTemplate)
         model.addAttribute("answers", emptyMap<String, String>())
+        model.addAttribute("issueForm", IssueForm(parentIssueId = parentIssueId))
+        model.addAttribute("isDraft", false)
+        model.addAttribute("temporaryAttachments", emptyList<com.github.yonaprojects.yona.domain.attachment.Attachment>())
+        model.addAttribute("temporaryUploadFiles", "")
         model.addAttribute("issueTemplate", bodyText ?: selectedTemplate?.body ?: catalog.legacyBody)
 
         model.addAttribute("project", project)
@@ -672,8 +676,31 @@ class IssueViewController(
         val submittedBody = try {
             issueTemplateService.submission(project, templateId, answers, body)
         } catch (e: ResponseStatusException) {
-            val view = createIssueForm(owner, projectName, parentIssueId, false, body, authentication, model, templateId)
+            val view = createIssueForm(
+                owner, projectName, parentIssueId, parameters["isFromGlobalMenuNew"].toBoolean(),
+                body, authentication, model, templateId
+            )
+            model.addAttribute("issueForm", IssueForm(
+                title = title, body = body, assigneeLoginId = assigneeLoginId, milestoneId = milestoneId,
+                dueDate = dueDate, labelIds = labelIds, parentIssueId = parentIssueId, targetProjectId = targetProjectId
+            ))
+            model.addAttribute("isDraft", isDraft)
             model.addAttribute("answers", answers)
+            // A removed template/field must not strand or silently discard its submitted answers.
+            val selectedTemplate = model.getAttribute("selectedTemplate") as? IssueTemplateService.Template
+            val orphanedAnswers = answers.filterKeys { key -> selectedTemplate?.fields?.none { it.id == key } != false }
+            if (orphanedAnswers.isNotEmpty()) {
+                val recovered = orphanedAnswers.entries.joinToString("\n\n") { (key, answer) ->
+                    (listOf(key) + answer.lines()).joinToString("\n") { "    $it" }
+                }
+                model.addAttribute("issueTemplate", listOf(body, recovered).filter { it.isNotEmpty() }.joinToString("\n\n"))
+            }
+            val fileIds = temporaryUploadFiles.orEmpty().split(",").mapNotNull { it.trim().toLongOrNull() }.distinct()
+            val temporaryAttachments = if (fileIds.isEmpty()) emptyList() else attachmentRepository.findAllById(fileIds).filter {
+                it.containerType == ResourceType.NOT_A_RESOURCE && it.containerId == "" && it.ownerLoginId == loginUser.loginId
+            }
+            model.addAttribute("temporaryAttachments", temporaryAttachments)
+            model.addAttribute("temporaryUploadFiles", temporaryAttachments.joinToString(",") { it.id.toString() })
             model.addAttribute("formError", e.reason)
             response?.status = HttpStatus.BAD_REQUEST.value()
             return view

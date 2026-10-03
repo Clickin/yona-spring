@@ -40,6 +40,8 @@ class IssueTemplateServiceSpec : DescribeSpec({
         service.select(catalog, "bug")!!.fields.map { it.id } shouldBe listOf("steps", "platform")
         service.select(catalog, "feature")!!.body shouldBe "Proposed feature"
         service.select(catalog, null) shouldBe null
+        service.select(catalog, "deleted") shouldBe null
+        service.select(catalog, "../secret") shouldBe null
         catalog.legacyBody shouldBe "Legacy body"
         service.submission(project, null, emptyMap(), "Unchanged **Markdown**") shouldBe "Unchanged **Markdown**"
     }
@@ -49,6 +51,7 @@ class IssueTemplateServiceSpec : DescribeSpec({
         service.catalog(project) shouldBe IssueTemplateService.Catalog(emptyList(), "Legacy body")
         every { repository.getRawFile("HEAD", IssueTemplateService.PATH) } returns "not json".toByteArray()
         service.catalog(project) shouldBe IssueTemplateService.Catalog(emptyList(), "Legacy body", true)
+        service.select(service.catalog(project), "bug") shouldBe null
     }
 
     it("rejects required blanks, forged choices, unknown fields and template paths") {

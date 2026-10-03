@@ -26,8 +26,9 @@
                     </select>
                     <button type="submit" class="ybtn" th:text="#{issue.template.load}"></button>
                 </form>
-                <form th:action="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name})}" id="issue-form" method="post" enctype="multipart/form-data">
+                <form th:action="@{/{owner}/{projectName}/issues(owner=${project.owner}, projectName=${project.name})}" id="issue-form" method="post" enctype="multipart/form-data" th:data-validation-redisplay="${formError != null}">
                     <input th:if="${selectedTemplate != null}" type="hidden" name="templateId" th:value="${selectedTemplate.id}">
+                    <input type="hidden" name="isFromGlobalMenuNew" th:value="${isFromGlobalMenuNew}">
                     <p th:if="${formError != null}" role="alert" th:text="${formError}"></p>
                     <div class="row-fluid">
                         <div class="span12">
@@ -35,20 +36,20 @@
                                 <dd>
                                     <div class="span12">
                                         <div class="span11">
-                                            <input type="text" id="title" name="title" class="text title" maxlength="250" tabindex="1" th:placeholder="#{title}" autocomplete="off" th:title="#{title.help.key}" th:value="${param.title}">
+                                            <input type="text" id="title" name="title" class="text title" maxlength="250" tabindex="1" th:placeholder="#{title}" autocomplete="off" th:title="#{title.help.key}" th:value="${param.title != null ? param.title[0] : issueForm.title}">
                                         </div>
-                                        <div class="span1 subtask-message" th:classappend="${parentIssue != null} ? 'option-on' : ''" th:text="#{issue.option}">Option</div>
+                                        <div class="span1 subtask-message" th:classappend="${parentIssue != null or issueForm.targetProjectId != null} ? 'option-on' : ''" th:text="#{issue.option}">Option</div>
                                     </div>
                                     <!-- 하위 태스크 설정 영역 -->
-                                    <div class="subtask-wrap" th:classappend="${parentIssue != null} ? 'show' : ''">
+                                    <div class="subtask-wrap" th:classappend="${parentIssue != null or issueForm.targetProjectId != null} ? 'show' : ''">
                                         <div class="span3">
-                                            <select id="targetProjectId" name="targetProjectId" data-format="projects" th:data-placeholder="#{organization.choose.projects}" data-toggle="tomselect" data-container-css-class="fullsize" th:disabled="${parentIssue == null}">
-                                                <option th:value="${project.id}" th:data-avatar-url="@{/projects/{projectId}/logo(projectId=${project.id})}" th:text="${project.name}"></option>
-                                                <option th:each="movable : ${movableProjects}" th:if="${movable.id != project.id}" th:value="${movable.id}" th:data-owner="${movable.owner} + ' /'" th:data-avatar-url="@{/projects/{projectId}/logo(projectId=${movable.id})}" th:text="${movable.name}"></option>
+                                            <select id="targetProjectId" name="targetProjectId" data-format="projects" th:data-placeholder="#{organization.choose.projects}" data-toggle="tomselect" data-container-css-class="fullsize" th:disabled="${parentIssue == null and issueForm.targetProjectId == null}">
+                                                <option th:value="${project.id}" th:selected="${issueForm.targetProjectId == null or issueForm.targetProjectId == project.id}" th:data-avatar-url="@{/projects/{projectId}/logo(projectId=${project.id})}" th:text="${project.name}"></option>
+                                                <option th:each="movable : ${movableProjects}" th:if="${movable.id != project.id}" th:value="${movable.id}" th:selected="${issueForm.targetProjectId == movable.id}" th:data-owner="${movable.owner} + ' /'" th:data-avatar-url="@{/projects/{projectId}/logo(projectId=${movable.id})}" th:text="${movable.name}"></option>
                                             </select>
                                         </div>
                                         <div class="span6">
-                                            <select id="parentId" name="parentIssueId" data-format="issues" th:data-placeholder="#{organization.choose.projects}" data-toggle="tomselect" data-container-css-class="fullsize" th:disabled="${parentIssue == null}">
+                                            <select id="parentId" name="parentIssueId" data-format="issues" th:data-placeholder="#{organization.choose.projects}" data-toggle="tomselect" data-container-css-class="fullsize" th:disabled="${parentIssue == null and issueForm.targetProjectId == null}">
                                                 <option value="" th:text="#{issue.subtask.select}">부모 이슈 선택</option>
                                                 <option th:if="${parentIssue != null}" th:value="${parentIssue.id}" selected th:text="'#' + ${parentIssue.number} + '. ' + ${parentIssue.title}"></option>
                                                 <option th:each="parentCandidate : ${parentCandidates}" th:value="${parentCandidate.id}" th:text="'#' + ${parentCandidate.number} + '. ' + ${parentCandidate.title}"></option>
@@ -74,6 +75,8 @@
                                         <select th:if="${field.type == 'select'}" th:id="${'answer-' + field.id}"
                                                 th:name="${'answer.' + field.id}" th:required="${field.required}">
                                             <option value="" th:text="#{issue.template.select}"></option>
+                                            <option th:if="${answers[field.id] != null and answers[field.id] != '' and !field.options.contains(answers[field.id])}"
+                                                    th:value="${answers[field.id]}" th:text="${answers[field.id]}" selected></option>
                                             <option th:each="option : ${field.options}" th:value="${option}" th:text="${option}"
                                                     th:selected="${answers[field.id] == option}"></option>
                                         </select>
@@ -89,7 +92,12 @@
                                 <!-- Vue 3 SFC(components/vue-widgets) - <yona-attachments>가
                                      드롭존/업로드 버튼/카드 목록/temporaryUploadFiles 히든 필드를
                                      전부 자체 소유한다. -->
-                                <yona-attachments data-resource-type="ISSUE_POST" id="upload"></yona-attachments>
+                                <yona-attachments data-resource-type="ISSUE_POST" id="upload"
+                                                  th:data-temporary-upload-files="${temporaryUploadFiles}">
+                                    <th:block th:each="attachment : ${temporaryAttachments}">
+                                        <div th:replace="~{common/attachmentFile :: attachmentFile(${attachment})}"></div>
+                                    </th:block>
+                                </yona-attachments>
 
                                 <div class="actrow right-txt">
                                     <button type="submit" id="button-save" class="ybtn ybtn-success" th:text="#{button.save}">저장</button><!--
@@ -101,7 +109,7 @@
                                 <dl class="issue-option">
                                     <dt th:text="#{issue.assignee}">담당자</dt>
                                     <dd>
-                                        <input type="hidden" class="bigdrop" id="assignee" name="assigneeLoginId" th:placeholder="#{issue.noAssignee}" style="width: 100%" title="">
+                                        <input type="hidden" class="bigdrop" id="assignee" name="assigneeLoginId" th:value="${issueForm.assigneeLoginId}" th:placeholder="#{issue.noAssignee}" style="width: 100%" title="">
                                     </dd>
                                 </dl>
 
@@ -118,7 +126,7 @@
                                             <select id="milestoneId" name="milestoneId"
                                                     data-toggle="tomselect" data-format="milestone" data-container-css-class="fullsize">
                                                 <option value="" th:text="#{issue.noMilestone}">마일스톤 없음</option>
-                                                <option th:each="milestone : ${milestones}" th:value="${milestone.id}" th:text="${milestone.title}"></option>
+                                                <option th:each="milestone : ${milestones}" th:value="${milestone.id}" th:text="${milestone.title}" th:selected="${issueForm.milestoneId == milestone.id}"></option>
                                             </select>
                                         </div>
                                     </dd>
@@ -128,7 +136,7 @@
                                     <dt th:text="#{issue.dueDate}">마감일</dt>
                                     <dd>
                                         <div class="search search-bar">
-                                            <input type="text" id="issueDueDate" data-toggle="calendar" name="dueDate" class="textbox full">
+                                            <input type="text" id="issueDueDate" data-toggle="calendar" name="dueDate" class="textbox full" th:value="${issueForm.dueDate}">
                                             <button type="button" class="search-btn btn-calendar"><i class="yobicon-calendar2"></i></button>
                                         </div>
                                     </dd>
@@ -152,6 +160,7 @@
                                                       th:data-category-id="${entry.key.id}"
                                                       th:data-category-is-exclusive="${entry.key.isExclusive}">
                                                 <option th:each="label : ${entry.value}" th:value="${label.id}"
+                                                        th:selected="${issueForm.labelIds != null and issueForm.labelIds.contains(label.id)}"
                                                         th:data-category-id="${entry.key.id}"
                                                         th:data-category-is-exclusive="${entry.key.isExclusive}"
                                                         th:text="${label.name}">
@@ -162,8 +171,8 @@
                                     </dd>
                                 </dl>
                                 
-                                <input type="hidden" name="referCommentId" th:value="${param.commentId}">
-                                <input type="hidden" id="isDraft" name="isDraft" value="false">
+                                <input type="hidden" name="referCommentId" th:value="${param.referCommentId != null ? param.referCommentId[0] : (param.commentId != null ? param.commentId[0] : '')}">
+                                <input type="hidden" id="isDraft" name="isDraft" th:value="${isDraft}">
                             </div>
                         </div>
                     </div>
@@ -194,7 +203,7 @@
             "elDueDate"    : document.getElementById("issueDueDate")
         });
 
-        if([[${isFromGlobalMenuNew}]]) {
+        if([[${isFromGlobalMenuNew and formError == null}]]) {
             document.querySelectorAll(".subtask-message").forEach(function(el){ el.click(); });
         }
 

@@ -233,6 +233,7 @@ var v = { class: "attach-wrap" }, y = {
 			t && de(t, n);
 		}
 		return c(() => {
+			M = (g?.getAttribute("data-temporary-upload-files") || "").split(",").filter(Boolean);
 			G();
 			let e = ue();
 			e.length > 0 && (E.value = _(e));
