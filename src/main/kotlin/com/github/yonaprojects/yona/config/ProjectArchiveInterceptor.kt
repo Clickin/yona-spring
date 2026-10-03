@@ -6,6 +6,9 @@ import com.github.yonaprojects.yona.domain.issue.IssueRepository
 import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import org.springframework.web.servlet.ModelAndView
+import com.github.yonaprojects.yona.web.AttachmentController
+import com.github.yonaprojects.yona.web.HgController
+import com.github.yonaprojects.yona.web.SvnController
 import com.github.yonaprojects.yona.web.IssueController
 import com.github.yonaprojects.yona.web.MarkdownController
 import com.github.yonaprojects.yona.web.ProjectArchiveController
@@ -26,8 +29,9 @@ class ProjectArchiveInterceptor(
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
         if (handler is HandlerMethod && ProjectArchiveController::class.java.isAssignableFrom(handler.beanType)) return true
         // VCS protocols classify reads by command, not HTTP verb; their authorization filters guard writes.
-        val path = request.requestURI.removePrefix(request.contextPath)
-        if (path.startsWith("/hg/") || path.startsWith("/svn/")) return true
+        if (handler is HandlerMethod &&
+            (HgController::class.java.isAssignableFrom(handler.beanType) ||
+                SvnController::class.java.isAssignableFrom(handler.beanType))) return true
         if (request.method in setOf("GET", "HEAD", "OPTIONS")) return true
         // These POST handlers only compute a response; archived reads remain available.
         if (request.method == "POST" && handler is HandlerMethod) {
@@ -44,7 +48,7 @@ class ProjectArchiveInterceptor(
         val project = variables["projectId"]?.toLongOrNull()?.let { projects.findById(it).orElse(null) }
             ?: variables["issueId"]?.toLongOrNull()?.let { issues.findById(it).orElse(null)?.project?.id }
                 ?.let { projects.findById(it).orElse(null) }
-            ?: (if (path.startsWith("/files/")) {
+            ?: (if (handler is HandlerMethod && AttachmentController::class.java.isAssignableFrom(handler.beanType)) {
                 variables["id"]?.toLongOrNull()?.let { attachments.findById(it).orElse(null) }
                     ?.takeIf { it.containerType == ResourceType.PROJECT }
                     ?.containerId?.toLongOrNull()?.let { projects.findById(it).orElse(null) }

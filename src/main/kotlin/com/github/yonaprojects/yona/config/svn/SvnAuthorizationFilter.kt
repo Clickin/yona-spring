@@ -10,6 +10,7 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
+import org.springframework.web.util.UrlPathHelper
 import java.util.regex.Pattern
 
 @Component
@@ -27,7 +28,7 @@ class SvnAuthorizationFilter(
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-        val uri = request.requestURI
+        val uri = UrlPathHelper.defaultInstance.getPathWithinApplication(request)
         val matcher = svnUriPattern.matcher(uri)
 
         if (!matcher.matches()) {

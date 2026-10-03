@@ -3,6 +3,7 @@ package com.github.yonaprojects.yona.config
 import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.config.git.GitAuthorizationFilter
 import com.github.yonaprojects.yona.config.svn.SvnAuthorizationFilter
+import com.github.yonaprojects.yona.config.hg.HgAuthorizationFilter
 import com.github.yonaprojects.yona.config.vcs.RepoAccessPolicy
 import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
@@ -13,6 +14,9 @@ import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.user.UserState
 import com.github.yonaprojects.yona.domain.vcs.ArchivedProjectPreReceiveHook
+import com.github.yonaprojects.yona.web.AttachmentController
+import com.github.yonaprojects.yona.web.HgController
+import com.github.yonaprojects.yona.web.SvnController
 import com.github.yonaprojects.yona.web.IssueController
 import com.github.yonaprojects.yona.web.MarkdownController
 import com.github.yonaprojects.yona.web.ProjectArchiveController
@@ -91,32 +95,35 @@ class ProjectArchiveSpec : DescribeSpec({
         every { attachments.findById(9) } returns Optional.of(
             com.github.yonaprojects.yona.domain.attachment.Attachment(id = 9, containerType = ResourceType.PROJECT, containerId = "1"))
         val interceptor = ProjectArchiveInterceptor(projects, mockk(), attachments)
+        val handler = HandlerMethod(mockk<AttachmentController>(), AttachmentController::class.java.methods.single { it.name == "deleteFile" })
         for (contextPath in listOf("", "/yona", "/hg", "/svn", "/files")) {
             val request = MockHttpServletRequest("POST", "$contextPath/files/9")
             request.contextPath = contextPath
             request.servletPath = "/files/9"
             request.setAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE, mapOf("id" to "9"))
             val response = MockHttpServletResponse()
-            interceptor.preHandle(request, response, Any()) shouldBe false
+            interceptor.preHandle(request, response, handler) shouldBe false
             response.status shouldBe 403
             request.method = "GET"
-            interceptor.preHandle(request, MockHttpServletResponse(), Any()) shouldBe true
+            interceptor.preHandle(request, MockHttpServletResponse(), handler) shouldBe true
             project.archivedAt = null
             request.method = "POST"
-            interceptor.preHandle(request, MockHttpServletResponse(), Any()) shouldBe true
+            interceptor.preHandle(request, MockHttpServletResponse(), handler) shouldBe true
             project.archivedAt = Instant.EPOCH
         }
     }
 
     it("Mercurial POST and SVN DAV reads remain delegated to protocol filters under a context path") {
         val interceptor = ProjectArchiveInterceptor(mockk(), mockk(), mockk())
+        val hg = HandlerMethod(mockk<HgController>(), HgController::class.java.methods.single { it.name == "service" })
+        val svn = HandlerMethod(mockk<SvnController>(), SvnController::class.java.methods.single { it.name == "service" })
         for (contextPath in listOf("", "/yona")) {
             for ((method, path) in listOf("POST" to "/hg/owner/repo", "REPORT" to "/svn/owner/repo", "PROPFIND" to "/svn/owner/repo")) {
                 val request = MockHttpServletRequest(method, "$contextPath$path")
                 request.contextPath = contextPath
                 request.servletPath = path
                 request.setAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE, mapOf("owner" to "owner", "projectName" to "repo"))
-                interceptor.preHandle(request, MockHttpServletResponse(), Any()) shouldBe true
+                interceptor.preHandle(request, MockHttpServletResponse(), if (path.startsWith("/hg/")) hg else svn) shouldBe true
             }
         }
     }
@@ -143,6 +150,60 @@ class ProjectArchiveSpec : DescribeSpec({
             response.status shouldBe 403
             request.method = "DELETE"
             interceptor.preHandle(request, MockHttpServletResponse(), handler) shouldBe false
+        }
+    }
+
+    it("protocol-looking paths do not exempt unrelated mapped mutations") {
+        val projects = mockk<ProjectRepository>()
+        every { projects.findById(1) } returns Optional.of(archivedProject())
+        val interceptor = ProjectArchiveInterceptor(projects, mockk(), mockk())
+        val handler = HandlerMethod(ArchivePreviewNameCollision(), "render")
+        for (path in listOf("/hg/owner/repo", "/svn/owner/repo", "/%68g/owner/repo", "/%73vn/owner/repo")) {
+            val request = MockHttpServletRequest("POST", path)
+            request.setAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE, mapOf("projectId" to "1"))
+            val response = MockHttpServletResponse()
+            interceptor.preHandle(request, response, handler) shouldBe false
+            response.status shouldBe 403
+        }
+    }
+
+    it("protocol filters resolve encoded paths and context paths before classifying writes") {
+        val project = archivedProject()
+        val policy = mockk<RepoAccessPolicy>()
+        every { policy.findProject("owner", "repo") } returns project
+        every { policy.requiresAuth(project, false) } returns false
+        for (context in listOf("", "/yona", "/hg", "/svn")) {
+            project.vcs = "HG"
+            for (path in listOf("/hg/owner/repo", "/%68g/owner/repo", "/hg/%6fwner/%72epo")) {
+                for (command in listOf("unbundle", "pushkey", "heads")) {
+                    val request = MockHttpServletRequest("GET", "$context$path")
+                    request.contextPath = context
+                    request.queryString = "cmd=$command"
+                    val response = MockHttpServletResponse()
+                    var reached = false
+                    HgAuthorizationFilter(policy).doFilter(request, response) { _, _ -> reached = true }
+                    reached shouldBe (command == "heads")
+                    response.status shouldBe if (command == "heads") 200 else 403
+                }
+                val request = MockHttpServletRequest("POST", "$context$path/%61pi/test/%72w/pushkey")
+                request.contextPath = context
+                val response = MockHttpServletResponse()
+                HgAuthorizationFilter(policy).doFilter(request, response) { _, _ -> error("write reached Mercurial") }
+                response.status shouldBe 403
+            }
+            project.vcs = "SVN"
+            for (path in listOf("/svn/owner/repo", "/%73vn/owner/repo", "/svn/%6fwner/%72epo")) {
+                for (method in listOf("PUT", "MERGE", "REPORT", "PROPFIND")) {
+                    val request = MockHttpServletRequest(method, "$context$path")
+                    request.contextPath = context
+                    val response = MockHttpServletResponse()
+                    var reached = false
+                    SvnAuthorizationFilter(policy).doFilter(request, response) { _, _ -> reached = true }
+                    val read = method == "REPORT" || method == "PROPFIND"
+                    reached shouldBe read
+                    response.status shouldBe if (read) 200 else 403
+                }
+            }
         }
     }
 

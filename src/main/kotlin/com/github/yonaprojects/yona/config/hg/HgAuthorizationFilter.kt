@@ -10,6 +10,7 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
+import org.springframework.web.util.UrlPathHelper
 import java.util.regex.Pattern
 
 // GitAuthorizationFilter/SvnAuthorizationFilter와
@@ -35,7 +36,7 @@ class HgAuthorizationFilter(
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-        val uri = request.requestURI
+        val uri = UrlPathHelper.defaultInstance.getPathWithinApplication(request)
         val matcher = hgUriPattern.matcher(uri)
 
         if (!matcher.matches()) {
@@ -60,7 +61,7 @@ class HgAuthorizationFilter(
             return
         }
 
-        val isWriteRequest = isWriteRequest(request)
+        val isWriteRequest = isWriteRequest(request, uri)
         if (isWriteRequest && project.isArchived) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Archived project is read-only")
             return
@@ -123,8 +124,7 @@ class HgAuthorizationFilter(
     // heads/known/branchmap/getbundle/lookup/...)는 읽기. v2: URL의
     // `/api/<namespace>/<ro|rw>/<command>` 세그먼트가 명시적으로 rw/ro를 알려준다
     // (HgHttpWireServer.service() 참고).
-    private fun isWriteRequest(request: HttpServletRequest): Boolean {
-        val uri = request.requestURI
+    private fun isWriteRequest(request: HttpServletRequest, uri: String): Boolean {
         val apiIdx = uri.indexOf("/api/")
         if (apiIdx != -1) {
             val segments = uri.substring(apiIdx + "/api/".length).split("/")

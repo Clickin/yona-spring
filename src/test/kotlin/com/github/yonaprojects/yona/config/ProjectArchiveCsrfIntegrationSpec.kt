@@ -43,6 +43,7 @@ class ProjectArchiveCsrfIntegrationSpec @Autowired constructor(
     private val users: UserRepository,
     private val projects: ProjectRepository,
     private val issues: com.github.yonaprojects.yona.domain.issue.IssueRepository,
+    private val attachments: com.github.yonaprojects.yona.domain.attachment.AttachmentRepository,
     private val tokens: ApiTokenRepository,
     private val keys: JwkKeyPairProvider
 ) : AbstractIntegrationTest() {
@@ -101,6 +102,63 @@ class ProjectArchiveCsrfIntegrationSpec @Autowired constructor(
                 response.status shouldBe 403
             } finally {
                 issues.delete(issue)
+            }
+        }
+
+        it("mapped logo deletion keeps archived attachments for encoded paths and servlet contexts") {
+            project.archivedAt = Instant.now()
+            projects.save(project)
+            val attachment = attachments.save(com.github.yonaprojects.yona.domain.attachment.Attachment(
+                name = "archive-logo.txt", hash = "archive-encoded-logo", ownerLoginId = owner.loginId,
+                containerType = com.github.yonaprojects.yona.domain.enumeration.ResourceType.PROJECT,
+                containerId = project.id.toString()
+            ))
+            try {
+                for (context in listOf("", "/yona", "/hg", "/svn", "/files")) {
+                    for (path in listOf("/files/", "/%66iles/")) {
+                        val csrf = "archive-logo-csrf"
+                        val result = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .post(java.net.URI.create("$context$path${attachment.id}")).contextPath(context)
+                            .session(session()).cookie(Cookie("XSRF-TOKEN", csrf)).header("X-XSRF-TOKEN", csrf)
+                            .param("_method", "delete")).andReturn()
+                        (result.handler as org.springframework.web.method.HandlerMethod).beanType shouldBe
+                            com.github.yonaprojects.yona.web.AttachmentController::class.java
+                        result.response.status shouldBe 403
+                        attachments.existsById(attachment.id!!) shouldBe true
+                    }
+                }
+                project.archivedAt = null
+                projects.save(project)
+                val csrf = "archive-logo-restored-csrf"
+                val response = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .post(java.net.URI.create("/yona/%66iles/${attachment.id}")).contextPath("/yona")
+                    .session(session()).cookie(Cookie("XSRF-TOKEN", csrf)).header("X-XSRF-TOKEN", csrf)
+                    .param("_method", "delete")).andReturn().response
+                response.status shouldBe 200
+                attachments.existsById(attachment.id!!) shouldBe false
+            } finally {
+                attachments.deleteById(attachment.id!!)
+            }
+        }
+
+        it("encoded Mercurial and SVN writes reach the archive filter rather than the repository") {
+            project.archivedAt = Instant.now()
+            for (context in listOf("", "/yona")) {
+                for ((vcs, path, method) in listOf(
+                    Triple("HG", "/%68g/${owner.loginId}/${project.name}?cmd=pushkey", "GET"),
+                    Triple("HG", "/%68g/${owner.loginId}/${project.name}?cmd=unbundle", "POST"),
+                    Triple("SVN", "/%73vn/${owner.loginId}/${project.name}", "PUT")
+                )) {
+                    project.vcs = vcs
+                    projects.save(project)
+                    val csrf = "archive-protocol-csrf"
+                    val response = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .request(org.springframework.http.HttpMethod.valueOf(method), java.net.URI.create("$context$path"))
+                        .contextPath(context).session(session())
+                        .cookie(Cookie("XSRF-TOKEN", csrf)).header("X-XSRF-TOKEN", csrf)).andReturn().response
+                    response.status shouldBe 403
+                    response.errorMessage shouldBe "Archived project is read-only"
+                }
             }
         }
 

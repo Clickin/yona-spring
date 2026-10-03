@@ -14,7 +14,7 @@ Proposal: `docs/technical/github-forgejo-feature-gaps-2026-10-02.md`, “종료 
 - Code, issues, comments, board posts, PRs, wiki pages, attachments, project settings, membership and repository administration remain readable under their existing access rules. Mutating controls are removed or disabled; existing settings read pages retain manager-only access. PR pages do not run the mutating merge preview when archived.
 - Git HTTP and SSH reject receive-pack while allowing upload-pack. A shared pre-receive hook rechecks the persisted archive state after authentication, protecting branches, tags, and other refs even with a writable deploy key. Git wiki HTTP and LFS object uploads follow the same project gate.
 - SVN DAV writes and Mercurial HTTP/SSH writes are also blocked. Their protocol reads are not inferred from HTTP POST alone: SVN REPORT/PROPFIND and Mercurial read commands retain their existing behavior.
-- MVC protocol and attachment paths exclude the servlet context path. A deployment under `/yona`, `/hg`, or `/svn` still blocks archived project-logo deletion through `/files/{id}`; the context prefix cannot grant a protocol exemption.
+- MVC attachment ownership and protocol exemptions use the mapped controller, not raw URI prefixes. Root/context-path deployments and percent-encoded `/files/{id}` spellings receive the same archive guard. Mercurial/SVN authorization filters resolve Spring's application-relative decoded path before project lookup and retain their separate protocol read/write classifications.
 
 ## Schema and deployment
 
@@ -33,7 +33,7 @@ Old backups without this column restore projects as active. New backups include 
 | PRs, reviews and code comments | PullRequestController/Api/View, ReviewApiController/View, CodeHistoryController, `/threads/{id}/open|close`, `/comments/{type}/{id}` | HTTP gate; global ID routes use actual-resource AccessControl. CodeReviewService checks existing thread/PR owners. PR merge and source-branch deletion/restoration guard affected projects. |
 | Cross-project deletion | ProjectService delete cascade, deletion of source branches and pushed-branch records | Deleting an active origin cannot detach an archived fork, delete PRs owned by an archived target, or delete an archived source branch. A pushed-branch ID cannot bypass archive through an active project's URL. |
 | Wiki web/API | WikiViewController, WikiRestApiController | HTTP gate and archive-aware wiki write permission; list/page/history/diff remain reads. |
-| Attachments | `/files`, `/files/{id}`, project logo upload | Unattached uploads remain user-owned temporary resources. Attaching them requires a writable target. Existing issue/post/milestone/review attachments delegate to resource authorization. Global project-logo deletion resolves its container project in the interceptor. Downloads remain reads. |
+| Attachments | `/files`, `/files/{id}`, project logo upload | Unattached uploads remain user-owned temporary resources. Attaching them requires a writable target. Existing issue/post/milestone/review attachments delegate to resource authorization. The mapped `AttachmentController` resolves global project-logo ownership through the persisted attachment's container, independent of URI spelling. Downloads remain reads. |
 | Membership and settings | ProjectMemberController, ProjectController, ProjectViewController | HTTP gate includes enrollment, acceptance/rejection, leaving, role changes, logos, settings, labels, transfers, forks and VCS changes. Service guards cover transfer acceptance's legacy GET route, direct project destruction, and fork source. |
 | Repository administration | BranchApiController, TagApiController, TagRestApiController, BranchProtectionController, DeployKeyController, WebhookController | HTTP gate plus existing permission checks. Existing manager settings GET/API reads use manager identity independent of archived writability. |
 | Watch/favorite/vote | WatchController (including GET notification toggle and global `/unwatch`), FavoriteController, VoteController | AccessControl WATCH gate; route gate for project/favorite issue IDs and votes. |
@@ -58,6 +58,33 @@ Old backups without this column restore projects as active. New backups include 
 - Already admitted operations are not force-cancelled or distributed-locked. New HTTP/mail/MCP requests check archive; Git rechecks before ref update and Hg SSH rechecks commands. Archive is not a filesystem/DB transactional snapshot and is not a substitute for revoking OS/database access. Concurrent archive-versus-in-flight operations require an explicit stronger consistency decision if linearizable freezing is required.
 
 ## Verification status
+
+### 2026-10-04 encoded-route correction
+
+The real Spring Security + MVC + JPA probe previously returned `403, exists=true` for `/files/{id}` but `200, exists=false` for `/%66iles/{id}`. The interceptor now identifies the mapped `AttachmentController` before resolving the persisted attachment's project, without adding a second controller guard or manually decoding URLs.
+
+Tracing the protocol exemptions also found raw-URI matching in `HgAuthorizationFilter` and `SvnAuthorizationFilter`. Both now use Spring's `UrlPathHelper` application-relative path; Mercurial v2 write classification uses that same resolved path. Only mapped `HgController`/`SvnController` handlers receive the MVC protocol exemption. Mercurial command-based and SVN DAV-method-based read/write policies are unchanged.
+
+Focused verification passed **57 tests, zero failures/errors/skips**, on JDK 21.0.6 (Gradle: 27 seconds):
+
+```sh
+JAVA_HOME=/Users/senghyunjo/.sdkman/candidates/java/21.0.6-tem \
+  ./gradlew test -Dyona.it.db=h2 --no-daemon --max-workers=1 \
+  -Pkotlin.daemon.jvmargs=-Xmx4g \
+  --tests com.github.yonaprojects.yona.config.ProjectArchiveSpec \
+  --tests com.github.yonaprojects.yona.config.ProjectArchiveCsrfIntegrationSpec \
+  --tests com.github.yonaprojects.yona.config.hg.HgAuthorizationFilterSpec \
+  --tests com.github.yonaprojects.yona.config.svn.SvnAuthorizationFilterSpec \
+  --tests com.github.yonaprojects.yona.config.svn.SvnAuthorizationFilterExtraSpec
+```
+
+The run additionally exported `sourceSets.test.runtimeClasspath` through a temporary external Gradle init task for the standalone Java probe. An initial invocation put `--tests` after that helper task and was rejected before executing tests; attaching the options to `test` corrected the command.
+
+- The persisted-attachment integration regression verifies both spellings under root, `/yona`, `/hg`, `/svn`, and `/files` contexts: all ten requests map to `AttachmentController.deleteFile`, return 403, and leave the row present. After unarchive, encoded deletion under `/yona` returns 200 and removes the row.
+- Real-filter-chain regression verifies encoded Mercurial GET `pushkey`, POST `unbundle`, and SVN PUT return the archive filter's 403 under root and `/yona`. Focused filter tests additionally cover encoded owner/project/v2 write segments and preserve Mercurial `heads` plus SVN REPORT/PROPFIND reads.
+- The separate `ArchiveEncodedProbe.java` source-mode smoke ran against the compiled application, real Spring Security/MVC, and isolated in-memory H2, with temporary data/VCS directories and SSH disabled. It independently reproduced all ten `403, exists=true` outcomes and the restored `200, exists=false` outcome; exit status was 0. This is actual handler/database proof, not a direct interceptor invocation or a live external HTTP-client test. Its application context closed on exit.
+
+No full-suite or new live Git/SVN/Mercurial client smoke was run for this correction.
 
 ### 2026-10-04 pre-PR review fixes
 
