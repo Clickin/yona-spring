@@ -37,6 +37,36 @@ data class IssueSearchDocument(val id: Long, val title: String, val body: String
 }
 
 data class IssueIndexHit(val id: Long, val digest: String, val auxiliaryOnly: Boolean = false)
+
+/** One pinned reader; request working sets and SQL candidate lists never exceed BATCH_SIZE. */
+class IssueIndexSearch internal constructor(private val searcher: IndexSearcher, private val query: Query) {
+    companion object { const val BATCH_SIZE = 200 }
+
+    fun isEmpty(): Boolean = searcher.search(query, 1).scoreDocs.isEmpty()
+
+    fun forEachBatch(consume: (List<IssueIndexHit>) -> Unit) {
+        var after: ScoreDoc? = null
+        do {
+            val page = searcher.searchAfter(after, query, BATCH_SIZE).scoreDocs
+            if (page.isNotEmpty()) consume(page.map(::hit))
+            after = page.lastOrNull()
+        } while (after != null)
+    }
+
+    fun matching(ids: List<Long>): Map<Long, IssueIndexHit> {
+        require(ids.size <= BATCH_SIZE)
+        if (ids.isEmpty()) return emptyMap()
+        val filtered = BooleanQuery.Builder().add(query, BooleanClause.Occur.MUST)
+            .add(TermInSetQuery("id", ids.map { org.apache.lucene.util.BytesRef(it.toString()) }),
+                BooleanClause.Occur.FILTER).build()
+        return searcher.search(filtered, ids.size).scoreDocs.map(::hit).associateBy { it.id }
+    }
+
+    private fun hit(score: ScoreDoc): IssueIndexHit {
+        val document = searcher.storedFields().document(score.doc, setOf("id", "digest"))
+        return IssueIndexHit(document.get("id").toLong(), document.get("digest"), score.score == 0f)
+    }
+}
 data class IssueIndexStatus(val ready: Boolean = false, val indexed: Long = 0, val scanned: Long = 0,
     val running: Boolean = false, val lastSuccess: Instant? = null, val error: String? = null)
 
@@ -136,28 +166,18 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             .add(BoostQuery(ConstantScoreQuery(fallback.build()), 0f), BooleanClause.Occur.SHOULD).build()
     }
 
-    fun search(text: String, titleHead: String? = null): List<IssueIndexHit> = readers.read {
-        check(status.ready) { "Search index is not ready" }
-        val query = query(text)
-        val filtered = if (titleHead == null) query else BooleanQuery.Builder()
-            .add(query, BooleanClause.Occur.MUST)
-            .add(TermQuery(Term("titleHead", titleHead)), BooleanClause.Occur.FILTER).build()
-        hits(checkNotNull(reader), filtered)
-    }
-
-    private fun hits(reader: DirectoryReader, query: Query): List<IssueIndexHit> {
-        val searcher = IndexSearcher(reader)
-        val result = mutableListOf<IssueIndexHit>()
-        var after: ScoreDoc? = null
-        do {
-            val page = searcher.searchAfter(after, query, 500).scoreDocs
-            page.forEach {
-                val document = searcher.storedFields().document(it.doc)
-                result.add(IssueIndexHit(document.get("id").toLong(), document.get("digest"), it.score == 0f))
-            }
-            after = page.lastOrNull()
-        } while (after != null)
-        return result
+    fun <T> withSearch(text: String, titleHead: String? = null, action: (IssueIndexSearch) -> T): T? {
+        val snapshot = readers.read {
+            if (!status.ready) return null
+            checkNotNull(reader).also { it.incRef() }
+        }
+        try {
+            val query = query(text)
+            val filtered = if (titleHead == null) query else BooleanQuery.Builder()
+                .add(query, BooleanClause.Occur.MUST)
+                .add(TermQuery(Term("titleHead", titleHead)), BooleanClause.Occur.FILTER).build()
+            return action(IssueIndexSearch(IndexSearcher(snapshot), filtered))
+        } finally { snapshot.decRef() }
     }
 
     /** Each retry scans the current DB, never a historical payload. Publish only a complete pass. */
@@ -167,32 +187,19 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
         try {
             val dir = directory ?: FSDirectory.open(path).also { directory = it }
             val output = writer ?: IndexWriter(dir, IndexWriterConfig(analyzer)).also { writer = it }
-            val previous = if (DirectoryReader.indexExists(dir)) DirectoryReader.open(dir).use {
-                if (it.indexCommit.userData[VERSION_KEY] == VERSION) {
-                    hits(it, MatchAllDocsQuery()).associate { hit -> hit.id to hit.digest }.toMutableMap()
-                } else {
-                    // Content digests cannot detect analyzer/schema changes.
-                    output.deleteAll()
-                    mutableMapOf()
-                }
-            } else mutableMapOf()
+            // A recovery/rebuild is a full pass. Avoid retaining every old document's stored fields in memory.
+            output.deleteAll()
             var cursor = 0L
             var scanned = 0L
             while (true) {
                 checkpoint(scanned)
                 val documents = batch(cursor)
                 if (documents.isEmpty()) break
-                documents.forEach { source ->
-                    val digest = source.digest()
-                    if (previous.remove(source.id) != digest) {
-                        output.updateDocument(Term("id", source.id.toString()), document(source))
-                    }
-                }
+                documents.forEach { source -> output.addDocument(document(source)) }
                 cursor = documents.last().id
                 scanned += documents.size
                 status = status.copy(scanned = scanned)
             }
-            previous.keys.forEach { output.deleteDocuments(Term("id", it.toString())) }
             checkpoint(scanned)
             output.setLiveCommitData(mapOf(VERSION_KEY to VERSION).entries)
             output.commit()

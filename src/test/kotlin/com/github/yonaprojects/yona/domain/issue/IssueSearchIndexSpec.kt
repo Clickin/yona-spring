@@ -21,7 +21,34 @@ import org.apache.lucene.search.TermQuery
 import org.apache.lucene.store.FSDirectory
 import java.nio.file.Files
 
+// Small fixtures collect results only in tests; production requests use the bounded reader API.
+internal fun IssueSearchIndex.search(text: String, titleHead: String? = null): List<IssueIndexHit> =
+    checkNotNull(withSearch(text, titleHead) { search -> buildList { search.forEachBatch { addAll(it) } } })
+
 class IssueSearchIndexSpec : DescribeSpec({
+    it("모든 결과를 제한된 배치로 읽고 게시 중에도 같은 reader를 유지한다") {
+        val path = Files.createTempDirectory("yona-search-batches-")
+        val index = IssueSearchIndex(path.toString())
+        val documents = (1L..405L).map { IssueSearchDocument(it, "batchneedle", "", emptyList()) }
+        try {
+            index.synchronize({ after -> documents.filter { it.id > after }.take(200) })
+            index.withSearch("batchneedle") { search ->
+                val sizes = mutableListOf<Int>()
+                var count = 0
+                search.forEachBatch { hits -> sizes.add(hits.size); count += hits.size }
+                sizes shouldBe listOf(200, 200, 5)
+                count shouldBe 405
+                search.matching(listOf(1L, 405L, 999L)).keys shouldBe setOf(1L, 405L)
+                index.update(listOf(405L), { emptyList() })
+                search.matching(listOf(405L)).keys shouldBe setOf(405L)
+            }
+            index.withSearch("batchneedle") { it.matching(listOf(405L)) } shouldBe emptyMap()
+        } finally {
+            index.close()
+            path.toFile().deleteRecursively()
+        }
+    }
+
     it("전체 디스크 색인을 재사용하고 실패한 갱신을 버리며 삭제 후 재시도로 문서를 되살리지 않는다") {
         val path = Files.createTempDirectory("yona-lucene-")
         var documents = listOf(

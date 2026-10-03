@@ -7,8 +7,11 @@ Application archives through the durable queue
 ---
 Use **Site settings → Data** while signed in as a site administrator. Exports are ZIP
 archives containing a manifest, table-separated NDJSON, and Git/SVN/LFS/upload/application
-files. Queue tables, queue storage, and the running file-based H2 database are excluded;
-an input attempting to restore them is rejected rather than silently ignored.
+files. Queue tables/storage, Lucene issue-search event metadata/index files, and the running
+file-based H2 database are excluded; an input attempting to restore them is rejected rather
+than silently ignored. Issue-search metadata also includes obsolete pre-release
+`issue_search_pending` / `issue_search_window` tables. Search rebuilds from restored source
+rows; see [issue full-text search](yona-run-options.md#optional-issue-full-text-search).
 Project export includes the selected project and its references; project import creates
 a separate project, renaming it on collision. It does not merge issues into an existing project.
 

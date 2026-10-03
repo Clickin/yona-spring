@@ -82,7 +82,7 @@ class DataBackupServiceImpl(
 ) : DataBackupService {
 
     private fun isOperationalTable(name: String): Boolean = isQueueTable(name) ||
-        name.lowercase() in setOf("issue_search_pending", "issue_search_window")
+        name.lowercase() in setOf("issue_search_change", "issue_search_pending", "issue_search_window")
 
     private val logger = LoggerFactory.getLogger(DataBackupServiceImpl::class.java)
     private val archiveJson = JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
