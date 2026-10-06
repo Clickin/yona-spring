@@ -18,90 +18,42 @@ export class YonaMarkdownRenderer extends LitElement {
   connectedCallback() {
     // A Turbo clone carries attributes but must mount its own output before becoming visible.
     this.removeAttribute('data-markdown-ready');
-    if (!this.output) {
-      let hardBreak = false;
-      let paragraph = false;
-      const source = this.sourceElement;
-      const markdown = source instanceof HTMLTextAreaElement || source instanceof HTMLInputElement
-        ? source.value : source?.textContent ??
-          this.querySelector<HTMLTemplateElement>(':scope > template[data-markdown-snapshot]')?.content.textContent ??
-          this.textContent ?? '';
-      // Turbo caches cloned DOM, not element fields. Keep the immutable snapshot inert and cloneable.
-      this.snapshot = document.createElement('template');
-      this.snapshot.dataset.markdownSnapshot = '';
-      this.snapshot.content.append(document.createTextNode(markdown));
-      const output = document.createElement('div');
-      output.className = 'markdown-output';
-      output.append(DOMPurify.sanitize(micromark(markdown, {
-        htmlExtensions: [gfmHtml(), ...(this.getAttribute('mode') === 'document' ? [] : [{
-          enter: {
-            paragraph() {
-              paragraph = true;
-              if (!this.getData('tightStack').at(-1)) {
-                this.lineEndingIfNeeded();
-                this.tag('<p>');
-              }
-              this.setData('slurpAllLineEndings');
-            },
-          },
-          exit: {
-            paragraph() {
-              paragraph = false;
-              if (this.getData('tightStack').at(-1)) this.setData('slurpAllLineEndings', true);
-              else this.tag('</p>');
-            },
-            hardBreakEscape() { this.tag('<br />'); hardBreak = true; },
-            hardBreakTrailing() { this.tag('<br />'); hardBreak = true; },
-            lineEnding(token) {
-              if (this.getData('slurpAllLineEndings')) return;
-              if (this.getData('slurpOneLineEnding')) {
-                this.setData('slurpOneLineEnding');
-                return;
-              }
-              if (this.getData('inCodeText')) { this.raw(' '); return; }
-              if (paragraph && !hardBreak) this.tag('<br />');
-              hardBreak = false;
-              this.raw(this.encode(this.sliceSerialize(token)));
-            },
-          },
-        } satisfies NonNullable<Options['htmlExtensions']>[number]])],
-        extensions: [gfm()],
-        allowDangerousHtml: true,
-      }), {
-        RETURN_DOM_FRAGMENT: true,
-        USE_PROFILES: {html: true},
-        FORBID_TAGS: ['style', 'form', 'button', 'textarea', 'select', 'option'],
-        FORBID_ATTR: ['style', 'autofocus', 'name', 'id'],
-        ALLOW_DATA_ATTR: false,
-        ADD_TAGS: ['input'],
-      }));
-      // Raw HTML cannot introduce successful form controls; GFM task boxes are display-only here.
-      output.querySelectorAll('input').forEach(input => {
-        if (input.type !== 'checkbox') input.remove();
-        else { input.disabled = true; input.removeAttribute('name'); }
-      });
-      this.output = output;
-      this.replaceChildren();
-      this.classList.add('markdown-wrap');
-      this.style.display = 'block';
-    }
+    if (!this.output) this.initializeOutput();
     super.connectedCallback();
     this.lifetime = new AbortController();
     const lifetime = this.lifetime;
-    void this.updateComplete.then(() => {
-      if (lifetime.signal.aborted || !this.isConnected) return;
-      const context = {
-        mode: this.getAttribute('mode') ?? 'comment',
-        owner: this.getAttribute('owner') ?? '',
-        project: this.getAttribute('project') ?? '',
-        ref: this.getAttribute('ref') ?? '',
-        path: this.getAttribute('path') ?? '',
-      };
-      applyStructure(this.output!, context, lifetime.signal);
-      enhance(this.output!, lifetime.signal);
-      this.setAttribute('data-markdown-ready', '');
-      this.dispatchEvent(new CustomEvent('markdown-rendered', {bubbles: true}));
-    });
+    void this.updateComplete.then(() => this.enhanceOutput(lifetime.signal));
+  }
+
+  private initializeOutput() {
+    const source = this.sourceElement;
+    const markdown = source instanceof HTMLTextAreaElement || source instanceof HTMLInputElement
+      ? source.value : source?.textContent ??
+        this.querySelector<HTMLTemplateElement>(':scope > template[data-markdown-snapshot]')?.content.textContent ??
+        this.textContent ?? '';
+    // Turbo caches cloned DOM, not element fields. Keep the immutable snapshot inert and cloneable.
+    this.snapshot = document.createElement('template');
+    this.snapshot.dataset.markdownSnapshot = '';
+    this.snapshot.content.append(document.createTextNode(markdown));
+    this.output = markdownOutput(markdown, this.getAttribute('mode') === 'document');
+    this.replaceChildren();
+    this.classList.add('markdown-wrap');
+    this.style.display = 'block';
+  }
+
+  private enhanceOutput(signal: AbortSignal) {
+    if (signal.aborted || !this.isConnected) return;
+    const context = {
+      mode: this.getAttribute('mode') ?? 'comment',
+      owner: this.getAttribute('owner') ?? '',
+      project: this.getAttribute('project') ?? '',
+      ref: this.getAttribute('ref') ?? '',
+      path: this.getAttribute('path') ?? '',
+    };
+    applyStructure(this.output!, context, signal);
+    enhance(this.output!, signal);
+    this.setAttribute('data-markdown-ready', '');
+    this.dispatchEvent(new CustomEvent('markdown-rendered', {bubbles: true}));
   }
 
   disconnectedCallback() {
@@ -110,6 +62,69 @@ export class YonaMarkdownRenderer extends LitElement {
   }
 
   protected render() { return html`${this.snapshot}${this.output}`; }
+}
+
+/** Parse and sanitize before any output becomes visible or participates in a form. */
+function markdownOutput(markdown: string, documentMode: boolean): HTMLDivElement {
+  const output = document.createElement('div');
+  output.className = 'markdown-output';
+  const markup = micromark(markdown, {
+    htmlExtensions: documentMode ? [gfmHtml()] : [gfmHtml(), commentLineBreaks()],
+    extensions: [gfm()],
+    allowDangerousHtml: true,
+  });
+  output.append(DOMPurify.sanitize(markup, {
+    RETURN_DOM_FRAGMENT: true,
+    USE_PROFILES: {html: true},
+    FORBID_TAGS: ['style', 'form', 'button', 'textarea', 'select', 'option'],
+    FORBID_ATTR: ['style', 'autofocus', 'name', 'id'],
+    ALLOW_DATA_ATTR: false,
+    ADD_TAGS: ['input'],
+  }));
+  // Raw HTML cannot introduce successful form controls; GFM task boxes are display-only here.
+  output.querySelectorAll('input').forEach(input => {
+    if (input.type !== 'checkbox') input.remove();
+    else { input.disabled = true; input.removeAttribute('name'); }
+  });
+  return output;
+}
+
+/** Comments keep soft breaks inside paragraphs, but not tight lists or code. */
+function commentLineBreaks(): NonNullable<Options['htmlExtensions']>[number] {
+  let hardBreak = false;
+  let paragraph = false;
+  return {
+    enter: {
+      paragraph() {
+        paragraph = true;
+        if (!this.getData('tightStack').at(-1)) {
+          this.lineEndingIfNeeded();
+          this.tag('<p>');
+        }
+        this.setData('slurpAllLineEndings');
+      },
+    },
+    exit: {
+      paragraph() {
+        paragraph = false;
+        if (this.getData('tightStack').at(-1)) this.setData('slurpAllLineEndings', true);
+        else this.tag('</p>');
+      },
+      hardBreakEscape() { this.tag('<br />'); hardBreak = true; },
+      hardBreakTrailing() { this.tag('<br />'); hardBreak = true; },
+      lineEnding(token) {
+        if (this.getData('slurpAllLineEndings')) return;
+        if (this.getData('slurpOneLineEnding')) {
+          this.setData('slurpOneLineEnding');
+          return;
+        }
+        if (this.getData('inCodeText')) { this.raw(' '); return; }
+        if (paragraph && !hardBreak) this.tag('<br />');
+        hardBreak = false;
+        this.raw(this.encode(this.sliceSerialize(token)));
+      },
+    },
+  };
 }
 
 customElements.define('yona-markdown-renderer', YonaMarkdownRenderer);
