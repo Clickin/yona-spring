@@ -254,15 +254,17 @@
 
 | 대상 | 스펙/실행 경로 | 검증 |
 |---|---|---|
-| Renderer/editor | `specs/15-misc/markdown-components.spec.ts` | immutable/clone snapshot, GFM/XSS, Edit/Preview, native textarea/toolbar/Tab/reset, `@/#/:`, Viewer dispose |
+| Renderer/editor | `specs/15-misc/markdown-components.spec.ts` | immutable/clone snapshot, GFM/XSS, Edit/Preview, native textarea/toolbar/Tab/reset, `@/#/:`, Viewer dispose; desktop/mobile에서 resize 후 짧은·긴 preview 왕복 크기 보존 |
 | README/`.md` corpus | `specs/05-code/markdown-documents.spec.ts` | 실제 Git push 후 상대 링크 왕복/이미지 로딩, 한글·중복 heading, GFM/safe HTML/code, 200문단 |
-| Initial loading | `specs/15-misc/markdown-loading.spec.ts` | module 지연 중 원문 비노출·내용 비례 높이 예약, resize, clone readiness, no-JS/다운로드 실패 fallback |
+| Initial loading | `specs/15-misc/markdown-loading.spec.ts` | module 지연 중 원문 비노출·내용 비례 높이 예약, resize, clone readiness, no-JS/다운로드 실패 fallback; 실제 이슈 작성 화면의 editor upgrade 전후 기본·조절한 크기 및 textarea 보존 |
 | Reference autolink | `specs/15-misc/markdown-references.spec.ts` | 실제 resolve API로 번역된 이슈 상태, 한글 뒤 `#N`, `@` 없는 경로 미링크, 사용자 popover |
 | Editor attachments | `specs/15-misc/markdown-editor-attachments.spec.ts` | 이미지 붙여넣기 → 링크, 목록 클릭 삽입, 댓글 폼 단일 업로드 (Chromium) |
 | Reference/structural plugins | `frontend/scripts/check-markdown-structure.mjs` | 100개 mount의 1 batch, cache/context/abort, unsafe metadata, 상대 URL, task PATCH |
 | Highlight/Mermaid | `frontend/scripts/check-markdown-enhancements.mjs` | legacy 59개 포함 162 identifier/alias, lazy loading, 10 diagrams, strict SVG/공격/크기/edge 제한 |
 
 위 경로는 Chromium/Firefox/WebKit에서 실행했다. 기존 Issue/Board/Wiki/Milestone/PR/code 테스트는 hidden-field 조작 대신 실제 textarea 입력을 사용한다. 기존 Turbo history/filter 회귀는 untouched upstream에서도 재현되며 이 전환의 green 결과로 포함하지 않는다. 측정 결과와 한계는 `docs/technical/markdown.md`에 기록한다.
+
+Editor 초기 로딩·탭 전환 크기 보존 회귀 검증은 Chromium에서 실행했다.
 
 ---
 

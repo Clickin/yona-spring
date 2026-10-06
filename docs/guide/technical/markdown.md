@@ -19,7 +19,7 @@ source는 최초 mount에서 한 번만 읽는다. 다른 source를 표시하려
 
 ## 편집기
 
-공통 `markdownEditor` fragment가 `<yona-markdown-editor>` 안에 실제 `<textarea>`를 서버 렌더링한다. JavaScript는 이 노드를 유지하며 `value`·`defaultValue`·selection·form reset을 그대로 사용한다. hidden textarea나 별도 editor document를 만들지 않는다.
+공통 `markdownEditor` fragment가 `<yona-markdown-editor>` 안에 상단 버튼·도움말·탭 영역과 실제 `<textarea>`를 서버 렌더링한다. 먼저 로드되는 `yona.css`가 module 초기화 전후에 같은 크기를 적용하므로 editor 높이를 추정하는 placeholder는 필요하지 않다. JavaScript는 textarea 노드를 유지하며 `value`·`defaultValue`·selection·form reset을 그대로 사용한다. hidden textarea나 별도 editor document를 만들지 않는다.
 
 Yona 1.x의 편집/미리보기 탭, 체크리스트 추가 버튼, 임시저장 표시와 Markdown 도움말을 기존 CSS로 표시한다. 버튼 문구는 Thymeleaf 메시지에서 받는다. 체크리스트는 해당 에디터의 textarea에 기존 3개 항목 템플릿을 삽입하며, 미리보기 중이면 편집으로 돌아온다. 추가했던 서식 toolbar와 별도 Help 버튼은 제거했다.
 
@@ -30,6 +30,8 @@ Yona 1.x의 편집/미리보기 탭, 체크리스트 추가 버튼, 임시저장
 자동완성에는 GitHub text-expander를 사용한다. `@/#`는 기존 `mentionList` endpoint에 취소 가능한 요청을 보내고, `:`는 기존 65개 로컬 emoji에서 검색한다. 결과 label은 HTML이 아닌 text로 삽입한다. Tab/Shift+Tab, 첨부파일 삽입, draft 복구/삭제는 같은 textarea와 editor `.value` 계약을 사용한다. textarea에 이미지를 붙여넣으면 업로드 후 링크로 바뀌는 `<!--_id_-->` 표식을 넣는다.
 
 Preview 진입마다 textarea를 한 번 읽는 renderer를 새로 mount하고 Edit 복귀 시 제거한다. 입력 중 파싱/live preview는 없다. `.value` setter와 form reset은 stale preview를 종료한다. Wiki preview는 document 모드다. Inline review도 기존 vanilla CodeCommentBox와 SSR form을 사용한다.
+
+Preview는 진입 직전 편집 영역의 실제 높이(하단 margin 포함)를 border-box 높이로 유지하며, 긴 본문은 내부에서 스크롤한다. Edit로 돌아오면 같은 textarea와 사용자가 조절한 높이가 유지된다. 활성 탭의 `flow-root`가 margin을 영역 안에 포함해 아래 요소가 움직이지 않게 한다. 공통 `autosize()`는 Markdown editor textarea를 제외하고 다른 textarea에만 적용한다. Chromium의 1366px·390px 화면에서 module 지연 중 기본·조절한 크기 유지와 짧은·긴 preview 왕복을 회귀 검증했다.
 
 CM6·Vue Markdown editor/review-form bundle·Marked·전역 highlighter·서버 preview controller와 사용하지 않는 서버 상대경로 helper는 제거했다. 다른 Vue 위젯과 server-only renderer/cache, 호환성 API 응답은 유지한다.
 
