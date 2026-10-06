@@ -381,15 +381,16 @@
             </div>
         </div>
 
-        <div class="textarea-box">
-            <yona-markdown-editor th:attr="name=${name},editor-mode=${editorMode},owner=${project?.owner},project=${project?.name}">
-                <textarea th:name="${name}" th:id="${#ids.seq('editor-' + name)}"
-                          th:data-editor-mode="${editorMode}" th:text="${value}"
-                          rows="10" class="content" aria-label="Markdown"></textarea>
-            </yona-markdown-editor>
-        </div>
+        <yona-markdown-editor
+            th:attr="name=${name},editor-mode=${editorMode},owner=${project?.owner},project=${project?.name},
+                     data-edit-label=#{common.editor.edit},data-preview-label=#{common.editor.preview},
+                     data-checklist-label=#{button.add.checklist}">
+            <textarea th:name="${name}" th:id="${#ids.seq('editor-' + name)}"
+                      th:data-editor-mode="${editorMode}" th:text="${value}"
+                      rows="10" class="content" aria-label="Markdown"></textarea>
+        </yona-markdown-editor>
 
-        <div th:replace="~{help/markdown}"></div>
+        <div th:replace="~{help/markdown :: markdown}"></div>
     </div>
 
   <!-- Markdown Script fragment -->
@@ -645,7 +646,6 @@
     <script type="module" src="/lib/yona-vue-widgets/yona-attachments-element.js"></script>
     <script type="module" src="/lib/yona-vue-widgets/yona-scroll-elevator-element.js"></script>
     <script type="module" src="/lib/yona-vue-widgets/yona-page-slide-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-help-markdown-element.js"></script>
 
     <script type="text/javascript" src="/javascripts/lib/autosize/autosize.min.js"></script>
     <script type="text/javascript" src="/javascripts/common/yona.KeyControl.js"></script>
@@ -845,30 +845,6 @@
 
             autosize(document.querySelectorAll('textarea'));
 
-            addTaskListButtonListener();
-            function addTaskListButtonListener() {
-                document.querySelectorAll(".add-task-list-button").forEach(function(btn){
-                    btn.addEventListener('click', function () {
-                        var tasklistTemplate = "\n- [ ] Todo A\n- [ ] Todo B\n- [ ] Todo C";
-                        var elForm = btn.closest("form");
-                        var elTextarea = elForm ? elForm.querySelector("textarea") : null;
-                        if (!elTextarea) { return; }
-                        var cursorPos = elTextarea.selectionStart;
-                        var text = elTextarea.value;
-
-                        if(cursorPos === 0 && text && text.length > 0){
-                            cursorPos = text.length;
-                        }
-
-                        var textBefore = text.substring(0, cursorPos);
-                        var textAfter  = text.substring(cursorPos, text.length);
-
-                        elTextarea.value = textBefore + tasklistTemplate + textAfter;
-                        elTextarea.focus();
-                        elTextarea.setSelectionRange(cursorPos + tasklistTemplate.length, cursorPos + tasklistTemplate.length);
-                    });
-                });
-            }
 
             if (window.parent !== window) {
                 document.querySelectorAll("a.ago, .head-anchor, .share-link").forEach(function(el){

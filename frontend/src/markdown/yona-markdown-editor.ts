@@ -1,5 +1,4 @@
 import {LitElement, html, nothing} from 'lit';
-import '@github/markdown-toolbar-element';
 import TextExpanderElement, {type TextExpanderChangeEvent} from '@github/text-expander-element';
 import {YonaMarkdownRenderer} from './yona-markdown-renderer';
 import {emoji} from './emoji';
@@ -14,6 +13,7 @@ export class YonaMarkdownEditor extends LitElement {
   private expander?: TextExpanderElement;
   private preview?: YonaMarkdownRenderer;
   private help?: HTMLElement;
+  private notice?: HTMLElement;
   private lifetime?: AbortController;
   private query?: AbortController;
 
@@ -29,6 +29,10 @@ export class YonaMarkdownEditor extends LitElement {
   private initializeTextarea() {
     const textarea = this.querySelector('textarea');
     if (!textarea) return;
+    const wrapper = this.closest('[data-toggle="markdown-editor"]');
+    this.help = wrapper?.querySelector<HTMLElement>('.markdown-help') ?? undefined;
+    this.notice = wrapper?.querySelector<HTMLElement>('.editor-notice-label') ?? undefined;
+    if (this.help) this.help.hidden = false;
     this.textarea = textarea;
     if (!textarea.id) textarea.id = `yona-markdown-input-${++nextEditorId}`;
     textarea.hidden = false;
@@ -42,11 +46,6 @@ export class YonaMarkdownEditor extends LitElement {
     this.expander.setAttribute('multiword', ':');
     this.expander.append(textarea);
     this.replaceChildren();
-    this.help = this.closest('[data-toggle="markdown-editor"]')?.querySelector<HTMLElement>('yona-help-markdown') ?? undefined;
-    if (this.help) {
-      if (!this.help.id) this.help.id = `${textarea.id}-help`;
-      this.help.hidden = true;
-    }
   }
 
   private bindEvents(textarea: HTMLTextAreaElement, expander: TextExpanderElement, form: HTMLFormElement | null | undefined) {
@@ -57,6 +56,8 @@ export class YonaMarkdownEditor extends LitElement {
     textarea.addEventListener('blur', () => this.query?.abort(), options);
     this.addEventListener('keydown', event => this.indent(event), options);
     form?.addEventListener('reset', () => this.edit(), options);
+    this.help?.addEventListener('click', event => this.toggleHelp(event), options);
+    this.help?.addEventListener('keydown', event => this.toggleHelp(event), options);
     expander.addEventListener('text-expander-change', event => this.complete(event), options);
     expander.addEventListener('text-expander-value', event => {
       const detail = (event as CustomEvent<{item: HTMLElement; value: string | null}>).detail;
@@ -109,10 +110,35 @@ export class YonaMarkdownEditor extends LitElement {
     this.requestUpdate();
   }
 
-  private toggleHelp() {
-    if (!this.help) return;
-    this.help.hidden = !this.help.hidden;
-    this.requestUpdate();
+  private addChecklist() {
+    const textarea = this.textarea;
+    if (!textarea) return;
+    this.edit();
+    const position = textarea.selectionStart || textarea.value.length;
+    const template = '\n- [ ] Todo A\n- [ ] Todo B\n- [ ] Todo C';
+    textarea.setRangeText(template, position, position, 'end');
+    textarea.dispatchEvent(new Event('input', {bubbles: true}));
+    void this.updateComplete.then(() => textarea.focus());
+  }
+
+  private toggleHelp(event: MouseEvent | KeyboardEvent) {
+    if (event instanceof KeyboardEvent && event.key !== 'Enter' && event.key !== ' ') return;
+    const tab = event.target instanceof Element
+      ? event.target.closest<HTMLElement>('.help-nav[data-toggle="markdown-help"]') : null;
+    const target = tab?.dataset.target;
+    if (!tab || !target || !this.help?.contains(tab)) return;
+    event.preventDefault();
+    const open = !tab.classList.contains('active');
+    for (const item of this.help.querySelectorAll('.help-nav')) {
+      const selected = open && item === tab;
+      item.classList.toggle('active', selected);
+      item.setAttribute('aria-expanded', String(selected));
+    }
+    for (const panel of this.help.querySelectorAll<HTMLElement>('.markdown-help-item')) {
+      const selected = open && panel.classList.contains(target);
+      panel.classList.toggle('active', selected);
+      panel.hidden = !selected;
+    }
   }
 
   private indent(event: KeyboardEvent) {
@@ -208,9 +234,7 @@ export class YonaMarkdownEditor extends LitElement {
       <style>
         yona-markdown-editor { display: block; }
         yona-markdown-editor [hidden] { display: none !important; }
-        yona-markdown-editor .markdown-editor-controls, yona-markdown-editor markdown-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 5px 0; }
-        yona-markdown-editor markdown-toolbar > * { cursor: pointer; border: 1px solid #bbb; border-radius: 3px; padding: 3px 7px; }
-        yona-markdown-editor markdown-toolbar > :focus-visible { outline: 2px solid #2679b5; }
+        yona-markdown-editor .markdown-editor-controls a:focus-visible, yona-markdown-editor .help-nav:focus-visible { outline: 2px solid #2679b5; }
         yona-markdown-editor text-expander { display: block; position: relative; }
         yona-markdown-editor textarea { display: block; box-sizing: border-box; width: 100%; min-height: 12em; resize: vertical; font-family: monospace; }
         yona-markdown-editor .markdown-suggestions { position: absolute; z-index: 100; max-height: 240px; max-width: 100%; overflow: auto; padding: 4px; margin: 0; list-style: none; color: #222; background: white; border: 1px solid #aaa; box-shadow: 0 2px 6px #0003; }
@@ -218,26 +242,38 @@ export class YonaMarkdownEditor extends LitElement {
         yona-markdown-editor .markdown-suggestions [aria-selected=true] { color: white; background: #2679b5; }
         yona-markdown-editor .markdown-suggestions img { vertical-align: middle; margin-right: 6px; }
       </style>
-      <div class="markdown-editor-controls" role="group" aria-label="Markdown view">
-        <button type="button" aria-pressed=${String(!this.preview)} @click=${() => { this.edit(); this.textarea?.focus(); }}>Edit</button>
-        <button type="button" aria-pressed=${String(!!this.preview)} @click=${this.showPreview}>Preview</button>
-        ${this.help ? html`<button type="button" aria-controls=${this.help.id} aria-expanded=${String(!this.help.hidden)} @click=${this.toggleHelp}>Help</button>` : nothing}
+      <ul class="nav nav-tabs nm small markdown-editor-controls" role="group" aria-label="Markdown view">
+        <li class=${this.preview ? '' : 'active'}>
+          <a href="#${this.textarea.id}-edit" role="button" aria-controls="${this.textarea.id}-edit"
+              aria-pressed=${String(!this.preview)}
+              @click=${(event: MouseEvent) => { event.preventDefault(); this.edit(); }}>
+            ${this.dataset.editLabel ?? 'Edit'}
+          </a>
+        </li>
+        <li class=${this.preview ? 'active' : ''}>
+          <a href="#${this.textarea.id}-preview" role="button" aria-controls="${this.textarea.id}-preview"
+              aria-pressed=${String(!!this.preview)}
+              @click=${(event: MouseEvent) => { event.preventDefault(); this.showPreview(); }}>
+            ${this.dataset.previewLabel ?? 'Preview'}
+          </a>
+        </li>
+        <li>
+          <div class="task-list-button">
+            <button type="button" class="add-task-list-button ybtn ybtn-small ybtn-danger-no-outline"
+                @click=${this.addChecklist}>${this.dataset.checklistLabel ?? 'Add checklist'}</button>
+          </div>
+        </li>
+        ${this.notice ? html`<li>${this.notice}</li>` : nothing}
+      </ul>
+      <div class="tab-content" style="position: relative; overflow: visible;">
+        ${this.help ?? nothing}
+        <div id="${this.textarea.id}-edit" class="tab-pane ${this.preview ? '' : 'active'}" ?hidden=${!!this.preview}>
+          <div class="textarea-box">${this.expander}</div>
+        </div>
+        <div id="${this.textarea.id}-preview" class="tab-pane ${this.preview ? 'active' : ''}" ?hidden=${!this.preview}>
+          ${this.preview ?? nothing}
+        </div>
       </div>
-      <markdown-toolbar for=${this.textarea.id} aria-label="Markdown formatting" ?hidden=${!!this.preview}>
-        <md-header role="button" tabindex="-1" aria-label="Heading">Heading</md-header>
-        <md-bold role="button" tabindex="-1" aria-label="Bold">Bold</md-bold>
-        <md-italic role="button" tabindex="-1" aria-label="Italic">Italic</md-italic>
-        <md-quote role="button" tabindex="-1" aria-label="Quote">Quote</md-quote>
-        <md-code role="button" tabindex="-1" aria-label="Code">Code</md-code>
-        <md-link role="button" tabindex="-1" aria-label="Link">Link</md-link>
-        <md-image role="button" tabindex="-1" aria-label="Image">Image</md-image>
-        <md-unordered-list role="button" tabindex="-1" aria-label="List">List</md-unordered-list>
-        <md-ordered-list role="button" tabindex="-1" aria-label="Ordered list">Ordered list</md-ordered-list>
-        <md-task-list role="button" tabindex="-1" aria-label="Task list">Task list</md-task-list>
-        <md-mention role="button" tabindex="-1" aria-label="Mention">@</md-mention>
-        <md-ref role="button" tabindex="-1" aria-label="Issue">#</md-ref>
-      </markdown-toolbar>
-      ${this.expander}${this.preview ?? nothing}
     `;
   }
 }

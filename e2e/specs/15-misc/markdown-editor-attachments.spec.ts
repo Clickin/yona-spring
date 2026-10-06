@@ -66,3 +66,34 @@ test('pasting an image into an issue comment inserts exactly one link and one up
   await expect(textarea).toHaveValue(/^!\[[^\]]+\.png\]\(\/files\/\d+\) ?$/, { timeout: 15_000 });
   await expect(page.locator('#comment-form .attached-file.complete')).toHaveCount(1);
 });
+
+test('Markdown help switches panels, closes them and survives a cached form', async ({ page }) => {
+  await openIssueForm(page);
+  const help = page.locator('yona-markdown-editor .markdown-help');
+  const header = help.getByRole('button', { name: 'Header', exact: true });
+  const styling = help.getByRole('button', { name: 'Text Style', exact: true });
+  await header.click();
+  await expect(help.locator('.markdownHeaders')).toBeVisible();
+  await expect(help.locator('.markdownHeaders h1')).toBeVisible();
+  await expect(header).toHaveAttribute('aria-expanded', 'true');
+  await styling.focus();
+  await styling.press('Enter');
+  await expect(help.locator('.markdownHeaders')).toBeHidden();
+  await expect(help.locator('.markdownStyling')).toBeVisible();
+  await styling.press('Space');
+  await expect(help.locator('.markdownStyling')).toBeHidden();
+  await expect(styling).toHaveAttribute('aria-expanded', 'false');
+  const image = help.getByRole('button', { name: 'Image', exact: true });
+  await image.click();
+  await expect(help.locator('.markdownImages img')).toBeVisible();
+  await expect.poll(() => help.locator('.markdownImages img').evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
+  await image.click();
+  await page.evaluate(() => {
+    const form = document.querySelector('yona-markdown-editor')!.closest('form')!;
+    form.replaceWith(form.cloneNode(true));
+  });
+  await header.click();
+  await expect(help.locator('.markdownHeaders')).toBeVisible();
+  await header.click();
+  await expect(help.locator('.markdownHeaders')).toBeHidden();
+});
