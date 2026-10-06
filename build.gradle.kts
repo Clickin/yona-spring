@@ -220,39 +220,39 @@ val copyTurbo = tasks.register<Copy>("copyTurbo") {
 	into(turboResources)
 }
 
-val markdownResources = layout.buildDirectory.dir("generated/frontend/markdown")
-val buildMarkdown = tasks.register<Exec>("buildMarkdown") {
+val frontendResources = layout.buildDirectory.dir("generated/frontend/web")
+val buildFrontend = tasks.register<Exec>("buildFrontend") {
 	dependsOn(npmCi)
 	workingDir("frontend")
 	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "npm.cmd" else "npm",
-		"run", "build:markdown")
+		"run", "build")
 	inputs.files("frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig.json")
 	inputs.dir("frontend/src")
 	inputs.dir("frontend/scripts")
-	outputs.dir(markdownResources)
-	outputs.file(layout.buildDirectory.file("generated/frontend/markdown-meta.json"))
+	outputs.dir(frontendResources)
+	outputs.file(layout.buildDirectory.file("generated/frontend/meta.json"))
 }
 
-val testMarkdown = tasks.register<Exec>("testMarkdown") {
+val testFrontend = tasks.register<Exec>("testFrontend") {
 	dependsOn(npmCi)
 	workingDir("frontend")
 	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "npm.cmd" else "npm", "test")
 	inputs.files("frontend/package.json", "frontend/package-lock.json")
 	inputs.dir("frontend/src")
 	inputs.dir("frontend/test")
-	val stamp = layout.buildDirectory.file("generated/frontend/markdown-test.stamp")
+	val stamp = layout.buildDirectory.file("generated/frontend/test.stamp")
 	outputs.file(stamp)
 	doLast { stamp.get().asFile.writeText("passed\n") }
 }
 
 tasks.test {
-	dependsOn(testMarkdown)
+	dependsOn(testFrontend)
 }
 
 tasks.processResources {
-	dependsOn(copyTurbo, buildMarkdown)
-	from(markdownResources) {
-		into("static/javascripts/markdown")
+	dependsOn(copyTurbo, buildFrontend)
+	from(frontendResources) {
+		into("static/javascripts")
 	}
 	from(turboResources) {
 		into("static/javascripts/turbo")

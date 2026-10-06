@@ -378,9 +378,8 @@ yona.Files = (function(){
             "sNamespace" : sNamespace
         });
 
-        // <yona-attachments> 컨테이너는 drag/drop/paste/input-change를 자기 Shadow DOM
-        // 안에서 직접 소유한다 - dragover/drop은 Shadow DOM 경계를 넘어 전파되는 합성
-        // 이벤트라, 여기서 컨테이너에 동일한 리스너를 또 걸면 업로드가 중복 실행된다.
+        // <yona-attachments> 컴포넌트(frontend/src/attachments)가 drag/drop/paste/input-change
+        // 리스너를 직접 소유한다 - 여기서 컨테이너에 동일한 리스너를 또 걸면 업로드가 중복 실행된다.
         // data-namespace 설정과 반환값 모양은 그대로 유지하고 리스너 연결만 건너뛴다.
         if(elContainerNode && elContainerNode.tagName.toLowerCase() === "yona-attachments"){
             elContainerNode._yonaIsUploader = true;

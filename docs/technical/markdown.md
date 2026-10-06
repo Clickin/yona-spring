@@ -27,7 +27,7 @@ The toolbar reference is the exact `v1.16.0` tag, not `upstream/master`: its che
 
 Markdown help is the native `help/markdown :: markdown` Thymeleaf fragment. Its ten input/output examples are static HTML and use the shared Yona styles, including the title's `.label` styling; no Vue element, Shadow DOM or copied stylesheet remains. A small [Stimulus controller enhances this server-rendered HTML](https://stimulus.hotwired.dev/handbook/introduction), independently of the editor.
 
-GitHub's text expander provides completion. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea. `<yona-attachments>` binds paste/drop to that textarea: a pasted image inserts a temporary `<!--_id_-->` marker replaced by its link after upload (`e2e/specs/15-misc/markdown-editor-attachments.spec.ts`).
+GitHub's text expander provides completion. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea. `<yona-attachments>` (see `docs/technical/attachments.md`) binds paste/drop to that textarea.
 
 Preview is explicit: entering Preview mounts a new renderer with the textarea as `sourceElement`; Edit removes it. Typing does not parse Markdown. Setting editor `.value` or resetting its form exits a stale preview. Wiki previews use document mode. Inline code reviews use the existing vanilla CodeCommentBox with a server-rendered form, rather than a second Vue editor.
 
@@ -86,12 +86,13 @@ Mermaid loads only for Mermaid fences. A shared 24 ms queue renders sequentially
 
 ## Build and checks
 
-`./gradlew processResources` and `bootJar` depend on `npmCi` and `buildMarkdown`. The pinned lockfile is installed with `--ignore-scripts --no-audit --no-fund`. esbuild emits ESM and lazy chunks into `build/generated/frontend/markdown`; generated Markdown bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `npm.cmd` on Windows.
+`./gradlew processResources` and `bootJar` depend on `npmCi` and `buildFrontend`. The pinned lockfile is installed with `--ignore-scripts --no-audit --no-fund`. esbuild emits ESM entries for each `frontend/src/<area>/yona-*.ts` and shared lazy chunks into `build/generated/frontend/web`, served under `/javascripts/<area>/`; generated Markdown bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `npm.cmd` on Windows.
 
 ```sh
 cd frontend
 npm ci --ignore-scripts --no-audit --no-fund
-npm run build:markdown
+npm run build
+npm test
 npx tsc --noEmit
 # From the repository root, against a running application:
 node frontend/scripts/check-markdown-structure.mjs http://localhost:8080

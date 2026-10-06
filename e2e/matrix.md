@@ -118,8 +118,8 @@
 | /issue/{number}/editform | specs/06-issue/issue-crud.spec.ts | done | |
 | /issues (목록) | specs/06-issue/issue-crud.spec.ts | done | |
 | POST /api/projects/{id}/issues/{number}/comments (댓글) | specs/06-issue/issue-crud.spec.ts | done | `#comment-form`의 `th:action`은 죽은 라우트(템플릿 자체 주석에 명시)이고 실제로는 JS가 fetch AJAX로 이 REST 경로에 제출함을 확인 후 실제 댓글 작성·렌더링까지 확인 |
-| 이슈 작성 폼 첨부파일 업로드 (`<yona-attachments>`, POST /files) | specs/06-issue/issue-attachments.spec.ts | done | Vue 3 SFC 컴파일 커스텀 엘리먼트라 Shadow DOM일 가능성을 염두에 뒀으나 Playwright 로케이터가 그대로 뚫고 `input[type=file]`을 찾아냄 — 실제 파일 업로드 후 `.attached-file.complete` 상태로 렌더링되는지까지 확인 |
-| 첨부파일 삭제 (`AttachmentController.deleteFile`, POST /files/{id}) | specs/06-issue/issue-attachments.spec.ts | done | 라우트 전수대조로 발견된 갭. 위젯의 컴파일된 Vue 소스(`yona-attachments-element.js`)를 읽어 삭제 트리거가 `.btn-delete`이고 `POST` + `_method=delete` 폼 파라미터로 요청함을 확인 후, 실제 업로드→삭제 클릭→목록에서 사라짐까지 확인 |
+| 이슈 작성 폼 첨부파일 업로드 (`<yona-attachments>`, POST /files) | specs/06-issue/issue-attachments.spec.ts | done | light DOM 커스텀 엘리먼트의 `input[type=file]`로 실제 파일 업로드 후 `.attached-file.complete` 상태로 렌더링되는지까지 확인 |
+| 첨부파일 삭제 (`AttachmentController.deleteFile`, POST /files/{id}) | specs/06-issue/issue-attachments.spec.ts | done | 라우트 전수대조로 발견된 갭. 삭제 트리거가 `.btn-delete`이고 `POST` + `_method=delete` 폼 파라미터로 요청함을 확인 후, 실제 업로드→삭제 클릭→목록에서 사라짐까지 확인 |
 | /issue/{number}/timeline (fragment) | specs/06-issue/issue-timeline.spec.ts | done | 실제 이슈 생성+상태변경(닫기) 후 타임라인 fragment가 실제 이벤트를 반영하는지, 이슈 뷰 페이지에 임베드된 동일 fragment도 확인. 존재하지 않는 이슈 번호는 실제 404로 렌더됨을 확인(과거엔 200이었음 — 시스템 전반 `error/404` 상태코드 버그 수정 참고) |
 | /reviews (ReviewThreadController) | specs/04-project/project-reviews.spec.ts | done | **매트릭스 자체의 분류 오류 정정**: REST 전용이 아니라 실제 GET 화면(검색/필터 사이드바, OPEN/CLOSED 탭, 텍스트 필터, XLS 내보내기 링크)임을 확인 — 참여자/작성자 필터 탭, 상태 탭, 텍스트 필터, XLS 다운로드까지 전부 실제 클릭/제출로 검증 |
 | 이슈 목록의 일괄수정 위젯 — 담당자 지정 | specs/06-issue/issue-management.spec.ts | done | `#list-assignee`에서 "나에게 할당" 클릭 → 실제 massupdate POST → 이슈뷰의 담당자 hidden input(`#assignee[value]`)에 반영 확인 |
