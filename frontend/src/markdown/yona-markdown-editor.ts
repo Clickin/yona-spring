@@ -12,6 +12,7 @@ export class YonaMarkdownEditor extends LitElement {
   private textarea?: HTMLTextAreaElement;
   private expander?: TextExpanderElement;
   private preview?: YonaMarkdownRenderer;
+  private previewHeight = 0;
   private helpMarkup?: HTMLElement;
   private notice?: HTMLElement;
   private lifetime?: AbortController;
@@ -94,6 +95,7 @@ export class YonaMarkdownEditor extends LitElement {
     if (!this.textarea || this.preview) return;
     this.query?.abort();
     this.expander?.dismiss();
+    this.previewHeight = this.textarea.closest('.tab-pane')!.getBoundingClientRect().height;
     const renderer = new YonaMarkdownRenderer();
     renderer.sourceElement = this.textarea;
     const mode = this.getAttribute('editor-mode') ?? this.textarea.dataset.editorMode;
@@ -208,21 +210,6 @@ export class YonaMarkdownEditor extends LitElement {
   protected render() {
     if (!this.textarea) return nothing;
     return html`
-      <style>
-        yona-markdown-editor { display: block; }
-        yona-markdown-editor [hidden] { display: none !important; }
-        yona-markdown-editor .markdown-editor-controls { color: #333; }
-        yona-markdown-editor .markdown-editor-controls.nav-tabs.small > li { margin-bottom: -1px; }
-        yona-markdown-editor .markdown-editor-controls.nav-tabs.small > li > a { padding: 4px 15px; }
-        yona-markdown-editor .markdown-editor-controls a:focus-visible { outline: 2px solid #2679b5; }
-        yona-markdown-editor text-expander { display: block; position: relative; }
-        yona-markdown-editor textarea { display: block; box-sizing: border-box; width: 100%; min-height: 12em; resize: vertical; font-family: monospace; }
-        yona-markdown-editor .markdown-preview > yona-markdown-renderer { padding: 0 !important; }
-        yona-markdown-editor .markdown-suggestions { position: absolute; z-index: 100; max-height: 240px; max-width: 100%; overflow: auto; padding: 4px; margin: 0; list-style: none; color: #222; background: white; border: 1px solid #aaa; box-shadow: 0 2px 6px #0003; }
-        yona-markdown-editor .markdown-suggestions [role=option] { cursor: pointer; padding: 4px 8px; overflow-wrap: anywhere; }
-        yona-markdown-editor .markdown-suggestions [aria-selected=true] { color: white; background: #2679b5; }
-        yona-markdown-editor .markdown-suggestions img { vertical-align: middle; margin-right: 6px; }
-      </style>
       <ul class="nav nav-tabs nm small markdown-editor-controls" role="group" aria-label="Markdown view">
         <li class=${this.preview ? '' : 'active'}>
           <a href="#${this.textarea.id}-edit" role="button" aria-controls="${this.textarea.id}-edit"
@@ -251,7 +238,8 @@ export class YonaMarkdownEditor extends LitElement {
         <div id="${this.textarea.id}-edit" class="tab-pane ${this.preview ? '' : 'active'}" ?hidden=${!!this.preview}>
           <div class="textarea-box">${this.expander}</div>
         </div>
-        <div id="${this.textarea.id}-preview" class="tab-pane markdown-preview ${this.preview ? 'active' : ''}" ?hidden=${!this.preview}>
+        <div id="${this.textarea.id}-preview" class="tab-pane markdown-preview ${this.preview ? 'active' : ''}" ?hidden=${!this.preview}
+            style=${this.preview ? `height: ${this.previewHeight}px` : nothing}>
           ${this.preview ?? nothing}
         </div>
       </div>

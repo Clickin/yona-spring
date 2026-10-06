@@ -5,6 +5,46 @@ import {requireSeed} from '../../support/seed-store';
 const guidePath = () => `/${requireSeed('projectOwner')}/${requireSeed('projectName')}/code/HEAD/docs/guide.md`;
 const documentSelector = 'yona-markdown-renderer[mode=document]';
 
+test('delayed editor upgrade preserves the server shell and a resized textarea', async ({page}, testInfo) => {
+  for (const width of [1366, 390]) {
+    await page.setViewportSize({width, height: 900});
+    const {promise: gate, resolve: release} = Promise.withResolvers<void>();
+    await page.route('**/javascripts/markdown/yona-markdown-editor.js', async route => {
+      await gate;
+      await route.continue();
+    });
+    try {
+      await page.goto(`/${requireSeed('projectOwner')}/${requireSeed('projectName')}/issueform`, {waitUntil: 'commit'});
+      const editor = page.locator('yona-markdown-editor');
+      const textarea = editor.locator('textarea.content');
+      await expect(textarea).toHaveCSS('box-sizing', 'border-box');
+      await page.evaluate(() => document.fonts.ready);
+      expect(await page.evaluate(() => customElements.get('yona-markdown-editor'))).toBeUndefined();
+      await textarea.fill('Typed before module download.');
+      await textarea.evaluate((element: HTMLTextAreaElement, resized) => {
+        if (resized) element.style.height = '460px';
+        Reflect.set(window, 'pendingEditorTextarea', element);
+      }, width === 390);
+      const before = {editor: await editor.boundingBox(), textarea: await textarea.boundingBox(),
+        help: await editor.locator('.markdown-help').boundingBox()};
+      release();
+      await page.evaluate(async () => {
+        await customElements.whenDefined('yona-markdown-editor');
+        await (document.querySelector('yona-markdown-editor') as HTMLElement & {updateComplete: Promise<boolean>}).updateComplete;
+      });
+      const after = {editor: await editor.boundingBox(), textarea: await textarea.boundingBox(),
+        help: await editor.locator('.markdown-help').boundingBox()};
+      await testInfo.attach(`editor-loading-${width}`, {body: JSON.stringify({before, after}), contentType: 'application/json'});
+      expect(after).toEqual(before);
+      expect(await textarea.evaluate(element => element === Reflect.get(window, 'pendingEditorTextarea'))).toBe(true);
+      await expect(textarea).toHaveValue('Typed before module download.');
+    } finally {
+      release();
+      await page.unroute('**/javascripts/markdown/yona-markdown-editor.js');
+    }
+  }
+});
+
 test('delayed module hides raw SSR Markdown without collapsing a long document', async ({page}, testInfo) => {
   await page.setViewportSize({width: 1280, height: 900});
   const {promise: blocked, resolve: requested} = Promise.withResolvers<void>();

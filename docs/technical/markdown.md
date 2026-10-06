@@ -19,7 +19,7 @@ The blocking `yona.css` stylesheet reserves loading space using the escaped sour
 
 ## Editor
 
-`site/layout :: markdownEditor` renders the real form textarea inside `<yona-markdown-editor>`. JavaScript retains that node; its `value`, `defaultValue`, selection and native form reset remain authoritative. The form is usable without JavaScript.
+`site/layout :: markdownEditor` renders the toolbar, help, tab panes and real form textarea inside `<yona-markdown-editor>`. Blocking `yona.css` supplies the same layout before and after the module upgrades that shell; no estimated editor height or loading placeholder is needed. JavaScript retains the textarea node; its `value`, `defaultValue`, selection and native form reset remain authoritative. The form is usable without JavaScript.
 
 The editor keeps Yona 1.x's Edit/Preview tabs, checklist button, draft notice and visible Markdown help navigation, using the existing `nav nav-tabs nm small` and `ybtn` styles. Labels come from Thymeleaf messages. Checklist insertion uses the legacy three-item template in the owning textarea and exits Preview; the old page-wide handler is removed to avoid duplicate insertion. The added formatting toolbar and separate Help button are removed.
 
@@ -32,6 +32,8 @@ GitHub's text expander provides completion. `@` and `#` adapt the existing permi
 Preview is explicit: entering Preview mounts a new renderer with the textarea as `sourceElement`; Edit removes it. Typing does not parse Markdown. Setting editor `.value` or resetting its form exits a stale preview. Wiki previews use document mode. Inline code reviews use the existing vanilla CodeCommentBox with a server-rendered form, rather than a second Vue editor.
 
 The visible preview pane retains the legacy `div.markdown-preview` shell, including its border against the help navigation and its background/radius. That shell owns the padding; the nested renderer has zero padding so content is not inset twice.
+
+Entering Preview captures the edit pane's current outer height, including the textarea's bottom margin, and applies that exact border-box height to the preview pane. Long content scrolls inside Preview instead of expanding the editor. Returning to Edit retains the same textarea and its native resized height. Active panes use `flow-root` to contain margins so following content does not shift between tabs. The page-wide `autosize()` excludes Markdown editor textareas; it still enhances other textareas. Chromium regression checks cover delayed module loading, default/resized textarea ownership, and short/overflowing Edit → Preview → Edit roundtrips at 1366px and 390px widths.
 
 CM6, the Vue Markdown editor/review-form distributions, Marked, the global highlighter and the `/markdown/{owner}/{project}` preview controller are removed. Other unrelated Vue widgets are unchanged. The server renderer's obsolete repository-relative helpers were removed; server-only rendering/cache and API response fields remain.
 

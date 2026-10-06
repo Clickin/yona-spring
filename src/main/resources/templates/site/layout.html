@@ -29,7 +29,7 @@
   <!-- Styles are shared; highlight core and grammars load only for code fences. -->
   <link rel="stylesheet" type="text/css" href="/javascripts/lib/highlight/styles/default.css" />
   <link rel="stylesheet" type="text/css" media="all" href="/stylesheets/usermenu.css">
-  <link rel="stylesheet" type="text/css" media="all" href="/stylesheets/yona.css?v=20260929-markdown-loading">
+  <link rel="stylesheet" type="text/css" media="all" href="/stylesheets/yona.css?v=20261006-editor-layout">
   <link rel="stylesheet" type="text/css" media="all" href="/javascripts/lib/nprogress/nprogress.css">
   <link rel="stylesheet" href="/javascripts/lib/viewerjs/viewer.css">
   <script>
@@ -369,7 +369,6 @@
     <!-- Markdown Editor fragment -->
     <div th:fragment="markdownEditor(name, value, editorMode)" data-toggle="markdown-editor" class="mt10"
          th:data-mention-url="${project != null} ? (@{/api/{owner}/{name}/mentionList(owner=${project.owner}, name=${project.name})}) : null">
-        <div class="editor-notice-label"></div>
         <!-- .editor-notice-label "안"이 아니라 형제로 둔다 - temporarySaveHandler가 초안을 저장할
              때마다 noticePanel.html(...)로 .editor-notice-label의 내용을 통째로 갈아치우므로,
              안에 두면 버튼이 주기적으로 사라진다. 기본은 숨김(CSS는 yona.css의
@@ -381,16 +380,40 @@
             </div>
         </div>
 
-        <yona-markdown-editor
+        <yona-markdown-editor th:with="editorId=${#ids.seq('editor-' + name)}"
             th:attr="name=${name},editor-mode=${editorMode},owner=${project?.owner},project=${project?.name},
                      data-edit-label=#{common.editor.edit},data-preview-label=#{common.editor.preview},
                      data-checklist-label=#{button.add.checklist}">
-            <textarea th:name="${name}" th:id="${#ids.seq('editor-' + name)}"
-                      th:data-editor-mode="${editorMode}" th:text="${value}"
-                      rows="10" class="content" aria-label="Markdown"></textarea>
+            <ul class="nav nav-tabs nm small markdown-editor-controls" role="group" aria-label="Markdown view">
+                <li class="active">
+                    <a th:href="${'#' + editorId + '-edit'}" role="button"
+                       th:attr="aria-controls=${editorId + '-edit'}" aria-pressed="true"
+                       th:text="#{common.editor.edit}">Edit</a>
+                </li>
+                <li>
+                    <a th:href="${'#' + editorId + '-preview'}" role="button"
+                       th:attr="aria-controls=${editorId + '-preview'}" aria-pressed="false"
+                       th:text="#{common.editor.preview}">Preview</a>
+                </li>
+                <li>
+                    <div class="task-list-button">
+                        <button type="button" class="add-task-list-button ybtn ybtn-small ybtn-danger-no-outline"><i class="yobicon-list task-list-icon" aria-hidden="true"></i> <span th:text="#{button.add.checklist}">Add checklist</span></button>
+                    </div>
+                </li>
+                <li><div class="editor-notice-label"></div></li>
+            </ul>
+            <div class="tab-content" style="position: relative; overflow: visible;">
+                <div th:replace="~{help/markdown :: markdown}"></div>
+                <div th:id="${editorId + '-edit'}" class="tab-pane active">
+                    <div class="textarea-box">
+                        <textarea th:name="${name}" th:id="${editorId}"
+                                  th:data-editor-mode="${editorMode}" th:text="${value}"
+                                  rows="10" class="content" aria-label="Markdown"></textarea>
+                    </div>
+                </div>
+                <div th:id="${editorId + '-preview'}" class="tab-pane markdown-preview" hidden></div>
+            </div>
         </yona-markdown-editor>
-
-        <div th:replace="~{help/markdown :: markdown}"></div>
     </div>
 
   <!-- Markdown Script fragment -->
@@ -844,7 +867,8 @@
                 });
             });
 
-            autosize(document.querySelectorAll('textarea'));
+            // Markdown editors retain their native, user-resized height across tabs.
+            autosize(document.querySelectorAll('textarea:not(yona-markdown-editor textarea)'));
 
 
             if (window.parent !== window) {

@@ -113,6 +113,50 @@ test('editor keeps native textarea ownership and takes one preview snapshot per 
   await expect(textarea).toHaveValue('**initial**');
 });
 
+test.describe('editor geometry', () => {
+  test.use({storageState: {cookies: [], origins: []}});
+
+  test('preview preserves the resized editor bounds for short and overflowing content', async ({page}) => {
+    for (const width of [1366, 390]) {
+      await page.setViewportSize({width, height: 900});
+      await page.evaluate(async () => {
+        await customElements.whenDefined('yona-markdown-editor');
+        const form = document.createElement('form');
+        form.style.width = '90%';
+        const editor = document.createElement('yona-markdown-editor');
+        editor.append(document.createElement('textarea'));
+        const following = document.createElement('p');
+        following.id = 'following-editor';
+        following.textContent = 'Following content';
+        form.append(editor, following);
+        document.body.replaceChildren(form);
+        await (editor as LitElement).updateComplete;
+      });
+      const textarea = page.locator('textarea');
+      await textarea.evaluate((element: HTMLTextAreaElement) => { element.style.height = '320px'; });
+      const editor = page.locator('yona-markdown-editor');
+      const before = (await editor.boundingBox())!;
+      const textareaBefore = (await textarea.boundingBox())!;
+      const followingBefore = (await page.locator('#following-editor').boundingBox())!;
+      for (const source of ['Short **preview**.', 'Long paragraph.\n\n'.repeat(100)]) {
+        await textarea.fill(source);
+        await page.getByRole('button', {name: 'Preview', exact: true}).click();
+        await expect(page.locator('yona-markdown-renderer')).toHaveAttribute('data-markdown-ready', '');
+        expect((await editor.boundingBox())!.height).toBeCloseTo(before.height, 0);
+        expect((await page.locator('#following-editor').boundingBox())!.y).toBeCloseTo(followingBefore.y, 0);
+        if (source.startsWith('Long')) {
+          expect(await page.locator('.markdown-preview').evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+        }
+        await page.getByRole('button', {name: 'Edit', exact: true}).click();
+        await expect(textarea).toBeVisible();
+        expect((await textarea.boundingBox())!).toEqual(textareaBefore);
+        expect((await editor.boundingBox())!).toEqual(before);
+        await expect(textarea).toHaveValue(source);
+      }
+    }
+  });
+});
+
 test('checklist insertion targets its editor and exits a stale preview', async ({page}) => {
   await page.evaluate(async () => {
     const form = document.createElement('form');
