@@ -86,7 +86,7 @@ test('editor keeps native textarea ownership and takes one preview snapshot per 
   await expect(textarea).toHaveValue('**initial**');
   await textarea.fill('before after');
   await textarea.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(7, 7));
-  await page.getByRole('button', {name: 'Add checklist', exact: true}).click();
+  await page.getByRole('button', {name: 'Add checklist', exact: true}).locator('i').click();
   await expect(textarea).toHaveValue('before \n- [ ] Todo A\n- [ ] Todo B\n- [ ] Todo Cafter');
   await textarea.fill('line');
   await textarea.press('End');

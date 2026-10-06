@@ -23,7 +23,9 @@ The blocking `yona.css` stylesheet reserves loading space using the escaped sour
 
 The editor keeps Yona 1.x's Edit/Preview tabs, checklist button, draft notice and visible Markdown help navigation, using the existing `nav nav-tabs nm small` and `ybtn` styles. Labels come from Thymeleaf messages. Checklist insertion uses the legacy three-item template in the owning textarea and exits Preview; the old page-wide handler is removed to avoid duplicate insertion. The added formatting toolbar and separate Help button are removed.
 
-Markdown help is the native `help/markdown :: markdown` Thymeleaf fragment. Its ten input/output examples are static HTML and use the shared Yona styles, including the title's `.label` styling; no Vue element, Shadow DOM or copied stylesheet remains. `toggleHelp` only opens/closes the selected example, supports Enter/Space and stays scoped to its editor across reconnects and Turbo clones.
+The toolbar reference is the exact `v1.16.0` tag, not `upstream/master`: its checklist button includes `yobicon-list task-list-icon`, tab padding is `4px 15px`, and list bottom margin is `-1px`. Editor-scoped rules restore these values without changing other site tabs. With ko-KR labels the corrected button measures 120.48×25px (previously 104.09×24px); the prior wider tab padding shifted it 60px right. Six toolbar elements in Edit/Preview at 1440px and 390px widths matched the tag's markup, compiled Less, Bootstrap and original icon font within 1 CSS px, with exact paint/typography/spacing. This is a static browser-reference comparison, not full running Play-page parity.
+
+Markdown help is the native `help/markdown :: markdown` Thymeleaf fragment. Its ten input/output examples are static HTML and use the shared Yona styles, including the title's `.label` styling; no Vue element, Shadow DOM or copied stylesheet remains. A small [Stimulus controller enhances this server-rendered HTML](https://stimulus.hotwired.dev/handbook/introduction), independently of the editor.
 
 GitHub's text expander provides completion. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea. `<yona-attachments>` binds paste/drop to that textarea: a pasted image inserts a temporary `<!--_id_-->` marker replaced by its link after upload (`e2e/specs/15-misc/markdown-editor-attachments.spec.ts`).
 
@@ -33,9 +35,33 @@ The visible preview pane retains the legacy `div.markdown-preview` shell, includ
 
 CM6, the Vue Markdown editor/review-form distributions, Marked, the global highlighter and the `/markdown/{owner}/{project}` preview controller are removed. Other unrelated Vue widgets are unchanged. The server renderer's obsolete repository-relative helpers were removed; server-only rendering/cache and API response fields remain.
 
+### Help ownership and Lit coexistence
+
+The reuse audit found 19 `markdownEditor` include templates: issues (3), board (3), Wiki (1), milestones (2), pull requests (3), code diff/compare/SVN (3), and common comment/update/thread/review partials (4). They all receive the same help fragment; there is no separate help-only include. CodeCommentBox moves the same `#review-form` DOM with `appendChild`, so this is a shared behavior rather than an issue-form behavior.
+
+`frontend/src/markdown/yona-markdown-help.ts`, loaded globally as `/javascripts/markdown/yona-markdown-help.js`, starts one Stimulus Application and registers its local `MarkdownHelpController` as `markdown-help`. The fragment root declares the behavior:
+
+```html
+<div class="markdown-help" data-controller="markdown-help"
+    data-action="click->markdown-help#toggle keydown.enter->markdown-help#toggle keydown.space->markdown-help#toggle">
+  <!-- Existing .help-nav[data-target] controls and HTML example panels. -->
+</div>
+```
+
+[`data-action` and its keyboard filters](https://stimulus.hotwired.dev/reference/actions#keyboardevent-filter) route click/Enter/Space to `toggle(Event)`. It handles only help controls, prevents their default action and updates `active`, `aria-expanded` and panel `hidden` through scoped `tab`/`panel` targets; existing `data-target` panel class names remain. There is no `data-toggle="markdown-help"`, editor help signal or editor-owned help listener. The DOM stores the open state; there is no `connect()` reset.
+
+The editor uses Light DOM (`createRenderRoot()` returns `this`), which [Lit explicitly supports](https://lit.dev/docs/components/shadow-dom/#implementing-createrenderroot). The document-root Stimulus application can therefore discover the help fragment without a bridge, even when Lit places the retained server DOM node in its layout. Lit owns placement, not the help subtree's state: it does not render or overwrite the child classes/attributes that Stimulus changes. No competing renderers mutate those children. [Controller scope](https://stimulus.hotwired.dev/reference/controllers#scopes) organizes behavior; it does **not** isolate CSS. Existing global Yona styles remain intentional.
+
+Shadow DOM is a different choice, not an automatic extension of this arrangement. [Lit uses a shadow root by default](https://lit.dev/docs/components/shadow-dom/#renderroot), providing DOM/style scoping; document queries cannot discover its internal nodes. Stimulus 3.2.2's [Application root is an `Element`, defaulting to `document.documentElement`](https://github.com/hotwired/stimulus/blob/v3.2.2/src/core/application.ts), and its [attribute discovery uses `querySelectorAll`](https://github.com/hotwired/stimulus/blob/v3.2.2/src/mutation-observers/attribute_observer.ts); `ShadowRoot` is not that typed root, and global discovery does not traverse shadow trees. [Composed events crossing a shadow root are retargeted to its host](https://lit.dev/docs/components/events/#shadowdom-retargeting); most native mouse/keyboard events cross, but constructed events need `composed: true` (and `bubbles: true` for delegation), as described in [Lit event dispatching](https://lit.dev/docs/components/events/#shadowdom-composed). Receiving an event outside is not the same as discovering its internal controller or original target. This implementation adds neither a shadow application nor bridging infrastructure.
+
+Stimulus [observes DOM changes asynchronously](https://stimulus.hotwired.dev/reference/lifecycle-callbacks#order-and-timing), disconnects removed roots and reuses the controller when the same element reconnects. A Turbo clone is a different element whose copied DOM supplies the help state. [Lit has its own custom-element lifecycle](https://lit.dev/docs/components/lifecycle/#custom-element-lifecycle); the editor does not manage the help controller's lifecycle. The recorded performance figures below predate this cutover.
+
+Cutover verification: both frontend builds/typechecks and their 9/15 unit tests passed; 14 selected Chromium editor/help/attachment tests passed. Actual board, Wiki and milestone forms retained working click/Enter/Space help across Lit Edit/Preview updates. Real-server help still worked after removing its editor, with independent cloned roots and cached state. Same-node editor reparenting preserved working keyboard behavior. A throwaway Lit shadow-root probe confirmed the document application does not discover its internal help. The preview retained its 1px `#ccc` boundary.
+
 ### Internal functions
 
 - `yona-markdown-editor.ts`: textarea initialization, event binding and line indentation are separate operations. Completion separates the request (`mentionSuggestions`), response conversion (`mentionSuggestion`) and safe DOM construction (`suggestionOption`).
+- `yona-markdown-help.ts`: one local Stimulus controller owns help toggling through declarative actions; the Lit editor only retains/places its server-rendered root.
 - `yona-markdown-renderer.ts`: snapshot initialization and post-mount enhancement stay in the element; `markdownOutput` owns parsing/sanitization, and `commentLineBreaks` owns comment-only newline rules.
 - `plugins/structure.ts`: headings, link policy, reference collection/resolution and DOM replacement each have a named function.
 - `runtime/reference-batch-resolver.ts`: `send` orchestrates the batch; `fetchMetadata` handles requests/validation, and `settleBatch` handles caching/subscriber cleanup.
