@@ -23,13 +23,38 @@ source는 최초 mount에서 한 번만 읽는다. 다른 source를 표시하려
 
 Yona 1.x의 편집/미리보기 탭, 체크리스트 추가 버튼, 임시저장 표시와 Markdown 도움말을 기존 CSS로 표시한다. 버튼 문구는 Thymeleaf 메시지에서 받는다. 체크리스트는 해당 에디터의 textarea에 기존 3개 항목 템플릿을 삽입하며, 미리보기 중이면 편집으로 돌아온다. 추가했던 서식 toolbar와 별도 Help 버튼은 제거했다.
 
-도움말은 `help/markdown :: markdown` Thymeleaf fragment로 서버 렌더링한다. 10개 문법의 입력·출력 예시는 정적인 HTML이며, 제목의 `.label`을 포함해 기존 공통 CSS를 사용한다. Vue 위젯·Shadow DOM·CSS 복사본은 제거했다. 항목 열기/닫기와 Enter/Space 키 처리는 에디터에 범위를 둔 작은 JS 함수가 담당하며, Turbo 복원 후에도 같은 방식으로 동작한다.
+상단 UI 기준은 `upstream/master`가 아닌 정확한 `v1.16.0` 태그다. 체크리스트 버튼의 `yobicon-list task-list-icon`, 탭 padding `4px 15px`, 목록 하단 margin `-1px`를 에디터 범위에서 복원했다. 한국어 버튼은 기존 104.09×24px에서 120.48×25px로 맞췄고, 넓어진 탭 때문에 오른쪽으로 60px 밀린 배치도 복원했다. 태그의 HTML·Less·Bootstrap·원본 아이콘 폰트를 이용해 1440px/390px의 편집·미리보기 4개 상태에서 6개 요소를 비교했다. 크기·위치는 1 CSS px 이내, 색·글꼴·여백은 일치했다. 실행 중인 Play 앱 전체가 아닌 정적 기준 화면과의 비교다.
+
+도움말은 `help/markdown :: markdown` Thymeleaf fragment로 서버 렌더링한다. 10개 문법의 입력·출력 예시는 정적인 HTML이며, 제목의 `.label`을 포함해 기존 공통 CSS를 사용한다. Vue 위젯·Shadow DOM·CSS 복사본은 제거했다. 에디터와 독립된 작은 [Stimulus controller가 이 서버 HTML에 동작을 연결한다](https://stimulus.hotwired.dev/handbook/introduction).
 
 자동완성에는 GitHub text-expander를 사용한다. `@/#`는 기존 `mentionList` endpoint에 취소 가능한 요청을 보내고, `:`는 기존 65개 로컬 emoji에서 검색한다. 결과 label은 HTML이 아닌 text로 삽입한다. Tab/Shift+Tab, 첨부파일 삽입, draft 복구/삭제는 같은 textarea와 editor `.value` 계약을 사용한다. textarea에 이미지를 붙여넣으면 업로드 후 링크로 바뀌는 `<!--_id_-->` 표식을 넣는다.
 
 Preview 진입마다 textarea를 한 번 읽는 renderer를 새로 mount하고 Edit 복귀 시 제거한다. 입력 중 파싱/live preview는 없다. `.value` setter와 form reset은 stale preview를 종료한다. Wiki preview는 document 모드다. Inline review도 기존 vanilla CodeCommentBox와 SSR form을 사용한다.
 
 CM6·Vue Markdown editor/review-form bundle·Marked·전역 highlighter·서버 preview controller와 사용하지 않는 서버 상대경로 helper는 제거했다. 다른 Vue 위젯과 server-only renderer/cache, 호환성 API 응답은 유지한다.
+
+### 도움말 소유권과 Lit 공존
+
+사용처는 이슈 3곳 외에도 게시판 3곳, Wiki 1곳, 마일스톤 2곳, PR 3곳, 코드 diff/compare/SVN 3곳, 공통 댓글·수정·스레드·리뷰 partial 4곳으로 총 19개 템플릿이다. 모두 같은 도움말 fragment를 받고, 도움말만 따로 포함하는 곳은 없다. CodeCommentBox는 같은 `#review-form` DOM을 `appendChild`로 옮겨 재사용하므로 이슈 폼 전용 동작으로 두지 않는다.
+
+`frontend/src/markdown/yona-markdown-help.ts`는 `/javascripts/markdown/yona-markdown-help.js`로 전역 로드하며, Stimulus Application 하나에 로컬 `MarkdownHelpController`를 `markdown-help`로 등록한다. fragment root의 선언은 다음과 같다.
+
+```html
+<div class="markdown-help" data-controller="markdown-help"
+    data-action="click->markdown-help#toggle keydown.enter->markdown-help#toggle keydown.space->markdown-help#toggle">
+  <!-- 기존 .help-nav[data-target] 항목과 HTML 예시 panel. -->
+</div>
+```
+
+[`data-action`과 keyboard filter](https://stimulus.hotwired.dev/reference/actions#keyboardevent-filter)가 click/Enter/Space를 `toggle(Event)`에 연결한다. 도움말 항목의 기본 동작만 막고, controller 범위의 `tab`/`panel` target으로 `active`·`aria-expanded`·`hidden`을 변경한다. 기존 `data-target`의 panel class 이름은 유지한다. `data-toggle="markdown-help"`, 에디터의 도움말 signal/listener는 없다. 열린 상태는 DOM에 저장하며 `connect()`에서 초기화하지 않는다.
+
+에디터는 `createRenderRoot()`에서 `this`를 반환하는 [Lit의 Light DOM 방식](https://lit.dev/docs/components/shadow-dom/#implementing-createrenderroot)을 사용한다. Lit가 보존한 서버 DOM node를 layout 안에 배치해도 document-root Stimulus가 별도 bridge 없이 도움말을 찾는다. Lit는 배치만 담당하고 Stimulus가 변경하는 도움말 자식의 class/attribute는 렌더링하거나 덮어쓰지 않는다. 같은 자식을 두 renderer가 경쟁해서 변경하지 않는다. [Controller scope](https://stimulus.hotwired.dev/reference/controllers#scopes)는 동작의 범위를 정할 뿐 **CSS 격리**가 아니다. 기존 전역 Yona CSS를 그대로 사용하는 것이 의도다.
+
+Shadow DOM에서도 모든 동작이 자동으로 연결된다는 뜻은 아니다. [Lit 기본값은 shadow root](https://lit.dev/docs/components/shadow-dom/#renderroot)로 DOM/style을 격리하며 document query는 내부 node를 찾지 못한다. Stimulus 3.2.2의 [Application root는 기본값이 `document.documentElement`인 `Element`](https://github.com/hotwired/stimulus/blob/v3.2.2/src/core/application.ts)이고, [속성 탐색은 `querySelectorAll`](https://github.com/hotwired/stimulus/blob/v3.2.2/src/mutation-observers/attribute_observer.ts)을 사용한다. `ShadowRoot`는 이 root 타입이 아니며 전역 탐색은 shadow tree 안으로 들어가지 않는다. [경계를 넘는 composed event의 target은 host로 retarget된다](https://lit.dev/docs/components/events/#shadowdom-retargeting). 대부분의 native mouse/keyboard event는 경계를 넘지만 직접 생성한 이벤트에는 `composed: true`가 필요하고 위임에는 `bubbles: true`도 필요하다([Lit event 문서](https://lit.dev/docs/components/events/#shadowdom-composed)). 외부에서 이벤트를 받는 것과 내부 controller/원래 target을 발견하는 것은 다르다. 이번 구현에는 shadow application이나 bridge를 추가하지 않는다.
+
+Stimulus는 [DOM 변경을 비동기로 관찰](https://stimulus.hotwired.dev/reference/lifecycle-callbacks#order-and-timing)하며 제거된 root를 disconnect하고 같은 element가 다시 연결되면 controller를 재사용한다. Turbo clone은 다른 element이며 복제된 DOM이 도움말 상태를 전달한다. [Lit의 custom-element 수명주기](https://lit.dev/docs/components/lifecycle/#custom-element-lifecycle)는 별개이고 에디터가 도움말 controller의 수명주기를 관리하지 않는다. 아래 성능 측정 수치는 이번 변경 이전의 결과다.
+
+도입 검증: 두 frontend의 build/typecheck와 단위 테스트 9개/15개, Chromium editor/help/attachment 검사 14개가 통과했다. 실제 게시판·Wiki·마일스톤 폼에서 Lit의 편집/미리보기 전환 후에도 click/Enter/Space가 동작했다. 실제 서버 도움말을 editor에서 떼고 editor를 제거해도 동작하며, 복제한 두 root의 상태 격리와 캐시 복원을 확인했다. 같은 editor DOM을 옮긴 뒤 키보드 동작도 유지했다. 임시 Lit shadow-root probe에서는 전역 Stimulus가 내부 도움말을 찾지 못하는 것을 확인했다. 미리보기의 1px `#ccc` 경계선도 유지했다.
 
 ## 보안과 비동기 처리
 

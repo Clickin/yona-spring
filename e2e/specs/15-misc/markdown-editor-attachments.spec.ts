@@ -125,3 +125,64 @@ test('Markdown help switches panels, closes them and survives a cached form', as
   expect(boundary).toMatchObject({ width: '1px', style: 'solid', color: 'rgb(204, 204, 204)' });
   expect(boundary.gap).toBeLessThanOrEqual(1);
 });
+
+test('Markdown help works without the editor, scopes cloned roots and preserves cached state', async ({ page }) => {
+  await openIssueForm(page);
+  await page.locator('yona-markdown-editor .markdown-help').evaluate(help => {
+    const editor = help.closest('yona-markdown-editor')!;
+    help.id = 'standalone-markdown-help';
+    const clone = help.cloneNode(true) as HTMLElement;
+    clone.id = 'cloned-markdown-help';
+    document.body.append(help, clone);
+    editor.remove();
+  });
+  await expect(page.locator('yona-markdown-editor')).toHaveCount(0);
+  const help = page.locator('#standalone-markdown-help');
+  const clone = page.locator('#cloned-markdown-help');
+  const header = help.getByRole('button', { name: 'Header', exact: true });
+  const styling = help.getByRole('button', { name: 'Text Style', exact: true });
+  const cloneStyling = clone.getByRole('button', { name: 'Text Style', exact: true });
+
+  await header.click();
+  await expect(help.locator('.markdownHeaders h1')).toBeVisible();
+  await expect(header).toHaveAttribute('aria-expanded', 'true');
+  await expect(clone.locator('.help-nav.active')).toHaveCount(0);
+  await expect(clone.locator('.markdown-help-item:not([hidden])')).toHaveCount(0);
+  await cloneStyling.press('Enter');
+  await expect(clone.locator('.markdownStyling')).toBeVisible();
+  await expect(cloneStyling).toHaveAttribute('aria-expanded', 'true');
+  await expect(help.locator('.markdownHeaders')).toBeVisible();
+  await expect(header).toHaveAttribute('aria-expanded', 'true');
+
+  await styling.press('Space');
+  await expect(help.locator('.markdownHeaders')).toBeHidden();
+  await expect(header).toHaveAttribute('aria-expanded', 'false');
+  await expect(help.locator('.markdownStyling')).toBeVisible();
+  await expect(styling).toHaveAttribute('aria-expanded', 'true');
+  await expect(help.locator('.help-nav.active')).toHaveCount(1);
+  await expect(help.locator('.markdown-help-item:not([hidden])')).toHaveCount(1);
+  await expect(clone.locator('.markdownStyling')).toBeVisible();
+  await expect(clone.locator('.help-nav.active')).toHaveCount(1);
+  await expect(clone.locator('.markdown-help-item:not([hidden])')).toHaveCount(1);
+  await cloneStyling.press('Space');
+  await expect(clone.locator('.markdownStyling')).toBeHidden();
+  await expect(cloneStyling).toHaveAttribute('aria-expanded', 'false');
+  await expect(clone.locator('.help-nav.active')).toHaveCount(0);
+  await expect(help.locator('.markdownStyling')).toBeVisible();
+  await expect(styling).toHaveAttribute('aria-expanded', 'true');
+
+  await help.evaluate(root => root.replaceWith(root.cloneNode(true)));
+  await expect(help.locator('.markdownStyling')).toBeVisible();
+  await expect(styling).toHaveAttribute('aria-expanded', 'true');
+  await expect(help.locator('.help-nav.active')).toHaveCount(1);
+  await styling.press('Enter');
+  await expect(help.locator('.markdownStyling')).toBeHidden();
+  await expect(styling).toHaveAttribute('aria-expanded', 'false');
+  await expect(help.locator('.help-nav.active')).toHaveCount(0);
+  await expect(help.locator('.markdown-help-item:not([hidden])')).toHaveCount(0);
+  await header.click();
+  await expect(help.locator('.markdownHeaders')).toBeVisible();
+  await header.click();
+  await expect(help.locator('.markdownHeaders')).toBeHidden();
+  await expect(clone.locator('.markdown-help-item:not([hidden])')).toHaveCount(0);
+});

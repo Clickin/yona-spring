@@ -12,7 +12,7 @@ export class YonaMarkdownEditor extends LitElement {
   private textarea?: HTMLTextAreaElement;
   private expander?: TextExpanderElement;
   private preview?: YonaMarkdownRenderer;
-  private help?: HTMLElement;
+  private helpMarkup?: HTMLElement;
   private notice?: HTMLElement;
   private lifetime?: AbortController;
   private query?: AbortController;
@@ -30,9 +30,8 @@ export class YonaMarkdownEditor extends LitElement {
     const textarea = this.querySelector('textarea');
     if (!textarea) return;
     const wrapper = this.closest('[data-toggle="markdown-editor"]');
-    this.help = wrapper?.querySelector<HTMLElement>('.markdown-help') ?? undefined;
+    this.helpMarkup = wrapper?.querySelector<HTMLElement>('.markdown-help') ?? undefined;
     this.notice = wrapper?.querySelector<HTMLElement>('.editor-notice-label') ?? undefined;
-    if (this.help) this.help.hidden = false;
     this.textarea = textarea;
     if (!textarea.id) textarea.id = `yona-markdown-input-${++nextEditorId}`;
     textarea.hidden = false;
@@ -56,8 +55,6 @@ export class YonaMarkdownEditor extends LitElement {
     textarea.addEventListener('blur', () => this.query?.abort(), options);
     this.addEventListener('keydown', event => this.indent(event), options);
     form?.addEventListener('reset', () => this.edit(), options);
-    this.help?.addEventListener('click', event => this.toggleHelp(event), options);
-    this.help?.addEventListener('keydown', event => this.toggleHelp(event), options);
     expander.addEventListener('text-expander-change', event => this.complete(event), options);
     expander.addEventListener('text-expander-value', event => {
       const detail = (event as CustomEvent<{item: HTMLElement; value: string | null}>).detail;
@@ -119,26 +116,6 @@ export class YonaMarkdownEditor extends LitElement {
     textarea.setRangeText(template, position, position, 'end');
     textarea.dispatchEvent(new Event('input', {bubbles: true}));
     void this.updateComplete.then(() => textarea.focus());
-  }
-
-  private toggleHelp(event: MouseEvent | KeyboardEvent) {
-    if (event instanceof KeyboardEvent && event.key !== 'Enter' && event.key !== ' ') return;
-    const tab = event.target instanceof Element
-      ? event.target.closest<HTMLElement>('.help-nav[data-toggle="markdown-help"]') : null;
-    const target = tab?.dataset.target;
-    if (!tab || !target || !this.help?.contains(tab)) return;
-    event.preventDefault();
-    const open = !tab.classList.contains('active');
-    for (const item of this.help.querySelectorAll('.help-nav')) {
-      const selected = open && item === tab;
-      item.classList.toggle('active', selected);
-      item.setAttribute('aria-expanded', String(selected));
-    }
-    for (const panel of this.help.querySelectorAll<HTMLElement>('.markdown-help-item')) {
-      const selected = open && panel.classList.contains(target);
-      panel.classList.toggle('active', selected);
-      panel.hidden = !selected;
-    }
   }
 
   private indent(event: KeyboardEvent) {
@@ -234,7 +211,10 @@ export class YonaMarkdownEditor extends LitElement {
       <style>
         yona-markdown-editor { display: block; }
         yona-markdown-editor [hidden] { display: none !important; }
-        yona-markdown-editor .markdown-editor-controls a:focus-visible, yona-markdown-editor .help-nav:focus-visible { outline: 2px solid #2679b5; }
+        yona-markdown-editor .markdown-editor-controls { color: #333; }
+        yona-markdown-editor .markdown-editor-controls.nav-tabs.small > li { margin-bottom: -1px; }
+        yona-markdown-editor .markdown-editor-controls.nav-tabs.small > li > a { padding: 4px 15px; }
+        yona-markdown-editor .markdown-editor-controls a:focus-visible { outline: 2px solid #2679b5; }
         yona-markdown-editor text-expander { display: block; position: relative; }
         yona-markdown-editor textarea { display: block; box-sizing: border-box; width: 100%; min-height: 12em; resize: vertical; font-family: monospace; }
         yona-markdown-editor .markdown-preview > yona-markdown-renderer { padding: 0 !important; }
@@ -261,13 +241,13 @@ export class YonaMarkdownEditor extends LitElement {
         <li>
           <div class="task-list-button">
             <button type="button" class="add-task-list-button ybtn ybtn-small ybtn-danger-no-outline"
-                @click=${this.addChecklist}>${this.dataset.checklistLabel ?? 'Add checklist'}</button>
+                @click=${this.addChecklist}><i class="yobicon-list task-list-icon" aria-hidden="true"></i> ${this.dataset.checklistLabel ?? 'Add checklist'}</button>
           </div>
         </li>
         ${this.notice ? html`<li>${this.notice}</li>` : nothing}
       </ul>
       <div class="tab-content" style="position: relative; overflow: visible;">
-        ${this.help ?? nothing}
+        ${this.helpMarkup ?? nothing}
         <div id="${this.textarea.id}-edit" class="tab-pane ${this.preview ? '' : 'active'}" ?hidden=${!!this.preview}>
           <div class="textarea-box">${this.expander}</div>
         </div>

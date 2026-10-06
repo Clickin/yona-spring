@@ -1,21 +1,21 @@
-<div xmlns:th="http://www.thymeleaf.org" th:fragment="markdown" class="markdown-help">
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="markdown" class="markdown-help" data-controller="markdown-help" data-action="click->markdown-help#toggle keydown.enter->markdown-help#toggle keydown.space->markdown-help#toggle">
     <ul class="markdown-help-nav">
         <li>
             <span class="label" th:text="#{title.markdown.help}">Markdown help</span>
         </li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownHeaders">Header</li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownStyling">Text Style</li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownLinks">Link</li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownLists">List</li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownTaskList">Checklist</li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownImages">Image</li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownBlockquotes">Blockquote</li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownCodes">Code</li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownTables">Table</li>
-        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-toggle="markdown-help" data-target="markdownShortLinks">Short Link</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownHeaders">Header</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownStyling">Text Style</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownLinks">Link</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownLists">List</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownTaskList">Checklist</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownImages">Image</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownBlockquotes">Blockquote</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownCodes">Code</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownTables">Table</li>
+        <li class="help-nav" role="button" tabindex="0" aria-expanded="false" data-markdown-help-target="tab" data-target="markdownShortLinks">Short Link</li>
     </ul>
     <ul class="markdown-help-wrap">
-        <li class="markdown-help-item markdownHeaders" hidden>
+        <li class="markdown-help-item markdownHeaders" data-markdown-help-target="panel" hidden>
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
@@ -37,7 +37,7 @@
                 </div>
             </div>
         </li>
-        <li class="markdown-help-item markdownStyling" hidden>
+        <li class="markdown-help-item markdownStyling" data-markdown-help-target="panel" hidden>
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
@@ -59,7 +59,7 @@
                 </div>
             </div>
         </li>
-        <li class="markdown-help-item markdownLinks" hidden>
+        <li class="markdown-help-item markdownLinks" data-markdown-help-target="panel" hidden>
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
@@ -80,7 +80,7 @@ http://yobi.io/
                 </div>
             </div>
         </li>
-        <li class="markdown-help-item markdownLists" hidden>
+        <li class="markdown-help-item markdownLists" data-markdown-help-target="panel" hidden>
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
@@ -104,7 +104,7 @@ http://yobi.io/
                 </div>
             </div>
         </li>
-        <li class="markdown-help-item markdownTaskList" hidden>
+        <li class="markdown-help-item markdownTaskList" data-markdown-help-target="panel" hidden>
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
@@ -134,7 +134,7 @@ http://yobi.io/
                 </div>
             </div>
         </li>
-        <li class="markdown-help-item markdownImages" hidden >
+        <li class="markdown-help-item markdownImages" data-markdown-help-target="panel" hidden >
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
@@ -152,7 +152,7 @@ http://yobi.io/
                 </div>
             </div>
         </li>
-        <li class="markdown-help-item markdownBlockquotes" hidden>
+        <li class="markdown-help-item markdownBlockquotes" data-markdown-help-target="panel" hidden>
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
@@ -173,7 +173,7 @@ http://yobi.io/
                 </div>
             </div>
         </li>
-        <li class="markdown-help-item markdownCodes" hidden>
+        <li class="markdown-help-item markdownCodes" data-markdown-help-target="panel" hidden>
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
@@ -200,7 +200,7 @@ function test() {
                 </div>
             </div>
         </li>
-        <li class="markdown-help-item markdownTables" hidden>
+        <li class="markdown-help-item markdownTables" data-markdown-help-target="panel" hidden>
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
@@ -228,7 +228,7 @@ function test() {
                 </div>
             </div>
         </li>
-        <li class="markdown-help-item markdownShortLinks" hidden>
+        <li class="markdown-help-item markdownShortLinks" data-markdown-help-target="panel" hidden>
             <div class="row-fluid thead">
                 <div class="span6">Markdown Input</div>
                 <div class="span6">Markdown Output</div>
