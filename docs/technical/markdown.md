@@ -29,6 +29,8 @@ GitHub's text expander provides completion. `@` and `#` adapt the existing permi
 
 Preview is explicit: entering Preview mounts a new renderer with the textarea as `sourceElement`; Edit removes it. Typing does not parse Markdown. Setting editor `.value` or resetting its form exits a stale preview. Wiki previews use document mode. Inline code reviews use the existing vanilla CodeCommentBox with a server-rendered form, rather than a second Vue editor.
 
+The visible preview pane retains the legacy `div.markdown-preview` shell, including its border against the help navigation and its background/radius. That shell owns the padding; the nested renderer has zero padding so content is not inset twice.
+
 CM6, the Vue Markdown editor/review-form distributions, Marked, the global highlighter and the `/markdown/{owner}/{project}` preview controller are removed. Other unrelated Vue widgets are unchanged. The server renderer's obsolete repository-relative helpers were removed; server-only rendering/cache and API response fields remain.
 
 ### Internal functions
