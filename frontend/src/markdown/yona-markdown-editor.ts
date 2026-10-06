@@ -237,6 +237,7 @@ export class YonaMarkdownEditor extends LitElement {
         yona-markdown-editor .markdown-editor-controls a:focus-visible, yona-markdown-editor .help-nav:focus-visible { outline: 2px solid #2679b5; }
         yona-markdown-editor text-expander { display: block; position: relative; }
         yona-markdown-editor textarea { display: block; box-sizing: border-box; width: 100%; min-height: 12em; resize: vertical; font-family: monospace; }
+        yona-markdown-editor .markdown-preview > yona-markdown-renderer { padding: 0 !important; }
         yona-markdown-editor .markdown-suggestions { position: absolute; z-index: 100; max-height: 240px; max-width: 100%; overflow: auto; padding: 4px; margin: 0; list-style: none; color: #222; background: white; border: 1px solid #aaa; box-shadow: 0 2px 6px #0003; }
         yona-markdown-editor .markdown-suggestions [role=option] { cursor: pointer; padding: 4px 8px; overflow-wrap: anywhere; }
         yona-markdown-editor .markdown-suggestions [aria-selected=true] { color: white; background: #2679b5; }
@@ -270,7 +271,7 @@ export class YonaMarkdownEditor extends LitElement {
         <div id="${this.textarea.id}-edit" class="tab-pane ${this.preview ? '' : 'active'}" ?hidden=${!!this.preview}>
           <div class="textarea-box">${this.expander}</div>
         </div>
-        <div id="${this.textarea.id}-preview" class="tab-pane ${this.preview ? 'active' : ''}" ?hidden=${!this.preview}>
+        <div id="${this.textarea.id}-preview" class="tab-pane markdown-preview ${this.preview ? 'active' : ''}" ?hidden=${!this.preview}>
           ${this.preview ?? nothing}
         </div>
       </div>
