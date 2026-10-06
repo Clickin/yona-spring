@@ -27,6 +27,15 @@ Preview is explicit: entering Preview mounts a new renderer with the textarea as
 
 CM6, the Vue Markdown editor/review-form distributions, Marked, the global highlighter and the `/markdown/{owner}/{project}` preview controller are removed. Other unrelated Vue widgets are unchanged. The server renderer's obsolete repository-relative helpers were removed; server-only rendering/cache and API response fields remain.
 
+### Internal functions
+
+- `yona-markdown-editor.ts`: textarea initialization, event binding and line indentation are separate operations. Completion separates the request (`mentionSuggestions`), response conversion (`mentionSuggestion`) and safe DOM construction (`suggestionOption`).
+- `yona-markdown-renderer.ts`: snapshot initialization and post-mount enhancement stay in the element; `markdownOutput` owns parsing/sanitization, and `commentLineBreaks` owns comment-only newline rules.
+- `plugins/structure.ts`: headings, link policy, reference collection/resolution and DOM replacement each have a named function.
+- `runtime/reference-batch-resolver.ts`: `send` orchestrates the batch; `fetchMetadata` handles requests/validation, and `settleBatch` handles caching/subscriber cleanup.
+
+The existing scanner, highlighting registry, Mermaid queue and scheduler already separate their responsibilities; no additional wrappers or modules are needed.
+
 ## Pipeline and security
 
 `micromark → DOMPurify → relative links/headings/references/task lists → async enhancement`.

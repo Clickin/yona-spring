@@ -8,18 +8,30 @@ export function applyStructure(root: HTMLElement, context: MarkdownContext, sign
   if (signal.aborted) return;
   if (context.mode === 'document' && !root.dataset.yonaStructured) {
     relativeLinks(root, context);
-    const slugger = new GithubSlugger();
-    root.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6').forEach(heading => {
-      heading.id = slugger.slug(heading.textContent ?? '');
-      const anchor = document.createElement('a');
-      anchor.className = 'heading-anchor';
-      anchor.href = `#${encodeURIComponent(heading.id)}`;
-      anchor.setAttribute('aria-label', `Link to ${heading.textContent}`);
-      anchor.textContent = '#';
-      heading.append(anchor);
-    });
+    addHeadingAnchors(root);
   }
   root.dataset.yonaStructured = 'true';
+  applyLinkPolicy(root);
+  applyReferences(root, context, signal);
+  const wrap = root.closest<HTMLElement>('.markdown-wrap') ?? root;
+  const yona = (window as Window & {yona?: {initTasklist?: (root: HTMLElement) => void}}).yona;
+  yona?.initTasklist?.(wrap);
+}
+
+function addHeadingAnchors(root: HTMLElement): void {
+  const slugger = new GithubSlugger();
+  root.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6').forEach(heading => {
+    heading.id = slugger.slug(heading.textContent ?? '');
+    const anchor = document.createElement('a');
+    anchor.className = 'heading-anchor';
+    anchor.href = `#${encodeURIComponent(heading.id)}`;
+    anchor.setAttribute('aria-label', `Link to ${heading.textContent}`);
+    anchor.textContent = '#';
+    heading.append(anchor);
+  });
+}
+
+function applyLinkPolicy(root: HTMLElement): void {
   const noreferrer = document.querySelector<HTMLMetaElement>('meta[name="yona-markdown-noreferrer"]')?.content === 'true';
   root.querySelectorAll<HTMLAnchorElement>('a[href]').forEach(anchor => {
     if (anchor.target === '_blank') anchor.relList.add('noopener');
@@ -33,10 +45,6 @@ export function applyStructure(root: HTMLElement, context: MarkdownContext, sign
       // Invalid sanitized links do not acquire navigation privileges.
     }
   });
-  references(root, context, signal);
-  const wrap = root.closest<HTMLElement>('.markdown-wrap') ?? root;
-  const yona = (window as Window & {yona?: {initTasklist?: (root: HTMLElement) => void}}).yona;
-  yona?.initTasklist?.(wrap);
 }
 
 function relativeLinks(root: HTMLElement, context: MarkdownContext): void {
@@ -60,7 +68,7 @@ function relativeLinks(root: HTMLElement, context: MarkdownContext): void {
   }
 }
 
-function references(root: HTMLElement, context: MarkdownContext, signal: AbortSignal): void {
+function applyReferences(root: HTMLElement, context: MarkdownContext, signal: AbortSignal): void {
   if (!context.owner || !context.project) return;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: node => node.parentElement?.closest('code,pre,a,script,style,textarea')
@@ -69,47 +77,56 @@ function references(root: HTMLElement, context: MarkdownContext, signal: AbortSi
   const nodes: Text[] = [];
   while (walker.nextNode()) nodes.push(walker.currentNode as Text);
   if (!nodes.length) return;
+  void resolveReferences(root, nodes, context, signal);
+}
+
+function referenceKey({type, value}: Candidate): string {
+  return `${type}:${value}`;
+}
+
+async function resolveReferences(root: HTMLElement, nodes: Text[], context: MarkdownContext, signal: AbortSignal): Promise<void> {
   const results = new Map<string, ReferenceMetadata | null>();
-  const keyOf = ({type, value}: Candidate) => `${type}:${value}`;
   const lookup = (candidate: Candidate) => {
-    const key = keyOf(candidate);
+    const key = referenceKey(candidate);
     return results.has(key) ? results.get(key) !== null : undefined;
   };
-  void (async () => {
-    // The legacy passes fall through on unresolved matches; a later pass can reveal a new candidate.
-    for (let round = 0; round < 4; round++) {
-      const pending = new Map<string, Candidate>();
-      for (const node of nodes) {
-        for (const candidate of linkLegacyReferences(node.data, lookup).unknown) pending.set(keyOf(candidate), candidate);
-      }
-      if (!pending.size) break;
-      await Promise.all([...pending.values()].map(candidate => new Promise<void>(settle => {
-        resolveReference(context, candidate.type, candidate.value, signal, metadata => {
-          results.set(keyOf(candidate), metadata);
-          settle();
-        });
-      })));
-      if (signal.aborted || !root.isConnected) return;
-    }
-    let linkedUser = false;
+  // The legacy passes fall through on unresolved matches; a later pass can reveal a new candidate.
+  for (let round = 0; round < 4; round++) {
+    const pending = new Map<string, Candidate>();
     for (const node of nodes) {
-      if (!node.isConnected) continue;
-      const {pieces} = linkLegacyReferences(node.data, candidate => Boolean(results.get(keyOf(candidate))));
-      if (pieces.length === 1 && typeof pieces[0] === 'string') continue;
-      const fragment = document.createDocumentFragment();
-      for (const piece of pieces) {
-        if (typeof piece === 'string') fragment.append(piece);
-        else {
-          const metadata = results.get(keyOf(piece))!;
-          linkedUser ||= metadata.type === 'user' && metadata.kind !== 'org';
-          fragment.append(referenceLink(metadata));
-        }
-      }
-      node.replaceWith(fragment);
+      for (const candidate of linkLegacyReferences(node.data, lookup).unknown) pending.set(referenceKey(candidate), candidate);
     }
-    const common = (window as Window & {$yona?: {initHoverPopovers?: (selector: string) => void}}).$yona;
-    if (linkedUser) common?.initHoverPopovers?.('.markdown-output .user-link [data-toggle="popover"]');
-  })();
+    if (!pending.size) break;
+    await Promise.all([...pending.values()].map(candidate => new Promise<void>(settle => {
+      resolveReference(context, candidate.type, candidate.value, signal, metadata => {
+        results.set(referenceKey(candidate), metadata);
+        settle();
+      });
+    })));
+    if (signal.aborted || !root.isConnected) return;
+  }
+  replaceReferences(nodes, results);
+}
+
+function replaceReferences(nodes: Text[], results: Map<string, ReferenceMetadata | null>): void {
+  let linkedUser = false;
+  for (const node of nodes) {
+    if (!node.isConnected) continue;
+    const {pieces} = linkLegacyReferences(node.data, candidate => Boolean(results.get(referenceKey(candidate))));
+    if (pieces.length === 1 && typeof pieces[0] === 'string') continue;
+    const fragment = document.createDocumentFragment();
+    for (const piece of pieces) {
+      if (typeof piece === 'string') fragment.append(piece);
+      else {
+        const metadata = results.get(referenceKey(piece))!;
+        linkedUser ||= metadata.type === 'user' && metadata.kind !== 'org';
+        fragment.append(referenceLink(metadata));
+      }
+    }
+    node.replaceWith(fragment);
+  }
+  const common = (window as Window & {$yona?: {initHoverPopovers?: (selector: string) => void}}).$yona;
+  if (linkedUser) common?.initHoverPopovers?.('.markdown-output .user-link [data-toggle="popover"]');
 }
 
 /** Same markup as the server AutoLinkRenderer, built from text only. */

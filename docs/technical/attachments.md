@@ -8,6 +8,10 @@
 
 `temporaryUploadFiles` is a real hidden input inside the shell and therefore part of the surrounding form.
 
+## Internal structure
+
+`mountShell` initializes the shell and marker-backed list; `bindShell` owns its event listeners. File selection, drop and image paste all reach `upload`, which inserts a marker only for textarea input. Request setup/progress lives in `createUploadRequest`, response parsing in `onUploadResponse`, and completion/failure in their respective state updates. Text formatting stays in the DOM-free `attachment-text.ts`, with explicit table-header preparation and alignment separators.
+
 ## Behavior
 
 | Input | Result |

@@ -36,20 +36,23 @@ export function hasTextAndImage(items: ArrayLike<{kind: string; type: string}>):
 export function markdownTable(data: string): string {
   const rows = data.split(/[\u0085\u2028\u2029]|\r\n?/g).map(row => row.replace('\n', ' ').split('\t'));
   const alignments: string[] = [];
-  const widths = rows[0].map((column, index) => {
+  const widths: number[] = [];
+  for (const [index, column] of rows[0].entries()) {
     const match = column.match(/^(\^[lcr])/i);
-    const alignment = match ? match[1][1].toLowerCase() : 'l';
-    alignments.push(alignment);
+    alignments.push(match ? match[1][1].toLowerCase() : 'l');
     rows[0][index] = column.replace(/^(\^[lcr])/i, '');
-    return Math.max(...rows.map(row => `${row[index]}`.length));
-  });
+    widths.push(Math.max(...rows.map(row => `${row[index]}`.length)));
+  }
   const lines = rows.map(row => `| ${row.map((column, index) => column + ' '.repeat(widths[index] - column.length)).join(' | ')} |`);
-  lines.splice(1, 0, `|${widths.map((width, index) => {
-    const alignment = alignments[index];
-    const adjust = alignment === 'r' ? 1 : alignment === 'c' ? 2 : 0;
-    return (alignment === 'c' ? ':' : '') + '-'.repeat(width + 2 - adjust) + (alignment === 'l' ? '' : ':');
-  }).join('|')}|`);
+  const separator = widths.map((width, index) => tableSeparator(width, alignments[index]));
+  lines.splice(1, 0, `|${separator.join('|')}|`);
   return lines.join('\n');
+}
+
+function tableSeparator(width: number, alignment: string): string {
+  if (alignment === 'c') return `:${'-'.repeat(width)}:`;
+  if (alignment === 'r') return `${'-'.repeat(width + 1)}:`;
+  return '-'.repeat(width + 2);
 }
 
 /** Legacy visible name for pasted images: seconds + milliseconds + "-Y-M-D-H-m" (not unique). */

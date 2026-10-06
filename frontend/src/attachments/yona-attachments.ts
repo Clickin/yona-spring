@@ -98,17 +98,24 @@ export class YonaAttachments extends LitElement {
       key: marker.dataset.id ?? uploadKey(), id: marker.dataset.id, name: marker.dataset.name ?? '',
       url: marker.dataset.href, mimeType: marker.dataset.mime, size: Number(marker.dataset.size) || 0, progress: 100,
     }));
+    this.bindShell(shell);
+  }
+
+  private bindShell(shell: HTMLElement): void {
     shell.addEventListener('dragover', event => this.onDragOver(event));
     shell.addEventListener('dragleave', event => {
       event.preventDefault();
       this.dragging = false;
     });
     shell.addEventListener('drop', event => this.onDrop(event, false));
-    shell.querySelector<HTMLInputElement>('input[type="file"]')?.addEventListener('change', event => {
-      const input = event.target as HTMLInputElement;
-      Array.from(input.files ?? []).forEach(file => this.upload(file));
-      input.value = '';
-    });
+    shell.querySelector<HTMLInputElement>('input[type="file"]')
+      ?.addEventListener('change', event => this.onFileSelection(event));
+  }
+
+  private onFileSelection(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    for (const file of Array.from(input.files ?? [])) this.upload(file);
+    input.value = '';
   }
 
   private readonly onTextareaPaste = (event: ClipboardEvent) => this.onPaste(event);
@@ -140,15 +147,7 @@ export class YonaAttachments extends LitElement {
     event.preventDefault();
     event.stopPropagation();
     this.dragging = false;
-    for (const file of Array.from(event.dataTransfer?.files ?? [])) {
-      if (!intoTextarea) {
-        this.upload(file);
-        continue;
-      }
-      const key = uploadKey();
-      this.insertText(uploadMarker(key));
-      this.upload(file, key);
-    }
+    for (const file of Array.from(event.dataTransfer?.files ?? [])) this.upload(file, intoTextarea);
   }
 
   private onPaste(event: ClipboardEvent): void {
@@ -163,38 +162,49 @@ export class YonaAttachments extends LitElement {
       if (entry.kind !== 'file' || !entry.type.startsWith('image')) continue;
       const blob = entry.getAsFile();
       if (!blob) continue;
-      const key = uploadKey();
       const name = `${legacyUploadName()}.png`;
-      this.insertText(uploadMarker(key));
-      this.upload(new File([blob], name, {type: blob.type}), key);
+      this.upload(new File([blob], name, {type: blob.type}), true);
       event.preventDefault();
     }
   }
 
-  private upload(file: File, key = uploadKey()): void {
+  private upload(file: File, intoTextarea = false): void {
+    const key = uploadKey();
+    if (intoTextarea) this.insertText(uploadMarker(key));
     // Browsers name some clipboard images image.png; legacy gave them a time-based name.
     const name = file.name === 'image.png' ? `${legacyUploadName()}.png` : file.name;
     this.items = [{key, name, size: file.size, progress: 0}, ...this.items];
     const body = new FormData();
     body.append('filePath', file, name);
+    const request = this.createUploadRequest(key);
+    request.send(body);
+  }
+
+  private createUploadRequest(key: string): XMLHttpRequest {
     const request = new XMLHttpRequest();
     request.open('POST', this.uploadURL);
     for (const [header, value] of Object.entries(xsrfHeaders())) request.setRequestHeader(header, value);
     request.upload?.addEventListener('progress', event => {
       if (event.lengthComputable) this.patch(key, {progress: Math.ceil(event.loaded / event.total * 100)});
     });
-    request.addEventListener('load', () => {
-      if (request.status < 200 || request.status >= 300) return this.failUpload(key, request.status, request.statusText);
-      let uploaded: Uploaded;
-      try {
-        uploaded = JSON.parse(request.responseText);
-      } catch {
-        return this.failUpload(key, request.status, 'invalid response');
-      }
-      this.completeUpload(key, uploaded);
-    });
+    request.addEventListener('load', () => this.onUploadResponse(key, request));
     request.addEventListener('error', () => this.failUpload(key, 0, 'network error'));
-    request.send(body);
+    return request;
+  }
+
+  private onUploadResponse(key: string, request: XMLHttpRequest): void {
+    if (request.status < 200 || request.status >= 300) {
+      this.failUpload(key, request.status, request.statusText);
+      return;
+    }
+    let uploaded: Uploaded;
+    try {
+      uploaded = JSON.parse(request.responseText);
+    } catch {
+      this.failUpload(key, request.status, 'invalid response');
+      return;
+    }
+    this.completeUpload(key, uploaded);
   }
 
   private completeUpload(key: string, uploaded: Uploaded): void {
@@ -250,16 +260,27 @@ export class YonaAttachments extends LitElement {
   }
 
   private patch(key: string, changes: Partial<Item>): Item | undefined {
+    const items = [...this.items];
     let updated: Item | undefined;
-    this.items = this.items.map(item => item.key === key ? (updated = {...item, ...changes}) : item);
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      if (item.key !== key) continue;
+      updated = {...item, ...changes};
+      items[index] = updated;
+    }
+    this.items = items;
     return updated;
   }
 
   private setTemporary(id: string, present: boolean): void {
     if (!this.temporary) return;
-    const ids = this.temporary.value ? this.temporary.value.split(',') : [];
-    const next = present ? (ids.includes(id) ? ids : [...ids, id]) : ids.filter(value => value !== id);
-    this.temporary.value = next.join(',');
+    let ids = this.temporary.value ? this.temporary.value.split(',') : [];
+    if (present) {
+      if (!ids.includes(id)) ids.push(id);
+    } else {
+      ids = ids.filter(value => value !== id);
+    }
+    this.temporary.value = ids.join(',');
   }
 
   private insertText(text: string): void {

@@ -67,6 +67,12 @@ function flush(): void {
 async function send(items: Entry[]): Promise<void> {
   const batch: Batch = {entries: items, controller: new AbortController()};
   items.forEach(entry => { entry.batch = batch; });
+  const results = await fetchMetadata(batch);
+  settleBatch(batch, results);
+}
+
+async function fetchMetadata(batch: Batch): Promise<Map<string, ReferenceMetadata> | undefined> {
+  const items = batch.entries;
   const {owner, project} = items[0].context;
   let results: Map<string, ReferenceMetadata> | undefined;
   try {
@@ -90,19 +96,23 @@ async function send(items: Entry[]): Promise<void> {
     }
   } catch {
     // Network failures and detach cancellation leave the original readable token in place.
-  } finally {
-    for (const entry of items) {
-      const key = entryKey(entry.context, entry.type, entry.value);
-      const metadata = results?.get(`${entry.type}:${entry.value}`);
-      const result = metadata?.type === entry.type ? metadata : null;
-      if (results && !batch.controller.signal.aborted) entry.result = result;
-      else if (entries.get(key) === entry) entries.delete(key);
-      entry.batch = undefined;
-      for (const subscriber of entry.subscribers) {
-        subscriber.signal.removeEventListener('abort', subscriber.cancel);
-        if (!subscriber.signal.aborted) subscriber.apply(result);
-      }
-      entry.subscribers.clear();
+    // Keep metadata already collected if a later item throws during validation.
+  }
+  return results;
+}
+
+function settleBatch(batch: Batch, results: Map<string, ReferenceMetadata> | undefined): void {
+  for (const entry of batch.entries) {
+    const key = entryKey(entry.context, entry.type, entry.value);
+    const metadata = results?.get(`${entry.type}:${entry.value}`);
+    const result = metadata?.type === entry.type ? metadata : null;
+    if (results && !batch.controller.signal.aborted) entry.result = result;
+    else if (entries.get(key) === entry) entries.delete(key);
+    entry.batch = undefined;
+    for (const subscriber of entry.subscribers) {
+      subscriber.signal.removeEventListener('abort', subscriber.cancel);
+      if (!subscriber.signal.aborted) subscriber.apply(result);
     }
+    entry.subscribers.clear();
   }
 }
