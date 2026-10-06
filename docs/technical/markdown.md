@@ -21,7 +21,11 @@ The blocking `yona.css` stylesheet reserves loading space using the escaped sour
 
 `site/layout :: markdownEditor` renders the real form textarea inside `<yona-markdown-editor>`. JavaScript retains that node; its `value`, `defaultValue`, selection and native form reset remain authoritative. The form is usable without JavaScript.
 
-The Lit editor uses GitHub's Markdown toolbar and text expander. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea. `<yona-attachments>` (see `docs/technical/attachments.md`) binds paste/drop to that textarea.
+The editor keeps Yona 1.x's Edit/Preview tabs, checklist button, draft notice and visible Markdown help navigation, using the existing `nav nav-tabs nm small` and `ybtn` styles. Labels come from Thymeleaf messages. Checklist insertion uses the legacy three-item template in the owning textarea and exits Preview; the old page-wide handler is removed to avoid duplicate insertion. The added formatting toolbar and separate Help button are removed.
+
+Markdown help is the native `help/markdown :: markdown` Thymeleaf fragment. Its ten input/output examples are static HTML and use the shared Yona styles, including the title's `.label` styling; no Vue element, Shadow DOM or copied stylesheet remains. `toggleHelp` only opens/closes the selected example, supports Enter/Space and stays scoped to its editor across reconnects and Turbo clones.
+
+GitHub's text expander provides completion. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea. `<yona-attachments>` (see `docs/technical/attachments.md`) binds paste/drop to that textarea.
 
 Preview is explicit: entering Preview mounts a new renderer with the textarea as `sourceElement`; Edit removes it. Typing does not parse Markdown. Setting editor `.value` or resetting its form exits a stale preview. Wiki previews use document mode. Inline code reviews use the existing vanilla CodeCommentBox with a server-rendered form, rather than a second Vue editor.
 
@@ -85,7 +89,7 @@ The read-only renderer migration precedes the editor replacement in a separate c
 
 Measurements below are local arm64 browser smoke results, not performance thresholds. Compressed sizes sum each entry's static dependency closure; renderer/editor totals overlap and must not be added together.
 
-| Current closure | Minified bytes | gzip | Brotli |
+| Recorded closure before toolbar restoration | Minified bytes | gzip | Brotli |
 |---|---:|---:|---:|
 | Renderer | 146,656 | 50,383 | 42,844 |
 | Editor including renderer | 183,720 | 61,381 | 52,592 |

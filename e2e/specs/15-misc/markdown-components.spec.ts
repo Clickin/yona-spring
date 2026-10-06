@@ -84,10 +84,10 @@ test('editor keeps native textarea ownership and takes one preview snapshot per 
   await expect(textarea).toHaveValue('restored');
   await page.evaluate(() => document.querySelector('form')!.reset());
   await expect(textarea).toHaveValue('**initial**');
-  await textarea.fill('selected');
-  await textarea.press('ControlOrMeta+A');
-  await page.getByRole('button', {name: 'Bold', exact: true}).click();
-  await expect(textarea).toHaveValue('**selected**');
+  await textarea.fill('before after');
+  await textarea.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(7, 7));
+  await page.getByRole('button', {name: 'Add checklist', exact: true}).click();
+  await expect(textarea).toHaveValue('before \n- [ ] Todo A\n- [ ] Todo B\n- [ ] Todo Cafter');
   await textarea.fill('line');
   await textarea.press('End');
   await textarea.press('Tab');
@@ -111,6 +111,32 @@ test('editor keeps native textarea ownership and takes one preview snapshot per 
   await page.evaluate(() => document.querySelector('form')!.reset());
   await expect(textarea).toBeVisible();
   await expect(textarea).toHaveValue('**initial**');
+});
+
+test('checklist insertion targets its editor and exits a stale preview', async ({page}) => {
+  await page.evaluate(async () => {
+    const form = document.createElement('form');
+    for (const name of ['first', 'second']) {
+      const editor = document.createElement('yona-markdown-editor');
+      const textarea = document.createElement('textarea');
+      textarea.name = name;
+      textarea.defaultValue = `${name} editor`;
+      editor.append(textarea);
+      form.append(editor);
+    }
+    document.body.replaceChildren(form);
+    await Promise.all(Array.from(form.querySelectorAll('yona-markdown-editor'), editor => (editor as LitElement).updateComplete));
+  });
+  const second = page.locator('yona-markdown-editor').nth(1);
+  await second.locator('textarea').evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(0, 0));
+  await second.getByRole('button', {name: 'Preview', exact: true}).click();
+  await expect(second.locator('yona-markdown-renderer p')).toHaveText('second editor');
+  await second.getByRole('button', {name: 'Add checklist', exact: true}).click();
+  await expect(second.locator('yona-markdown-renderer')).toHaveCount(0);
+  await expect(page.locator('textarea[name=first]')).toHaveValue('first editor');
+  await expect(second.locator('textarea')).toBeFocused();
+  await second.locator('textarea').pressSequentially(' next');
+  await expect(second.locator('textarea')).toHaveValue('second editor\n- [ ] Todo A\n- [ ] Todo B\n- [ ] Todo C next');
 });
 
 test('autocomplete uses local emoji and treats server labels as text', async ({page}) => {

@@ -1788,20 +1788,6 @@ class TemplateEquivalenceSpec @Autowired constructor(
                     doc.select(".gnb-search").size shouldBe 0
                 }
 
-                // help/markdown.html이 Vue 3 SFC(<yona-help-markdown>)로 전면 교체되면서 아코디언
-                // 탭 10개는 그 컴포넌트의 Shadow DOM 안에서 클라이언트 마운트 시점에 그려진다 -
-                // 서버 렌더링 HTML에는 <yona-help-markdown> 태그만 남는다. 예시 콘텐츠의 동치성은
-                // components/vue-widgets/src/help-markdown/examples.ts로 직접 확인했다 - Jsoup으로는
-                // Shadow DOM에 닿지 못한다.
-                it("markdown.html(#235)은 이슈 작성 에디터에 포함되어 <yona-help-markdown> 커스텀 엘리먼트로 렌더링되어야 한다") {
-                    val doc = Jsoup.parse(
-                        mockMvc.perform(
-                            get("/owner/public-proj/issueform").with(SecurityMockMvcRequestPostProcessors.user(memberDetails))
-                        ).andExpect(status().isOk).andReturn().response.contentAsString
-                    )
-
-                    doc.select("yona-help-markdown").size shouldBe 1
-                }
 
                 it("keymap.html(#236)은 section 값에 따라 게시판 목록/상세에서 서로 다른 안내 항목을 노출해야 한다") {
                     val listDoc = Jsoup.parse(

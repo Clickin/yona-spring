@@ -10,7 +10,6 @@
     "npm": ">=10"
   },
   "dependencies": {
-    "@github/markdown-toolbar-element": "2.2.3",
     "@github/text-expander-element": "2.9.4",
     "@hotwired/turbo": "8.0.23",
     "dompurify": "3.4.16",
