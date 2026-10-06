@@ -13,15 +13,12 @@ function yonaAssgineeModule(findAssignableUsersApiUrl, updateAssgineesApiUrl, me
   var resultCache = {};
 
   function formatter(data, escape){
-    var name = data.name || data.text || data.loginId;
-    if(!data.avatarUrl){
-      return "<div>" + escape(name) + "</div>";
-    }
+    var name = data.pureNameOnly || data.name || data.loginId;
 
     var loginId = data.loginId ? "@" + data.loginId : "";
 
     return '<div class="usf-group" title="' + escape(name) + ' ' + escape(loginId) + '">' +
-      '<span class="avatar-wrap smaller"><img src="' + escape(data.avatarUrl) + '" width="20" height="20"></span>' +
+      (data.avatarUrl ? '<span class="avatar-wrap smaller"><img src="' + escape(data.avatarUrl) + '" width="20" height="20"></span>' : '') +
       '<strong class="name">' + escape(name) + '</strong>' +
       '<span class="loginid">' + escape(loginId) + '</span>' +
       '</div>';
@@ -30,7 +27,7 @@ function yonaAssgineeModule(findAssignableUsersApiUrl, updateAssgineesApiUrl, me
   function score(search){
     var term = search.toLowerCase();
     return function(item){
-      var text = (item.name || item.text || "").toString().toLowerCase();
+      var text = (item.pureNameOnly || item.name || "").toString().toLowerCase();
       var loginId = (item.loginId || "").toString().toLowerCase();
       return (loginId.indexOf(term) > -1 || text.indexOf(term) > -1) ? 1 : 0;
     };
@@ -44,6 +41,10 @@ function yonaAssgineeModule(findAssignableUsersApiUrl, updateAssgineesApiUrl, me
     searchField: ["name", "loginId"],
     maxItems: null,
     plugins: ['remove_button'],
+    wrapperClass: "ts-wrapper issue-assignees bordered fullsize",
+    dropdownClass: "ts-dropdown issue-assignees",
+    preload: "focus",
+    hidePlaceholder: true,
     highlight: false,
     score: score,
     loadThrottle: 300, // select2 ajax.quietMillis:300 대응

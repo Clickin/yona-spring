@@ -111,24 +111,19 @@ test.describe.serial('issue management actions', () => {
     const issueRow = page.locator('li.post-item', { hasText: issueTitle });
     await issueRow.locator('input[name="checked-issue"]').check();
 
-    // `page.click(selector, {hasText})` silently ignores hasText (it isn't a valid click
-    // option, only a Locator filter) and clicked the *first* <li>, "no assignee" (id -1)
-    // instead of "assign to me" -- the mass-update POST carried `assignee.id=-1`.
-    // issue/list.html always renders "assign to me" as the *second* <li> in this dropdown
-    // (right after "no assignee", before the divider and the per-member list), so target it
-    // positionally instead of by (locale-dependent) text.
-    await page.click('#list-assignee button.dropdown-toggle');
+    const adminLoginId = requireSeed('adminLoginId');
+    const assignees = page.locator('[data-mass-assignees] + .ts-wrapper');
+    const userId = await page.locator(`[data-mass-assignees] option[data-login-id="${adminLoginId}"]`).getAttribute('value');
+    await assignees.locator('input').fill(adminLoginId);
+    await assignees.locator(`.option[data-value="${userId}"]`).click();
+    await assignees.locator('input').press('Escape');
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'load' }),
-      page.locator('#list-assignee ul.dropdown-menu > li').nth(1).locator('a').click(),
+      page.locator('[data-apply-assignees]').click(),
     ]);
 
     await page.goto(`/${owner}/${name}/issue/${issueNumber}`);
-    const owner2 = requireSeed('adminLoginId');
-    // isAllowedUpdate renders the assignee as a hidden <input id="assignee" value="...">
-    // (backing an inline select2-alike widget saved through its own dedicated endpoint, not
-    // massUpdate) rather than visible text -- toContainText() would see nothing here.
-    await expect(page.locator('#assignee')).toHaveValue(owner2);
+    await expect(page.locator('#assignee')).toHaveValues([adminLoginId]);
   });
 
   test('assign a milestone to the issue via the mass-update widget', async ({ page }) => {

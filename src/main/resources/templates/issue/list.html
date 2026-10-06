@@ -277,8 +277,9 @@
                                     </yona-dropdown>
                                     <!-- 담당자 변경 -->
                                     <div id="list-assignee" class="btn-group">
-                                        <select multiple data-mass-assignees th:aria-label="#{issue.assignee}" data-toggle="tomselect">
-                                            <option th:each="member : ${members}" th:value="${member.id}" th:text="${member.name + ' (@' + member.loginId + ')'}"></option>
+                                        <select multiple data-mass-assignees th:aria-label="#{issue.assignee}" data-toggle="tomselect" data-format="user"
+                                                data-container-css-class="issue-assignees bordered fullsize" data-dropdown-css-class="issue-assignees">
+                                            <option th:each="member : ${members}" th:value="${member.id}" th:data-login-id="${member.loginId}" th:data-avatar-url="${member.avatarUrl}" th:text="${member.name}"></option>
                                         </select>
                                         <button type="button" data-apply-assignees class="btn medium" disabled th:text="#{issue.update.assignee.id}">Assign</button>
                                         <button type="button" data-clear-mass-assignees class="btn medium" disabled th:text="#{issue.noAssignee}">Clear assignees</button>

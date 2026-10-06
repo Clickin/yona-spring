@@ -1,6 +1,6 @@
 # Preparation: multiple issue assignees
 
-Branch: `prep/multiple-assignees`. Base: upstream `next` at `6dae7982a242f672d3132feeeb32a369d21e8d1f`.
+Submission branch: `pr/multiple-assignees`. Original preparation history is preserved on `prep/multiple-assignees`. Base: upstream `next` at `6dae7982a242f672d3132feeeb32a369d21e8d1f`.
 
 This is an unapproved preparation branch, not a release or PR-ready claim. No issue comment, push, or PR has been made.
 
@@ -28,6 +28,15 @@ The singular API contract remains available alongside the plural fields:
 `yona-cli` is a separate repository and its source is absent from this worktree; its implementation has not been changed or verified here. Existing singular clients remain compatible. To expose multiple assignees, clients can resolve repeatable issue `--assignee` values into `assigneeIds`, send `[]` to clear, omit both fields to preserve assignments, and display every response `assignees` member. PR CLI assignment remains singular.
 
 ## Verification status
+
+### Assignee UI correction — 2026-10-06
+
+- The legacy renderer read `text` although assignable-user responses contain `name`. The deployed legacy script reproduced `undefined@admin` with a real API response; the corrected renderer displayed `UI Admin@admin`. The name fix and regression belong to this assignee PR; the temporary `next`-only patch/test were removed during PR separation.
+- Multiple-assignee create, edit, detail and mass-update controls now share the existing label picker's border, dropdown and removable-item CSS. User avatars, names and login IDs remain user-specific; GitHub styling was not copied.
+- Preselected edit/detail options carry their name and avatar metadata, matching remote selections. The empty-state placeholder disappears when users are selected. Opening the picker loads candidates without typing; the self-assignment shortcut displays the actual person's name.
+- The new Playwright regression owns its user, project and issue. It checks both names after selection/reload, independent removal and clearing. Existing mass-assignment and my-issues checks were migrated from the retired singular dropdown.
+- Four focused Playwright tests passed against the packaged multiple-assignee app, with separate browser smoke of edit-form saving and bulk replacement. `bootJar` passed. A temporary standalone legacy-name patch also passed a packaged-app smoke; its coverage is consolidated into this branch's name/persistence regression rather than a separate PR.
+- Chromium at 1365×900 and 1024×900 compared six control/dropdown/chip pairs: zero measured CSS/empty-control geometry mismatches (1 CSS px geometry tolerance). This is focused control parity, not whole-page or mobile parity. Selected chip dimensions may differ with avatars and user text; avatar image pixels are not compared with label badges.
 
 ### Review verification — 2026-10-04
 

@@ -435,18 +435,18 @@ test('cross-project "my issues" screen shows an issue actually assigned to the c
   await page.click('#button-save');
   await expect(page).toHaveURL(new RegExp(`/${adminLoginId}/${projectName}/issue/\\d+`));
 
-  // /user/issues with no filter params defaults to "assigned to me" (UserViewController.userIssues:
-  // effectiveAssigneeId = loginUser.id when no filter given) -- a freshly created issue has no
-  // assignee by default, so self-assign it first via the issue list's mass-update widget (same
-  // dropdown pattern as 06-issue/issue-management.spec.ts's "assign to me" test: the dropdown's
-  // second <li> is always "assign to me", right after "no assignee").
+  // The default cross-project filter shows issues assigned to the current user.
   await page.goto(`/${adminLoginId}/${projectName}/issues`);
   const issueRow = page.locator('li.post-item', { hasText: issueTitle });
   await issueRow.locator('input[name="checked-issue"]').check();
-  await page.click('#list-assignee button.dropdown-toggle');
+  const assignees = page.locator('[data-mass-assignees] + .ts-wrapper');
+  const userId = await page.locator(`[data-mass-assignees] option[data-login-id="${adminLoginId}"]`).getAttribute('value');
+  await assignees.locator('input').fill(adminLoginId);
+  await assignees.locator(`.option[data-value="${userId}"]`).click();
+  await assignees.locator('input').press('Escape');
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'load' }),
-    page.locator('#list-assignee ul.dropdown-menu > li').nth(1).locator('a').click(),
+    page.locator('[data-apply-assignees]').click(),
   ]);
 
   const response = await page.goto('/user/issues');

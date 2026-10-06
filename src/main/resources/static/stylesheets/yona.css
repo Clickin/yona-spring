@@ -11983,25 +11983,25 @@ code {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
   padding: 3px 5px;
 }
-.ts-wrapper.issue-labels {
+.ts-wrapper:is(.issue-labels, .issue-assignees) {
   border: none;
   box-shadow: none;
 }
-.ts-wrapper.issue-labels.bordered {
+.ts-wrapper:is(.issue-labels, .issue-assignees).bordered {
   border: 1px solid #ddd;
 }
-.ts-wrapper.issue-labels.bordered:hover,
-.ts-wrapper.issue-labels.bordered.focus {
+.ts-wrapper:is(.issue-labels, .issue-assignees).bordered:hover,
+.ts-wrapper:is(.issue-labels, .issue-assignees).bordered.focus {
   border: 1px solid #ddd;
 }
-.ts-wrapper.issue-labels .ts-control .item {
+.ts-wrapper:is(.issue-labels, .issue-assignees) .ts-control .item {
   position: relative;
   background: transparent;
   border: none;
   box-shadow: none;
   padding: 3px 18px 3px 5px;
 }
-.ts-wrapper.issue-labels .ts-control .item .remove {
+.ts-wrapper:is(.issue-labels, .issue-assignees) .ts-control .item .remove {
   position: absolute;
   top: 6px;
   right: 3px;
@@ -12009,20 +12009,20 @@ code {
   opacity: 0;
   border-left: none !important;
 }
-.ts-wrapper.issue-labels:hover,
-.ts-wrapper.issue-labels.focus {
+.ts-wrapper:is(.issue-labels, .issue-assignees):hover,
+.ts-wrapper:is(.issue-labels, .issue-assignees).focus {
   border: none;
   background: transparent;
 }
-.ts-wrapper.issue-labels:hover .ts-control,
-.ts-wrapper.issue-labels.focus .ts-control {
+.ts-wrapper:is(.issue-labels, .issue-assignees):hover .ts-control,
+.ts-wrapper:is(.issue-labels, .issue-assignees).focus .ts-control {
   border: none;
 }
-.ts-wrapper.issue-labels:hover .ts-control .item .remove,
-.ts-wrapper.issue-labels.focus .ts-control .item .remove {
+.ts-wrapper:is(.issue-labels, .issue-assignees):hover .ts-control .item .remove,
+.ts-wrapper:is(.issue-labels, .issue-assignees).focus .ts-control .item .remove {
   opacity: 1;
 }
-.ts-wrapper.issue-labels .ts-control .item:hover {
+.ts-wrapper:is(.issue-labels, .issue-assignees) .ts-control .item:hover {
   background: #e6e6e6;
 }
 .ts-wrapper.multi.focus .ts-control {
@@ -12033,13 +12033,13 @@ code {
 .ts-wrapper.multi.disabled .ts-control {
   border: none;
 }
-.ts-dropdown.issue-labels {
+.ts-dropdown:is(.issue-labels, .issue-assignees) {
   min-width: 220px;
   border-top: 1px solid rgba(0, 0, 0, 0.15);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   border-radius: 3px;
 }
-.ts-dropdown.issue-labels .ts-dropdown-content {
+.ts-dropdown:is(.issue-labels, .issue-assignees) .ts-dropdown-content {
   min-width: 200px;
 }
 .ts-dropdown.issue-labels .optgroup-header {
@@ -12053,6 +12053,16 @@ code {
   margin-top: 0;
   padding-top: 0;
 }
+.assignee-clear {
+  border: none;
+  background: none;
+  padding: 0;
+  margin-left: 5px;
+  color: #51AACC;
+  font-size: 11px;
+}
+.assignee-clear::before { content: "["; }
+.assignee-clear::after { content: "]"; }
 .label {
   border-radius: 1px;
 }

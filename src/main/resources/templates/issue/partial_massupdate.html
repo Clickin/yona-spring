@@ -22,8 +22,9 @@
                 </div>
 
                 <div id="assignee" class="btn-group" style="display: inline-block; margin-right: 5px;">
-                    <select multiple data-mass-assignees th:aria-label="#{issue.assignee}" data-toggle="tomselect">
-                        <option th:each="user : ${@templateHelper.getAssignableUsers(project)}" th:value="${user.id}" th:text="${user.name + ' (@' + user.loginId + ')'}"></option>
+                    <select multiple data-mass-assignees th:aria-label="#{issue.assignee}" data-toggle="tomselect" data-format="user"
+                            data-container-css-class="issue-assignees bordered fullsize" data-dropdown-css-class="issue-assignees">
+                        <option th:each="user : ${@templateHelper.getAssignableUsers(project)}" th:value="${user.id}" th:data-login-id="${user.loginId}" th:data-avatar-url="${user.avatarUrl}" th:text="${user.name}"></option>
                     </select>
                     <button type="button" data-apply-assignees class="btn medium" disabled th:text="#{issue.update.assignee.id}">Assign</button>
                     <button type="button" data-clear-mass-assignees class="btn medium" disabled th:text="#{issue.noAssignee}">Clear assignees</button>

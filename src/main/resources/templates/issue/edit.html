@@ -72,13 +72,15 @@
                             
                             <div class="span3 span-hard-wrap right-menu">
                                 <dl class="issue-option">
-                                    <dt th:text="#{issue.assignee}">담당자</dt>
+                                    <dt>
+                                        <span th:text="#{issue.assignee}">담당자</span>
+                                        <button type="button" data-clear-assignees class="assignee-clear" th:text="#{issue.noAssignee}">No assignee</button>
+                                    </dt>
                                     <dd>
                                         <input type="hidden" name="_assigneeLoginIds" value="on">
                                         <select multiple class="bigdrop" id="assignee" name="assigneeLoginIds" th:aria-label="#{issue.assignee}" th:data-placeholder="#{issue.noAssignee}" style="width: 100%">
-                                            <option th:each="assignee : ${issue.assignees}" th:value="${assignee.loginId}" th:text="${assignee.name + ' (@' + assignee.loginId + ')'}" selected></option>
+                                            <option th:each="assignee : ${issue.assignees}" th:value="${assignee.loginId}" th:data-name="${assignee.name}" th:data-avatar-url="${assignee.avatarUrl}" th:text="${assignee.name}" selected></option>
                                         </select>
-                                        <button type="button" data-clear-assignees th:text="#{issue.noAssignee}">Clear assignees</button>
                                     </dd>
                                 </dl>
 
