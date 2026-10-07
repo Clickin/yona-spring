@@ -28,6 +28,7 @@ import kotlin.system.measureNanoTime
  */
 object IssueSearchQualityProbe {
     data class Case(val type: String, val issueId: Long, val text: String)
+    interface ProbeIssueId { val id: Long }
 
     val identifierTypes = listOf("identifierCamelSuffix", "identifierCamelPrefix", "identifierDotFinal",
         "identifierSnakePart", "identifierKebabPart", "identifierSlashPart")
@@ -200,7 +201,9 @@ object IssueSearchQualityProbe {
                 em.persist(User(loginId = "admin", name = "Probe", email = "probe@example.invalid",
                     state = UserState.SITE_ADMIN, password = "not-a-login-credential"))
             }
+            println("PROGRESS restoring archive")
             Files.newInputStream(archive).use { context.getBean(DataBackupService::class.java).importSite(it, null) }
+            println("PROGRESS archive restored; building index")
             val jobs = context.getBean(IssueSearchJobs::class.java)
             val changes = context.getBean(IssueSearchChanges::class.java)
             val index = context.getBean(IssueSearchIndex::class.java)
@@ -212,6 +215,7 @@ object IssueSearchQualityProbe {
                 em.createQuery("select count(j) from QueueJob j where j.taskType = 'search.issues.sync' and j.finishedAt is null",
                     Long::class.javaObjectType).singleResult
             }!! > 0)
+            println("PROGRESS index ready; sampling queries")
 
             val issues = context.getBean(IssueRepository::class.java)
             val comments = context.getBean(IssueCommentRepository::class.java)
@@ -224,7 +228,7 @@ object IssueSearchQualityProbe {
             val everything = Specification<Issue> { _, _, cb -> cb.conjunction() }
             val byDate = Sort.by(Sort.Order.desc("createdDate"), Sort.Order.desc("id"))
             fun ids(spec: Specification<Issue>, sort: Sort) =
-                issues.findBy<Issue, List<IssueSearchId>>(spec) { it.sortBy(sort).`as`(IssueSearchId::class.java).all() }.map { it.id }
+                issues.findBy<Issue, List<ProbeIssueId>>(spec) { it.sortBy(sort).`as`(ProbeIssueId::class.java).all() }.map { it.id }
             fun likeAnd(text: String) = text.split(' ').filter { it.isNotBlank() }
                 .fold(readable) { spec, word -> spec.and(IssueSpecification.textSearch(word)) }
 
@@ -251,13 +255,17 @@ object IssueSearchQualityProbe {
                 identifierPool[type].orEmpty().shuffled(Random(java.util.Objects.hash(seed, type, "identifierIssues"))).take(sample)
             }
 
+            fun indexedIds(text: String): List<Long> = checkNotNull(index.withSearch(text) { search ->
+                buildList { search.forEachBatch { batch -> addAll(batch.map { it.id }) } }
+            })
+
             // Ordered matches per engine: the full result list, not only the first page.
             val engines = linkedMapOf<String, (String) -> List<Long>>(
                 "like" to { text -> ids(readable.and(IssueSpecification.textSearch(text)), byDate) },
                 "likeAnd" to { text -> ids(likeAnd(text), byDate) },
                 "lucene" to { text -> val allowed = ids(readable, Sort.by("id")).toHashSet()
-                    index.search(text).map { it.id }.filter { it in allowed } },
-                "luceneDate" to { text -> val hits = index.search(text).map { it.id }
+                    indexedIds(text).filter { it in allowed } },
+                "luceneDate" to { text -> val hits = indexedIds(text)
                     if (hits.isEmpty()) emptyList() else ids(readable.and(TitleHeads.withIds(hits)), byDate) })
             // First page as served: DB uses the web's date order, Lucene relevance or the same date order.
             val pages = linkedMapOf<String, (String) -> Unit>(
@@ -269,7 +277,16 @@ object IssueSearchQualityProbe {
                     as IssueSearchPage).searchBackend == "lucene") })
 
             data class Outcome(val rank: Int?, val hits: Int, val ms: Double)
-            val outcomes = (cases + identifierSample).map { case ->
+            val total = cases.size + identifierSample.size
+            val started = System.nanoTime()
+            var reported = started
+            println("PROGRESS measuring 0/$total")
+            val outcomes = (cases + identifierSample).mapIndexed { number, case ->
+                val now = System.nanoTime()
+                if (now - reported >= 30_000_000_000L) {
+                    println("PROGRESS measuring $number/$total; elapsed ${(now - started) / 1_000_000_000}s")
+                    reported = now
+                }
                 case to engines.mapValues { (name, engine) ->
                     val matched = tx.execute { engine(case.text) }!!
                     val page = pages.getValue(name)
