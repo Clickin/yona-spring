@@ -14,50 +14,37 @@ import org.apache.lucene.document.*
 import org.apache.lucene.index.*
 import org.apache.lucene.util.QueryBuilder
 import org.apache.lucene.search.*
+import org.apache.lucene.search.highlight.Highlighter
+import org.apache.lucene.search.highlight.QueryScorer
+import org.apache.lucene.search.highlight.SimpleHTMLEncoder
+import org.apache.lucene.search.highlight.SimpleHTMLFormatter
 import org.apache.lucene.store.FSDirectory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.io.Reader
 import java.nio.file.Path
-import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.regex.Pattern
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
-data class IssueSearchDocument(val id: Long, val title: String, val body: String, val comments: List<Pair<Long, String>>) {
-    fun digest(): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        (listOf(title, body) + comments.flatMap { listOf(it.first.toString(), it.second) }).forEach {
-            val bytes = it.toByteArray(Charsets.UTF_8)
-            digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.size).array())
-            digest.update(bytes)
-        }
-        return java.util.HexFormat.of().formatHex(digest.digest())
-    }
-}
-
-data class IssueIndexHit(val id: Long, val digest: String, val auxiliaryOnly: Boolean = false)
-
 /** One pinned reader; request working sets and SQL candidate lists never exceed BATCH_SIZE. */
-class IssueIndexSearch internal constructor(private val searcher: IndexSearcher, private val query: Query) {
-    companion object { const val BATCH_SIZE = 200 }
+internal class LuceneIssueIndexSearch(private val searcher: IndexSearcher, private val query: Query,
+    private val highlightQuery: Query, private val analyzer: Analyzer) : IssueIndexSearch {
+    override fun isEmpty(): Boolean = searcher.search(query, 1).scoreDocs.isEmpty()
 
-    fun isEmpty(): Boolean = searcher.search(query, 1).scoreDocs.isEmpty()
-
-    fun forEachBatch(consume: (List<IssueIndexHit>) -> Unit) {
+    override fun forEachBatch(consume: (List<IssueIndexHit>) -> Unit) {
         var after: ScoreDoc? = null
         do {
-            val page = searcher.searchAfter(after, query, BATCH_SIZE).scoreDocs
+            val page = searcher.searchAfter(after, query, IssueIndexSearch.BATCH_SIZE).scoreDocs
             if (page.isNotEmpty()) consume(page.map(::hit))
             after = page.lastOrNull()
         } while (after != null)
     }
 
-    fun matching(ids: List<Long>): Map<Long, IssueIndexHit> {
-        require(ids.size <= BATCH_SIZE)
+    override fun matching(ids: List<Long>): Map<Long, IssueIndexHit> {
+        require(ids.size <= IssueIndexSearch.BATCH_SIZE)
         if (ids.isEmpty()) return emptyMap()
         val filtered = BooleanQuery.Builder().add(query, BooleanClause.Occur.MUST)
             .add(TermInSetQuery("id", ids.map { org.apache.lucene.util.BytesRef(it.toString()) }),
@@ -65,18 +52,31 @@ class IssueIndexSearch internal constructor(private val searcher: IndexSearcher,
         return searcher.search(filtered, ids.size).scoreDocs.map(::hit).associateBy { it.id }
     }
 
+    override fun snippets(sources: List<IssueSearchDocument>): Map<Long, IssueSearchSnippet> =
+        sources.mapNotNull { source -> snippet(source)?.let { source.id to it } }.toMap()
+
+    private fun snippet(source: IssueSearchDocument): IssueSearchSnippet? {
+        val fields = listOf(Triple("title", source.title, null), Triple("body", source.body, null)) +
+            source.comments.map { Triple("comments", it.second, it.first) }
+        for ((field, value, commentId) in fields) {
+            val highlighter = Highlighter(SimpleHTMLFormatter("<mark>", "</mark>"), SimpleHTMLEncoder(), QueryScorer(highlightQuery, field))
+            highlighter.maxDocCharsToAnalyze = value.length
+            val fragment = highlighter.getBestFragment(analyzer, field, value)
+            if (fragment != null) return IssueSearchSnippet(fragment, commentId)
+        }
+        return null
+    }
+
     private fun hit(score: ScoreDoc): IssueIndexHit {
         val document = searcher.storedFields().document(score.doc, setOf("id", "digest"))
         return IssueIndexHit(document.get("id").toLong(), document.get("digest"), score.score == 0f)
     }
 }
-data class IssueIndexStatus(val ready: Boolean = false, val indexed: Long = 0, val scanned: Long = 0,
-    val running: Boolean = false, val lastSuccess: Instant? = null, val error: String? = null)
-
 /** Single-node index. Only queue workers write; requests share the last committed reader. */
 @Component
-@ConditionalOnProperty(name = ["yona.search.backend"], havingValue = "lucene")
-class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/search/issues}") path: String) {
+@ConditionalOnLuceneSearch
+class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/search/issues}") path: String) : IssueSearchEngine {
+    override val name = SearchBackends.LUCENE
     private val path = Path.of(path)
     private val readers = ReentrantReadWriteLock()
     private var directory: FSDirectory? = null
@@ -114,7 +114,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
         val ACRONYM_BOUNDARY = Pattern.compile("([A-Z])(?=[A-Z][a-z])")
         val IDENTIFIER = Regex("""[A-Za-z0-9]+(?:[._/-][A-Za-z0-9]+)*""")
     }
-    @Volatile final var status = IssueIndexStatus()
+    @Volatile final override var status = IssueIndexStatus()
         private set
 
     /**
@@ -176,7 +176,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             .add(BoostQuery(ConstantScoreQuery(fallback.build()), 0f), BooleanClause.Occur.SHOULD).build()
     }
 
-    fun <T> withSearch(text: String, titleHead: String? = null, action: (IssueIndexSearch) -> T): T? {
+    override fun <T> withSearch(text: String, titleHead: String?, action: (IssueIndexSearch) -> T): T? {
         val snapshot = readers.read {
             if (!status.ready) return null
             checkNotNull(reader).also { it.incRef() }
@@ -186,13 +186,13 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
             val filtered = if (titleHead == null) query else BooleanQuery.Builder()
                 .add(query, BooleanClause.Occur.MUST)
                 .add(TermQuery(Term("titleHead", titleHead)), BooleanClause.Occur.FILTER).build()
-            return action(IssueIndexSearch(IndexSearcher(snapshot), filtered))
+            return action(LuceneIssueIndexSearch(IndexSearcher(snapshot), filtered, query, analyzer))
         } finally { snapshot.decRef() }
     }
 
     /** Each retry scans the current DB, never a historical payload. Publish only a complete pass. */
     @Synchronized
-    fun synchronize(batch: (Long) -> List<IssueSearchDocument>, checkpoint: (Long) -> Unit = {}) {
+    override fun synchronize(batch: (Long) -> List<IssueSearchDocument>, checkpoint: (Long) -> Unit) {
         status = status.copy(running = true, scanned = 0, error = null)
         try {
             val dir = directory ?: FSDirectory.open(path).also { directory = it }
@@ -242,7 +242,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
 
     /** Update only the durable dirty IDs. Missing rows are tombstones, not stale payloads. */
     @Synchronized
-    fun update(ids: List<Long>, load: (List<Long>) -> List<IssueSearchDocument>, checkpoint: (Long) -> Unit = {}) {
+    override fun update(ids: List<Long>, load: (List<Long>) -> List<IssueSearchDocument>, checkpoint: (Long) -> Unit) {
         status = status.copy(running = true, scanned = 0, error = null)
         try {
             val dir = checkNotNull(directory) { "Initial index is not built" }
@@ -277,7 +277,7 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
 
     @PreDestroy
     @Synchronized
-    fun close() = readers.write {
+    override fun close() = readers.write {
         status = status.copy(ready = false)
         reader?.close()
         reader = null

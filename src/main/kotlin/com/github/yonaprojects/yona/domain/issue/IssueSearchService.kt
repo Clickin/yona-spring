@@ -2,10 +2,6 @@ package com.github.yonaprojects.yona.domain.issue
 
 import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.user.User
-import org.apache.lucene.search.highlight.Highlighter
-import org.apache.lucene.search.highlight.QueryScorer
-import org.apache.lucene.search.highlight.SimpleHTMLEncoder
-import org.apache.lucene.search.highlight.SimpleHTMLFormatter
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
@@ -26,13 +22,13 @@ class IssueSearchService(
     private val comments: IssueCommentRepository,
     private val accessControl: AccessControl,
     @Value("\${yona.search.backend:db}") val backend: String = "db",
-    private val index: IssueSearchIndex? = null
+    private val index: IssueSearchEngine? = null
 ) {
-    init { require(backend in setOf("db", "lucene")) { "yona.search.backend must be db or lucene" } }
+    init { require(backend in SearchBackends.ALL) { "yona.search.backend must be one of ${SearchBackends.ALL.joinToString()}" } }
 
     fun search(conditions: Specification<Issue>, text: String?, user: User?, pageable: Pageable,
                titleHead: String? = null): Page<Issue> {
-        val fullText = backend == "lucene" && (!text.isNullOrBlank() || titleHead != null)
+        val fullText = SearchBackends.isIndexed(backend) && (!text.isNullOrBlank() || titleHead != null)
         if (fullText) {
             try {
                 index?.withSearch(text.orEmpty(), titleHead) { search ->
@@ -51,7 +47,7 @@ class IssueSearchService(
 
     private fun matchedPage(conditions: Specification<Issue>, text: String?, user: User?, pageable: Pageable,
                             titleHead: String?, search: IssueIndexSearch?): IssueSearchPage {
-        val backend = if (search == null) "db" else "lucene"
+        val backend = if (search == null) SearchBackends.DB else checkNotNull(index).name
         if (search?.isEmpty() == true) return IssueSearchPage(emptyList(), pageable, 0, backend)
         val allowed = conditions.and(accessControl.readableIssues(user))
         val selected = mutableListOf<Long>()
@@ -98,32 +94,17 @@ class IssueSearchService(
             issues.findAll(allowed.and(TitleHeads.withIds(ids)))
         }.associateBy { it.id!! }
         val page = selected.mapNotNull { byId[it] }
-        val snippets = if (search == null || text.isNullOrBlank()) emptyMap() else page.chunked(200).flatMap { batch ->
+        val snippets = if (search == null || text.isNullOrBlank()) emptyMap() else page.chunked(IssueIndexSearch.BATCH_SIZE).flatMap { batch ->
             val byIssue = comments.findForSearch(batch.map { it.id!! }).groupBy { it.issue.id }
-            batch.mapNotNull { issue ->
+            val current = batch.mapNotNull { issue ->
                 val source = IssueSearchDocument(issue.id!!, issue.title, issue.body.orEmpty(),
                     byIssue[issue.id].orEmpty().map { it.id!! to it.contents })
                 // Never attach a stale snippet, comment link, or offsets from an identifier-only match.
                 val hit = selectedHits.getValue(issue.id!!)
-                if (source.digest() != hit.digest || hit.auxiliaryOnly) null
-                else snippet(source, text)?.let { issue.id!! to it }
+                source.takeUnless { source.digest() != hit.digest || hit.auxiliaryOnly }
             }
+            search.snippets(current).toList()
         }.toMap()
         return IssueSearchPage(page, pageable, total, backend, snippets)
-    }
-
-    private fun snippet(source: IssueSearchDocument, text: String): IssueSearchSnippet? {
-        if (text.isBlank()) return null
-        val engine = checkNotNull(index)
-        val query = engine.query(text)
-        val fields = listOf(Triple("title", source.title, null), Triple("body", source.body, null)) +
-            source.comments.map { Triple("comments", it.second, it.first) }
-        for ((field, value, commentId) in fields) {
-            val highlighter = Highlighter(SimpleHTMLFormatter("<mark>", "</mark>"), SimpleHTMLEncoder(), QueryScorer(query, field))
-            highlighter.maxDocCharsToAnalyze = value.length
-            val fragment = highlighter.getBestFragment(engine.analyzer, field, value)
-            if (fragment != null) return IssueSearchSnippet(fragment, commentId)
-        }
-        return null
     }
 }

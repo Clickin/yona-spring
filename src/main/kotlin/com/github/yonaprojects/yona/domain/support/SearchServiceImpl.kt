@@ -7,6 +7,7 @@ import com.github.yonaprojects.yona.domain.organization.Organization
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.issue.IssueRepository
+import com.github.yonaprojects.yona.domain.issue.SearchBackends
 import com.github.yonaprojects.yona.domain.issue.IssueCommentRepository
 import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.board.PostingCommentRepository
@@ -145,7 +146,7 @@ class SearchServiceImpl(
     }
 
     private fun indexedIssues(keyword: String, projectIds: List<Long>, user: User?, pageable: Pageable): org.springframework.data.domain.Page<com.github.yonaprojects.yona.domain.issue.Issue>? {
-        val service = issueSearchService?.takeIf { it.backend == "lucene" } ?: return null
+        val service = issueSearchService?.takeIf { SearchBackends.isIndexed(it.backend) } ?: return null
         val spec = org.springframework.data.jpa.domain.Specification<com.github.yonaprojects.yona.domain.issue.Issue> { root, _, _ ->
             root.get<Project>("project").get<Long>("id").`in`(projectIds)
         }

@@ -6,7 +6,6 @@ import org.hibernate.engine.spi.SessionFactoryImplementor
 import org.hibernate.event.service.spi.EventListenerRegistry
 import org.hibernate.event.spi.*
 import org.springframework.beans.factory.SmartInitializingSingleton
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
@@ -29,7 +28,7 @@ data class SearchChangeWindow(val first: Long?, val last: Long?) {
 
 /** Append-only events commit with the source mutation, without locking any shared bookkeeping row. */
 @Component
-@ConditionalOnProperty(name = ["yona.search.backend"], havingValue = "lucene")
+@ConditionalOnIndexedSearch
 class IssueSearchChanges(private val em: EntityManager, private val emf: EntityManagerFactory,
     transactions: PlatformTransactionManager
 ) : SmartInitializingSingleton, PostInsertEventListener, PostUpdateEventListener, PostDeleteEventListener {

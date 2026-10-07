@@ -1,6 +1,7 @@
 package com.github.yonaprojects.yona.web
 
 import com.github.yonaprojects.yona.domain.issue.IssueSearchService
+import com.github.yonaprojects.yona.domain.issue.SearchBackends
 import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.enumeration.EventType
@@ -182,7 +183,7 @@ class IssueViewController(
         }
 
         val sort = if (orderBy == "relevance") {
-            if (issueSearchService.backend == "lucene" && !filter.isNullOrBlank()) Sort.unsorted()
+            if (SearchBackends.isIndexed(issueSearchService.backend) && !filter.isNullOrBlank()) Sort.unsorted()
             else Sort.by(Sort.Direction.DESC, "createdDate")
         } else if (orderDir.equals("asc", ignoreCase = true)) {
             Sort.by(Sort.Direction.ASC, orderBy)
@@ -297,8 +298,8 @@ class IssueViewController(
         model.addAttribute("filter", searchText)
         val searchPage = issuePage as? com.github.yonaprojects.yona.domain.issue.IssueSearchPage
         model.addAttribute("searchSnippets", searchPage?.snippets.orEmpty())
-        model.addAttribute("searchFallback", issueSearchService.backend == "lucene" && (!searchText.isNullOrBlank() || titleHead != null) && searchPage?.searchBackend == "db")
-        model.addAttribute("fullTextSearch", issueSearchService.backend == "lucene")
+        model.addAttribute("searchFallback", SearchBackends.isIndexed(issueSearchService.backend) && (!searchText.isNullOrBlank() || titleHead != null) && searchPage?.searchBackend == "db")
+        model.addAttribute("fullTextSearch", SearchBackends.isIndexed(issueSearchService.backend))
         model.addAttribute("orderBy", orderBy)
         model.addAttribute("orderDir", orderDir)
         model.addAttribute("openIssuesCount", openIssuesCount)

@@ -4,7 +4,6 @@ import com.github.yonaprojects.yona.queue.Queue
 import com.github.yonaprojects.yona.queue.QueueStatus
 import com.github.yonaprojects.yona.queue.TaskDefinition
 import jakarta.persistence.EntityManager
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.annotation.Scheduled
@@ -14,8 +13,8 @@ import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty(name = ["yona.search.backend"], havingValue = "lucene")
-class IssueSearchTasks(private val index: IssueSearchIndex, private val em: EntityManager,
+@ConditionalOnIndexedSearch
+class IssueSearchTasks(private val index: IssueSearchEngine, private val em: EntityManager,
     private val changes: IssueSearchChanges,
     transactions: PlatformTransactionManager) {
     private val read = TransactionTemplate(transactions).apply { isReadOnly = true }
@@ -62,7 +61,7 @@ class IssueSearchTasks(private val index: IssueSearchIndex, private val em: Enti
 
 /** One fixed window from the oldest committed pending event; idle polls never scan issue content. */
 @Service
-@ConditionalOnProperty(name = ["yona.search.backend"], havingValue = "lucene")
+@ConditionalOnIndexedSearch
 class IssueSearchJobs(private val queue: Queue, private val em: EntityManager,
     private val changes: IssueSearchChanges,
     @org.springframework.beans.factory.annotation.Value("\${yona.search.batch-window-millis:2000}") private val windowMillis: Long = 2000,
