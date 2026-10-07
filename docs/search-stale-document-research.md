@@ -1,12 +1,12 @@
 # 검색 결과의 stale 문서 처리 조사
 
-조사일: 2026-10-02. Gitea v1.24.6, Forgejo v16.0.0, GitLab v18.4.0-ee의 공식 소스를 읽었다. 아래의 “hash 재검증 없음”은 **명시한 조회 경로에서 본문·댓글 전체를 다시 읽어 색인 내용과 비교하는 코드가 없다는 뜻**이며, 제품 전체의 모든 검색 경로를 증명한 것은 아니다. 조사 작업에서는 구현을 수정하지 않았다.
+조사일: 2026-10-02. Gitea v1.24.6, Forgejo v16.0.0, GitLab v18.4.0-ee의 공식 소스를 읽었다. 아래의 “hash 재검증 없음”은 **명시한 조회 경로에서 본문·댓글 전체를 다시 읽어 색인 내용과 비교하는 코드가 없다는 뜻**이며, 제품 전체의 모든 검색 경로를 증명한 것은 아니다.
 
 ## 결론
 
 **모든 검색 hit의 현재 본문·댓글 hash를 매번 대조할 필요는 없다는 직접적인 선례가 있다.** Gitea의 저장소 이슈 목록은 전문 검색으로 후보 ID를 얻고, 현재 DB 조건으로 count와 페이지를 만든다. GitLab은 색인에서 페이지를 정한 뒤 DB record를 읽고, 현재 권한으로 마지막 접근 검사를 수행한다. 두 경로 모두 내용 일치 여부와 현재 접근 권한을 별개로 다룬다. [Gitea 목록](https://github.com/go-gitea/gitea/blob/v1.24.6/routers/web/repo/issue_list.go#L539-L644), [GitLab 응답 매핑](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/lib/search/elastic/response_mapper.rb#L15-46), [GitLab 최종 권한 검사](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/app/services/search_service.rb#L132-160)
 
-Yona에는 **현재 DB의 존재·ACL·메타 조건으로 count와 페이지를 결정하고, 전문 검색의 내용 일치는 비동기 색인 반영을 따르는 정책**을 권한다. 본문·댓글 hash는 최종 페이지의 snippet을 붙일지 결정할 때만 사용하면 된다. 아래 비교에 근거한 Yona 설계 판단이며, 외부 제품이 이 snippet 정책까지 그대로 사용한다는 뜻은 아니다.
+Yona는 **현재 DB의 존재·ACL·메타 조건으로 count와 페이지를 결정하고, 전문 검색의 내용 일치는 비동기 색인 반영을 따르는 정책**을 쓴다. 본문·댓글 hash는 최종 페이지의 snippet을 붙일지 결정할 때만 사용한다. 아래 비교에 근거한 Yona 설계 판단이며, 외부 제품이 이 snippet 정책까지 그대로 사용한다는 뜻은 아니다.
 
 ## 조회 정책 비교
 
@@ -53,16 +53,16 @@ GitLab work item reference도 현재 SQL record를 preload하고 존재하면 up
 
 Elasticsearch의 기본 `refresh=false`는 이미 전달된 쓰기가 즉시 검색에 보인다는 보장이 없다는 뜻이고, `wait_for`는 그 쓰기의 가시성을 기다린다. 어느 쪽도 애플리케이션 DB 변경을 자동으로 수집하거나 SQL ACL을 재검사하지 않는다. delete version 보관도 임시이므로 오래된 작업의 재실행·삭제 후 재등장 문제는 앱 동기화 정책까지 검토해야 한다. [refresh](https://www.elastic.co/docs/reference/elasticsearch/rest-apis/refresh-parameter), [Delete API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-delete)
 
-## Yona에 대한 최소 정책 제안
+## Yona의 정책
 
-다음은 위 사례를 참고한 권고다. GitLab처럼 index total을 그대로 사용하는 수준까지 완화할 필요는 없다.
+다음은 위 사례를 참고한 정책이다. GitLab처럼 index total을 그대로 사용하는 수준까지 완화하지는 않는다.
 
 1. **검색 후보의 현재 DB 존재·ACL·메타 조건은 count와 page보다 먼저 적용한다.** DB에서 삭제한 이슈, 접근 불가로 바뀐 이슈, 담당자·작성자·라벨·상태 조건에서 벗어난 이슈를 결과와 count에서 제거한다. title-head처럼 현재 제목에 대한 명시적 조건도 DB 기준을 유지한다.
-2. **내용 일치는 index snapshot 기준으로 정의한다.** 수정 직후 이전 단어 검색에 잠시 남고 새 단어 검색에는 늦게 나타날 수 있다. hash가 달라졌다는 이유로 모든 결과를 숨기는 정책은 제거할 수 있다. 현재 제목·본문은 DB에서 표시하므로 잠시 “검색어가 보이지 않는 결과”가 생길 수 있음을 수용하는 결정이다.
+2. **내용 일치는 index snapshot 기준으로 정의한다.** 수정 직후 이전 단어 검색에 잠시 남고 새 단어 검색에는 늦게 나타날 수 있다. hash가 달라졌다는 이유로 결과를 숨기지 않는다. 현재 제목·본문은 DB에서 표시하므로 잠시 “검색어가 보이지 않는 결과”가 생길 수 있음을 수용한다.
 3. **snippet은 최종 페이지에서만 검증한다.** 그 페이지의 현재 본문·댓글로 digest를 만들고 hit digest와 다르면 snippet·comment anchor를 생략한다. 같을 때 현재 DB 내용으로 escape한 snippet을 만든다. stale 결과를 통째로 숨기지 않으면서 오래된 댓글 내용·링크를 보여주지 않는 보수적인 정책이다. 페이지당 모든 댓글 읽기는 남으므로 댓글이 매우 많은 단일 이슈의 비용까지 사라지는 것은 아니다.
 4. **page-only 검증으로 결과를 삭제하지 않는다.** 페이지를 먼저 확정한 뒤 stale hit를 제거하면 짧은 페이지와 total 불일치가 생긴다. 전체 freshness를 보장하지 못하면서 pagination까지 불안정해진다. page-only 검증은 표시 보조정보인 snippet의 생성 여부에만 쓰는 편이 명확하다.
 5. **동기화의 안전성은 유지한다.** durable dirty ID, 실행 시 현재 DB 재조회, 삭제 처리, generation 조건 ack와 재시도를 줄이지 않는다. 조회 hash 검증은 누락된 update를 복구하지 못하며 새로운 검색어의 false negative도 해결하지 못한다.
 
 이 정책의 total은 “현재 DB 조건·권한을 만족하는 index text hit의 수”다. “현재 DB 본문을 지금 전문 분석했을 때 일치하는 수”를 약속하지 않는다. 같은 요청 안에서도 DB isolation과 변경 경쟁의 한계가 있으므로 모든 단계가 하나의 실시간 snapshot이라고 표현하지 않는다.
 
-검증은 수정 직후 old/new query, 댓글 삭제 후 snippet·anchor, 이슈 삭제, 권한 철회, 메타 조건 변경, 다음 색인 후 수렴을 포함한다. 성능 비교에서는 hit 수가 늘어날 때 댓글 조회량이 전체 hit에서 최종 page로 줄었는지 확인한다. 이 조사 문서는 해당 변경의 테스트 결과나 실측 수치를 주장하지 않는다.
+검증 항목은 수정 직후 old/new query, 댓글 삭제 후 snippet·anchor, 이슈 삭제, 권한 철회, 메타 조건 변경, 다음 색인 후 수렴이다. 댓글 조회량은 전체 hit가 아니라 최종 page 기준이어야 한다. 테스트 결과와 실측 수치는 [PoC 문서](search-poc.md)와 [리소스 측정](search-resource-measurement.md)에 있다.

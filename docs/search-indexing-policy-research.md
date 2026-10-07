@@ -1,10 +1,10 @@
 # 검색 색인 변경 수집·반영 정책 조사
 
-조사일: 2026-10-02. 후속 구현: [고정 창 PoC](search-poc.md)로 전환했으며, 아래의 “현재 2초/10초”는 조사 당시 상태를 설명한다. 공식 문서와 버전 고정 공식 소스를 기준으로 정리했다. 최신 문서의 설정값과 과거 태그의 구현을 같은 버전으로 간주하지 않는다. 이번 작업은 조사이며 PoC 구현은 변경하지 않았다.
+조사일: 2026-10-02. 공식 문서와 버전 고정 공식 소스를 기준으로 정리했다. 최신 문서의 설정값과 과거 태그의 구현을 같은 버전으로 간주하지 않는다. 채택한 정책은 [고정 창 PoC](search-poc.md)에 있다.
 
 ## 판단
 
-Yona와 직접 비교하기 좋은 Gitea·Forgejo는 **전역 큐에서 짧은 고정 시간 동안 항목을 모으고, 수량이 차면 먼저 처리하는 방식**이다. 코드 이름에는 debounce가 있지만, 새 변경마다 타이머를 뒤로 미루는 trailing debounce는 아니다. 현재 Yona의 전역 범위와 durable 변경 집합은 유지할 만하다. 배치 시작 정책은 현재의 `마지막 변경 + 2초 / 최초 변경 + 10초`와 **`최초 변경 + 2초` 고정 창**을 비교하는 것이 좋다. 2초·10초 자체는 외부 제품에서 검증된 표준값이 아니라 PoC 가정이다. 아래 소스 비교에 근거한 설계 판단이다.
+Yona와 직접 비교하기 좋은 Gitea·Forgejo는 **전역 큐에서 짧은 고정 시간 동안 항목을 모으고, 수량이 차면 먼저 처리하는 방식**이다. 코드 이름에는 debounce가 있지만, 새 변경마다 타이머를 뒤로 미루는 trailing debounce는 아니다. Yona는 전역 범위와 durable 변경 집합을 유지하고, 배치 시작 정책으로 **`최초 변경 + 2초` 고정 창**을 쓴다. 2초는 외부 제품에서 검증된 표준값이 아니라 PoC 가정이다. 아래 소스 비교에 근거한 설계 판단이다.
 
 ## 구분해야 할 정책
 
@@ -64,16 +64,14 @@ Meilisearch는 비동기 작업을 영속 큐에 두고, 재시작 때 처리 �
 
 Solr는 hard commit과 검색 가시성을 위한 soft commit을 구분한다. `maxTime`은 가장 오래된 미반영 update부터의 시간, `maxDocs`는 이전 commit 이후 update 수로 조건을 정한다. `commitWithin`은 update에 시간 제약을 부여하며 기본적으로 soft commit을 사용한다. 문서의 10초 설정 예제는 모든 배포의 기본값이 아니다. [Commits and transaction logs](https://solr.apache.org/guide/solr/latest/configuration-guide/commits-transaction-logs.html)
 
-## Yona에 적용할 판단
+## Yona의 선택
 
-현재 코드는 원본 변경과 함께 dirty ID를 DB에 기록하고, 전역 `last + 2초` 또는 `first + 10초` 조건을 500ms마다 확인한다. 이미 진행 중인 sync job은 재사용하고, 처리한 generation만 ack한다. 이 조사에서는 구현을 그대로 두었다. [현재 debounce·job 코드](https://github.com/Clickin/yona-spring/blob/c1d6aa89fe92cfa01d63c190b47fde3e654eb6e8/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchJobs.kt), [현재 변경 집합·window 코드](https://github.com/Clickin/yona-spring/blob/c1d6aa89fe92cfa01d63c190b47fde3e654eb6e8/src/main/kotlin/com/github/yonaprojects/yona/domain/issue/IssueSearchChanges.kt)
+Yona는 원본 변경과 함께 dirty ID를 DB에 기록하고, 전역 `최초 변경 + 2초` 조건을 500ms마다 확인한다. 이미 진행 중인 sync job은 재사용하고, 처리한 generation만 ack한다. 아래 값과 우선순위는 외부 제품의 보장값이 아니라 Yona에 대한 판단이다.
 
-추천하는 다음 비교 실험은 다음과 같다. 아래 값과 우선순위는 외부 제품의 보장값이 아니라 Yona에 대한 판단이다.
-
-1. **전역 고정 창을 우선 비교한다.** 첫 dirty 발생 후 2초에 실행 가능하게 하고 새 변경이 deadline을 미루지 않게 한다. 읽기가 많고 쓰기가 드물다면 trailing 방식과 묶이는 건수는 비슷하면서 연속 쓰기 때 지연을 예측하기 쉽다. 더 많은 병합의 가치가 확인되면 현재 2초/10초 방식과 비교해 선택한다.
+1. **전역 고정 창을 쓴다.** 첫 dirty 발생 후 2초에 실행 가능하게 하고 새 변경이 deadline을 미루지 않게 한다. 읽기가 많고 쓰기가 드물다면 trailing 방식과 묶이는 건수는 비슷하면서 연속 쓰기 때 지연을 예측하기 쉽다.
 2. **시간 정책과 ID 중복 제거는 분리한다.** 같은 ID는 최신 상태를 한 번 읽도록 유지한다. 이를 위해 이슈별 timer가 필요하지 않다. 독립 job 수를 줄이는 전역 정책과 양립한다.
-3. **durable 변경 집합과 generation ack는 유지한다.** 배치 정책을 바꿔도 원본 commit 직후 종료·색인 처리 중 재수정·실패 재시도의 안전성은 별도 요구사항이다.
-4. **수량 조기 실행은 측정 후 추가한다.** Gitea의 20건·100ms를 그대로 복사하지 않는다. Yona에서 대량 import나 연속 수정이 있을 때 batch 크기, commit 비용, 큐 대기가 문제가 되는지 먼저 본다.
-5. **등록 지연과 검색 반영 지연을 따로 측정한다.** 현재 max-wait 10초는 작업 등록을 시도할 시점의 목표다. polling 오차, 기존 job·재시도 대기, DB 조회, 색인 처리·commit 시간이 더해지므로 검색 완료 SLA가 아니다.
+3. **durable 변경 집합과 generation ack를 유지한다.** 원본 commit 직후 종료·색인 처리 중 재수정·실패 재시도의 안전성은 배치 정책과 별도 요구사항이다.
+4. **수량 조기 실행은 넣지 않았다.** Gitea의 20건·100ms를 그대로 복사하지 않는다. 대량 import나 연속 수정에서 batch 크기, commit 비용, 큐 대기가 문제가 되는지 먼저 측정해야 한다.
+5. **등록 지연과 검색 반영 지연은 별개다.** 2초는 작업 등록을 시도할 시점의 목표다. polling 오차, 기존 job·재시도 대기, DB 조회, 색인 처리·commit 시간이 더해지므로 검색 완료 SLA가 아니다.
 
-비교 지표는 `원본 commit → 검색 가능` p50/p95/p99, 배치당 고유 ID 수, 초당 Lucene commit 수, idle DB 쿼리 수, dirty oldest age와 backlog면 충분하다. 야간에 변경이 없을 때 신규 색인 job과 전체 issue 조회가 없는지도 확인한다. 실제 Yona 데이터에서 이 측정은 아직 수행하지 않았다.
+향후 비교 지표는 `원본 commit → 검색 가능` p50/p95/p99, 배치당 고유 ID 수, 초당 Lucene commit 수, idle DB 쿼리 수, dirty oldest age와 backlog면 충분하다. 야간에 변경이 없을 때 신규 색인 job과 전체 issue 조회가 없는지도 확인한다. 실제 Yona 데이터에서 이 측정은 아직 수행하지 않았다.

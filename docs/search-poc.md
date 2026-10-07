@@ -4,16 +4,16 @@
 
 ## 전체 색인과 검색 요청
 
-검색 요청마다 메모리 색인을 만들던 첫 PoC를 **전체 이슈를 담는 공유 디스크 색인**으로 교체했다. 이전 방식도 조건에 맞는 결과를 찾을 수는 있었지만 요청마다 DB 조회와 분석을 반복했고, 관련도 통계가 필터에 따라 달라졌다. 현재 검색 요청은 이미 커밋된 색인을 읽기만 한다.
+**전체 이슈를 담는 공유 디스크 색인**을 쓴다. 검색 요청은 이미 커밋된 색인을 읽기만 하므로 요청마다 DB 조회와 분석을 반복하지 않고, 관련도 통계가 필터에 따라 달라지지도 않는다.
 
 - 공개·비공개를 포함한 모든 프로젝트의 이슈 제목·본문·댓글을 색인한다. 검색자의 접근 권한으로 색인 범위를 제한하지 않는다.
-- Lucene 색인은 파생 데이터다. 원본은 항상 DB이며, `yona.search.index-dir`에 저장한다.
+- 색인은 파생 데이터다. 원본은 항상 DB다. `lucene`은 `yona.search.index-dir`의 로컬 디스크에, `elasticsearch`·`opensearch`는 외부 클러스터에 저장한다.
 - 초기 전체 동기화가 끝나야 전문 검색을 사용한다. 재시작 후에도 DB 대조가 끝난 뒤 활성화한다.
-- 색인 형식 버전이 없거나 현재 버전 2와 다르면 기존 지문과 관계없이 전체 재색인한다. 실패 시 이전 commit을 보존한다.
+- 색인 형식 버전이 없거나 현재 버전 3과 다르면 기존 지문과 관계없이 전체 재색인한다. 실패 시 이전 commit을 보존한다.
 - 기존 프로젝트·상태·태그(라벨)·작성자·담당자·마일스톤·댓글 작성자·마감일 조건을 JPA로 적용한다. 일반 Lucene 검색은 현재 이슈 READ 권한도 DB 조건으로 적용한다. DB 정렬이면 DB에서 count·page를 계산하며, 관련도순이면 허용된 ID만 조회해 Lucene 순서에서 page를 정한다. 두 경로 모두 이슈 본문은 해당 페이지에만 읽는다.
 - 텍스트 일치·관련도는 마지막 게시된 색인을 따른다. 수정 직후에는 이전 검색어로 잡히거나 새 검색어로 아직 잡히지 않을 수 있다. 전체 건수는 **색인 hit 중 현재 DB에 존재하고 조건·권한을 통과한 이슈 수**다. 최신 본문을 다시 검색한 건수라는 의미는 아니다.
 - 제목·본문은 DB에서 읽으며, 최종 페이지에만 댓글 조회와 지문 비교를 수행한다. 색인과 내용이 다르면 그 결과의 스니펫·댓글 링크를 생략한다. 삭제된 이슈와 권한을 잃은 이슈는 페이지·건수에서 제외한다. 모두 해당 검색 트랜잭션에서 관측한 DB 상태 기준이다.
-- 이 정책은 [stale 문서 사례 조사](search-stale-document-research.md)에 근거한다. 전체 hit의 본문·댓글 지문을 매 요청 재검증하던 정책을 변경했다. 첫 변경 후 2초는 작업 등록 기준이며, 장애·큐 지연 중에는 텍스트 불일치가 더 오래 지속될 수 있다.
+- 이 정책은 [stale 문서 사례 조사](search-stale-document-research.md)에 근거한다. 전체 hit의 본문·댓글 지문은 검증하지 않는다. 첫 변경 후 2초는 작업 등록 기준이며, 장애·큐 지연 중에는 텍스트 불일치가 더 오래 지속될 수 있다.
 
 Lucene의 [`IndexWriter` 문서](https://lucene.apache.org/core/9_12_3/core/org/apache/lucene/index/IndexWriter.html)에 따른 커밋·롤백과 reader 교체를 사용한다. 작업 도중의 부분 색인은 요청에 노출하지 않고, 성공한 동기화의 커밋을 게시한다.
 
@@ -44,8 +44,8 @@ Lucene의 [`IndexWriter` 문서](https://lucene.apache.org/core/9_12_3/core/org/
 ```yaml
 yona:
   search:
-    backend: lucene                 # 기본 db
-    index-dir: ./data/search/issues # 단일 Yona 노드의 로컬 디스크
+    backend: lucene                 # db(기본) | lucene | elasticsearch | opensearch
+    index-dir: ./data/search/issues # lucene 전용. 단일 Yona 노드의 로컬 디스크
     batch-window-millis: 2000      # 최초 변경 기준; 후속 변경으로 연장하지 않음
     poll-millis: 500               # 변경 시각 한 행만 확인
     initial-delay-millis: 1000
@@ -69,6 +69,33 @@ curl --get -H "Authorization: Bearer $YONA_TOKEN" \
 ```
 
 서버 포트는 기존 설정을 따른다. 웹은 숫자 ID 조건을, REST `author`·`assignee`는 기존 로그인 ID 조건을 유지한다. `labelIds` 내에서는 기존 OR 의미를 유지하고, 종류가 다른 조건은 AND로 결합한다. REST는 `milestoneId`, `commenterId`, `dueDate`, `titleHead`도 받을 수 있다.
+
+## 외부 검색 엔진 (Elasticsearch·OpenSearch)
+
+`backend`를 `elasticsearch` 또는 `opensearch`로 지정하면 Lucene 대신 외부 클러스터에 색인한다. 두 엔진은 같은 구현을 쓰고 point-in-time API 경로만 다르다. 변경 기록, 고정 배치 창, 큐 작업, DB 권한 판정은 `lucene`과 같다.
+
+```yaml
+yona:
+  search:
+    backend: opensearch
+    elasticsearch:                       # 두 엔진 모두 이 접두사를 쓴다
+      url: http://localhost:9200
+      index: yona-issues                 # alias 이름. 실제 색인은 yona-issues-<시각>
+      username: ""                       # 기본 인증
+      password: ""
+      api-key: ""                        # 지정하면 기본 인증보다 우선
+      index-definition-file: ""          # 색인 정의(JSON) 전체를 교체
+      request-timeout-millis: 10000
+      pit-keep-alive: 1m
+```
+
+- **역할 분담.** 필드·분석기·질의는 Yona가 정한다. 샤드·레플리카·refresh 주기·하드웨어·보안 같은 클러스터 설정은 운영자가 정한다. 기본 색인 정의는 샤드·레플리카를 지정하지 않아 클러스터 기본값을 따른다.
+- **색인 정의를 바꾸려면** `index-definition-file`에 `settings`와 `mappings`를 담은 JSON을 지정한다. 분석기 `yona_korean`·`yona_identifier_index`·`yona_identifier_search`와 필드 `issue_id`, `digest`, `titleHead`, `title`·`body`·`comments`·`*_ident`를 유지해야 한다. 분석 구성을 바꾸면 이 문서의 검색 품질 수치는 적용되지 않는다.
+- **한국어 분석.** 모든 노드에 `analysis-nori` 플러그인이 설치돼 있어야 한다. 없으면 색인 생성이 실패하고 DB 검색을 쓴다. 플러그인을 설치할 수 없는 관리형 서비스에서는 쓸 수 없다.
+- **전체 동기화.** 새 색인을 끝까지 채운 뒤 alias를 한 번에 옮기고 이전 색인을 지운다. 실패하면 새 색인만 지우므로 이전 색인이 그대로 남는다.
+- **검색 요청.** 요청마다 point-in-time을 열어 같은 시점을 읽고 끝나면 닫는다. 엔진에 연결할 수 없거나 응답이 오류면 DB 검색으로 전환한다. 스니펫 강조만 실패하면 결과는 유지하고 스니펫만 뺀다.
+- **검증.** Lucene, OpenSearch 2.19.1, Elasticsearch 8.17.0이 같은 시나리오 9개를 통과한다(`IssueSearchEngineConformanceSpec`). 외부 엔진은 Docker가 필요해서 `YONA_IT_SEARCH_ENGINES=opensearch,elasticsearch`로 켰을 때만 실행한다. REST 요청의 순서와 형식은 Docker 없이 `ElasticIssueSearchEngineSpec`이 검증한다.
+- **측정하지 않은 것.** 외부 엔진의 응답 시간과 검색 품질 수치(재현율·MRR)는 측정하지 않았다. 위 시나리오는 동작이 같은지만 확인한다.
 
 ## 제공 범위
 
@@ -115,11 +142,11 @@ GRADLE
 
 남아 있는 운영 제한:
 
-- 단일 노드 전용이다. 다중 노드용 OpenSearch는 구현하지 않았다.
+- `lucene`은 단일 노드 전용이다. 다중 노드는 `elasticsearch`·`opensearch`를 쓴다. Quickwit은 문서 단위 갱신·삭제가 같지 않아 지원하지 않는다.
 - 전역 변경 시각과 변경 세대는 한 DB 행의 잠금으로 직렬화한다. 쓰기가 많아지는 환경에서는 이 짧은 기록 작업의 경합을 측정해야 한다. 2초 창은 작업 등록 기준이며 큐 대기·색인 실행 시간은 별도다.
 - 일반 Lucene 검색은 DB 권한 조건으로 페이지의 이슈만 읽는다. 관련도순에서 허용된 전체 ID 목록을 읽는 비용과 Lucene 전체 hit 목록 비용은 남는다. 머리말 검색은 후보 ID·제목을 읽어 정확히 판정한 후 페이지의 본문만 읽는다. Lucene 장애 시 DB 대체 경로도 권한 조건과 DB 페이징을 사용한다. 머리말 후보 제목 전체를 검사하는 비용은 남는다. 전체 내보내기처럼 unpaged 요청은 전체 내용을 읽는다. 댓글 조회·지문 비교·snippet 생성은 결과 페이지에 한정한다.
-- H2 회귀 테스트와 MariaDB 10.11의 평가 데이터 복원·검색·증분 색인 측정을 수행했다. 나머지 DB 회귀는 미완료다. 검색 품질은 [별도 문서](search-quality-measurement.md)에서 LIKE와 비교했다. 이슈 4,882건에서 확인한 검색 후처리 병목을 개선했으며, 같은 데이터의 전후 측정은 아래 문서에 기록한다.
+- H2 회귀 테스트와 MariaDB 10.11의 평가 데이터 복원·검색·증분 색인 측정을 수행했다. 나머지 DB 회귀는 미완료다. 검색 품질은 [별도 문서](search-quality-measurement.md)에서 LIKE와 비교했다.
 
-고정 창 전환 후 리소스 측정 방법·결과는 [검색 리소스 측정](search-resource-measurement.md)을 참고한다. 유휴 상태에서도 500ms마다 window 한 행 조회는 남으며, Lucene 갱신·commit·색인 job이 없다는 뜻이지 전체 프로세스의 작업량이 0이라는 뜻은 아니다. 초기 복구 색인은 별도다.
+리소스 측정 방법과 결과는 [검색 리소스 측정](search-resource-measurement.md)을 참고한다. 유휴 상태에서도 500ms마다 window 한 행 조회는 남으며, Lucene 갱신·commit·색인 job이 없다는 뜻이지 전체 프로세스의 작업량이 0이라는 뜻은 아니다. 초기 복구 색인은 별도다.
 
 조회 projection은 Spring Data JPA의 [Specification Fluent API](https://docs.spring.io/spring-data/jpa/reference/jpa/specifications.html)를 사용한다. 별도 검색용 DB 테이블이나 결과 캐시는 추가하지 않았다. 권한 SQL은 `AccessControl.readableIssues`에 기존 READ 판정 옆에 두며, 권한 정책을 변경하면 두 경로와 대조 테스트를 함께 갱신해야 한다.
