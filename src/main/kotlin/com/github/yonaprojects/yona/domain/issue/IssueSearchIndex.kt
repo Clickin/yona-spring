@@ -5,7 +5,8 @@ import org.apache.lucene.analysis.Analyzer
 import org.apache.lucene.analysis.AnalyzerWrapper
 import org.apache.lucene.analysis.core.FlattenGraphFilter
 import org.apache.lucene.analysis.core.LowerCaseFilter
-import org.apache.lucene.analysis.core.WhitespaceTokenizer
+import org.apache.lucene.analysis.pattern.PatternReplaceCharFilter
+import org.apache.lucene.analysis.util.CharTokenizer
 import org.apache.lucene.analysis.miscellaneous.WordDelimiterGraphFilter
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute
 import org.apache.lucene.analysis.ko.KoreanAnalyzer
@@ -17,10 +18,12 @@ import org.apache.lucene.store.FSDirectory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
+import java.io.Reader
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.regex.Pattern
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
@@ -81,8 +84,14 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
     private var reader: DirectoryReader? = null
     private val nori = KoreanAnalyzer()
     private val identifiers = object : Analyzer() {
+        override fun initReader(fieldName: String, reader: Reader): Reader =
+            PatternReplaceCharFilter(ACRONYM_BOUNDARY, "$1 ", reader)
+
         override fun createComponents(fieldName: String): TokenStreamComponents {
-            val tokenizer = WhitespaceTokenizer()
+            val tokenizer = CharTokenizer.fromTokenCharPredicate { code ->
+                code in 'A'.code..'Z'.code || code in 'a'.code..'z'.code || code in '0'.code..'9'.code ||
+                    code == '.'.code || code == '_'.code || code == '/'.code || code == '-'.code
+            }
             val parts = WordDelimiterGraphFilter(tokenizer,
                 WordDelimiterGraphFilter.GENERATE_WORD_PARTS or WordDelimiterGraphFilter.GENERATE_NUMBER_PARTS or
                     WordDelimiterGraphFilter.SPLIT_ON_CASE_CHANGE or WordDelimiterGraphFilter.SPLIT_ON_NUMERICS or
@@ -101,8 +110,9 @@ class IssueSearchIndex(@Value("\${yona.search.index-dir:\${yona.data:data}/searc
     private companion object {
         val FIELDS = listOf("title" to 3f, "body" to 1f, "comments" to 1f)
         const val VERSION_KEY = "yona.issue-search.version"
-        const val VERSION = "2"
-        val IDENTIFIER = Regex("""(?<![\p{L}\p{N}_])[A-Za-z0-9]+(?:[._/-][A-Za-z0-9]+)*(?![\p{L}\p{N}_])""")
+        const val VERSION = "3"
+        val ACRONYM_BOUNDARY = Pattern.compile("([A-Z])(?=[A-Z][a-z])")
+        val IDENTIFIER = Regex("""[A-Za-z0-9]+(?:[._/-][A-Za-z0-9]+)*""")
     }
     @Volatile final var status = IssueIndexStatus()
         private set

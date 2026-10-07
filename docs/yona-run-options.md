@@ -57,6 +57,21 @@ identifier-part matching. The index is single-node derived data, stored under
 `${yona.data}/search/issues` unless `yona.search.index-dir` overrides it. Do not share
 the index directory between server processes. An unavailable index falls back to DB search.
 
+Identifier matching splits acronym boundaries (`getHTTPResponse`) and adjacent Korean
+text (`오류SocketTimeoutException처리`) consistently at indexing and query time.
+Index format 3 requires rebuilding older derived indexes; startup already performs that
+rebuild. Quoted Nori phrases, zero-score identifier fallback and 200-candidate paging
+are unchanged. This does not implement arbitrary substring matching like `%interExcep%`.
+
+The boundary-only transplant from `poc/issue-843-search-ranking` excludes proximity boosts
+and auxiliary BM25 scoring. On 2026-10-07, 22 targeted search tests passed. A real MariaDB
+10.11 run with the same 3,391 queries as the `814c069a9` baseline resolved all 57 identifier
+misses (1,640/1,640 additional identifier cases found), with no previously found target lost.
+Overall recall was 97.83%, MRR 0.383512 and top-20 recall 67.34%; 20 camel-case target ranks
+declined despite aggregate improvements. First-page relevance p50/p95 was 4.291/18.329 ms
+and the index occupied 4,944,547 bytes. These are single-client known-item measurements,
+not arbitrary-substring or concurrent-load guarantees.
+
 Issue/comment transactions append independent rows to `issue_search_change`; they do not
 lock a global search-window row. The worker acknowledges only the exact event IDs visible
 to its snapshot, after publishing the index. A transaction committing out of order stays

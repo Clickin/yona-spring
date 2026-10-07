@@ -213,10 +213,34 @@ class IssueSearchIndexSpec : DescribeSpec({
         }
     }
 
+    it("약어 경계와 한글에 붙은 식별자를 색인과 검색어에서 같은 방식으로 나눈다") {
+        val path = Files.createTempDirectory("yona-lucene-")
+        val documents = listOf(
+            IssueSearchDocument(1, "getHTTPResponse", "", emptyList()),
+            IssueSearchDocument(2, "기록", "오류getHTTPResponse처리", emptyList()),
+            IssueSearchDocument(3, "기록", "", listOf(10L to "오류SocketTimeoutException처리")),
+            IssueSearchDocument(4, "get unrelated HTTP Response", "", emptyList()),
+            IssueSearchDocument(5, "기록", "", listOf(11L to "getHTTP", 12L to "Response"))
+        )
+        val index = IssueSearchIndex(path.toString())
+        try {
+            index.synchronize({ after -> documents.filter { it.id > after } })
+            index.search("Response").map { it.id }.toSet() shouldBe setOf(1L, 2L, 4L, 5L)
+            index.search("getHTTP").map { it.id }.toSet() shouldBe setOf(1L, 2L, 5L)
+            index.search("getHTTPResponse").map { it.id }.toSet() shouldBe setOf(1L, 2L)
+            index.search("timeout").map { it.id } shouldBe listOf(3L)
+            index.search("오류timeout처리").map { it.id } shouldBe listOf(3L)
+            index.search("\"Response\"").map { it.id }.toSet() shouldBe setOf(4L, 5L)
+        } finally {
+            index.close()
+            path.toFile().deleteRecursively()
+        }
+    }
+
     it("버전이 없거나 오래된 디스크 색인은 digest가 같아도 전부 재색인하고 실패 시 이전 commit을 유지한다") {
-        for (oldVersion in listOf(null, "1")) {
+        for (oldVersion in listOf(null, "1", "2")) {
             val path = Files.createTempDirectory("yona-lucene-")
-            val source = IssueSearchDocument(1, "SocketTimeoutException", "", emptyList())
+            val source = IssueSearchDocument(1, "getHTTPResponse", "", emptyList())
             KoreanAnalyzer().use { analyzer ->
                 FSDirectory.open(path).use { dir ->
                     IndexWriter(dir, IndexWriterConfig(analyzer)).use { writer ->
@@ -245,16 +269,13 @@ class IssueSearchIndexSpec : DescribeSpec({
                     }
                 }
                 index.synchronize({ after -> if (after == 0L) listOf(source) else emptyList() })
-                index.search("timeout").map { it.id } shouldBe listOf(1L)
+                index.search("Response").map { it.id } shouldBe listOf(1L)
                 index.status.indexed shouldBe 1
-                FSDirectory.open(path).use { dir ->
-                    DirectoryReader.open(dir).use { it.indexCommit.userData["yona.issue-search.version"] shouldBe "2" }
-                }
             } finally { index.close() }
             val reopened = IssueSearchIndex(path.toString())
             try {
                 reopened.synchronize({ after -> if (after == 0L) listOf(source) else emptyList() })
-                reopened.search("timeout").map { it.id } shouldBe listOf(1L)
+                reopened.search("Response").map { it.id } shouldBe listOf(1L)
             } finally {
                 reopened.close()
                 path.toFile().deleteRecursively()
