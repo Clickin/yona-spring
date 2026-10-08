@@ -244,6 +244,25 @@ class HgMirrorSourceSpec : DescribeSpec({
             HgRemoteConnectionFactory.getRegisteredProtocols() shouldBe protocols
         }
 
+        it("keeps listkeys names exactly as sent and drops entries without a valid node") {
+            Fixture { _, response ->
+                response.status = 200
+                response.setContentType("application/mercurial-0.1")
+                response.setCharacterEncoding("UTF-8")
+                response.writer.print("50% off\t" + "a".repeat(40) + "\nback\\slash\t" + "b".repeat(40) + "\n기능+x\t" + "c".repeat(40) + "\nbroken\tnot-a-node\n")
+            }.use { fixture ->
+                val policy = spyk(MirrorSourcePolicy(settings(fixture.port)))
+                every { policy.checkHost(any()) } just runs
+                source(policy, fixture.port, RecordingConnector(fixture.port)).bookmarks() shouldBe
+                    mapOf("50% off" to "a".repeat(40), "back\\slash" to "b".repeat(40), "기능+x" to "c".repeat(40))
+            }
+            Fixture { _, response -> response.status = 200; response.writer.print("one\ttwo\tthree\n") }.use { fixture ->
+                val policy = spyk(MirrorSourcePolicy(settings(fixture.port)))
+                every { policy.checkHost(any()) } just runs
+                shouldThrow<MirrorFailure> { source(policy, fixture.port, RecordingConnector(fixture.port)).bookmarks() }.code shouldBe "SOURCE_PROTOCOL"
+            }
+        }
+
         it("only accepts the normalized HTTPS origin") {
             val policy = MirrorSourcePolicy(settings(443))
             shouldThrow<MirrorFailure> { HgHttpsMirrorSource(policy, "http://localhost:443/repo", null) }.code shouldBe "SOURCE_POLICY"

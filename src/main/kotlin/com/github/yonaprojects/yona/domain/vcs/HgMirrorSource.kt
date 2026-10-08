@@ -12,7 +12,6 @@ import java.net.Proxy
 import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.URL
-import java.net.URLDecoder
 import java.net.URLEncoder
 import java.net.UnknownHostException
 import java.nio.CharBuffer
@@ -119,13 +118,12 @@ internal class HgHttpsMirrorSource(
 
     override fun bookmarks(): Map<String, String> {
         val result = linkedMapOf<String, String>()
-        for (line in text(request("listkeys", mapOf("namespace" to "bookmarks"), SMALL_LIMIT)).lines()) {
+        for (line in text(request("listkeys", mapOf("namespace" to "bookmarks"), SMALL_LIMIT)).split('\n')) {
             if (line.isEmpty()) continue
             val parts = line.split('\t')
             if (parts.size != 2) throw MirrorFailure("SOURCE_PROTOCOL")
-            val name = URLDecoder.decode(parts[0].replace("+", "%2B"), StandardCharsets.UTF_8)
-            val node = URLDecoder.decode(parts[1].replace("+", "%2B"), StandardCharsets.UTF_8)
-            if (NODE.matches(node)) result[name] = node
+            // Mercurial sends names as raw UTF-8 (no escaping); only a malformed node is dropped.
+            if (NODE.matches(parts[1])) result[parts[0]] = parts[1]
         }
         return result
     }
@@ -167,6 +165,8 @@ internal class HgHttpsMirrorSource(
                 status == 401 || status == 403 -> throw MirrorFailure("SOURCE_AUTH_REJECTED")
                 status != 200 -> throw MirrorFailure("SOURCE_HTTP_ERROR", transient = status == 408 || status == 429 || status >= 500)
             }
+            // hgweb reports wire errors (for example "bundle2 required") as 200 with this content type.
+            if (connection.contentType?.startsWith("application/hg-error", ignoreCase = true) == true) throw MirrorFailure("SOURCE_PROTOCOL")
             return connection.inputStream.use { readLimited(unwrap(it), limit) }
         } catch (e: IOException) {
             throw transportFailure(e)
