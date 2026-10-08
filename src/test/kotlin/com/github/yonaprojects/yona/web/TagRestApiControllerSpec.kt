@@ -21,6 +21,9 @@ import com.github.yonaprojects.yona.domain.vcs.Commit
 import com.github.yonaprojects.yona.domain.vcs.GitTag
 import com.github.yonaprojects.yona.domain.vcs.PlayRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import com.github.yonaprojects.yona.domain.user.UserState
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearMocks
@@ -65,7 +68,9 @@ class TagRestApiControllerSpec : DescribeSpec({
         milestoneRepository
     )
 
-    val controller = TagRestApiController(projectRepository, userRepository, repositoryService, accessControl)
+    val controller = TagRestApiController(
+        projectRepository, userRepository, repositoryService, accessControl, RepositoryWriteGuard(projectRepository)
+    )
     val mockMvc = MockMvcBuilders.standaloneSetup(controller).build()
 
     val publicProject = Project(id = 1L, owner = "owner", name = "TestProject", vcs = "git", projectScope = ProjectScope.PUBLIC)
@@ -79,11 +84,27 @@ class TagRestApiControllerSpec : DescribeSpec({
 
     beforeTest {
         clearMocks(projectRepository, userRepository, projectUserRepository, repositoryService, playRepository)
+        every { projectRepository.findRepositoryModeById(any()) } returns RepositoryMode.HOSTED
         // clearMocks()가 stub 응답까지 지우므로(BranchApiControllerSpec과 달리 이 스펙은 로그인
         // 사용자 조회를 매 테스트에서 반복 선언하지 않기 위해 공용으로 둔다) beforeTest 안에서
         // clearMocks 이후 다시 선언해야 한다.
         every { userRepository.findByLoginId("manageruser") } returns Optional.of(managerUser)
         every { userRepository.findByLoginId("memberuser") } returns Optional.of(memberUser)
+    }
+
+    it("denies MIRROR REST tag creation and deletion even for a site administrator") {
+        val admin = User(id = 12L, loginId = "admin", name = "Admin", state = UserState.SITE_ADMIN)
+        val authentication = UsernamePasswordAuthenticationToken("admin", "password")
+        every { userRepository.findByLoginId("admin") } returns Optional.of(admin)
+        every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProject") } returns Optional.of(publicProject)
+        every { projectRepository.findRepositoryModeById(1L) } returns RepositoryMode.MIRROR
+        mockMvc.perform(
+            post("/api/v1/projects/owner/TestProject/tags").principal(authentication)
+                .contentType(MediaType.APPLICATION_JSON).content("""{"name":"v1.0"}""")
+        ).andExpect(status().isForbidden)
+        mockMvc.perform(delete("/api/v1/projects/owner/TestProject/tags/v1.0").principal(authentication))
+            .andExpect(status().isForbidden)
+        verify(exactly = 0) { repositoryService.getRepository(any()) }
     }
 
     val mockCommit = mockk<Commit>()

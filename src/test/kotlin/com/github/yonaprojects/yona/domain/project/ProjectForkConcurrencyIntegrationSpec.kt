@@ -42,7 +42,7 @@ class ProjectForkConcurrencyIntegrationSpec @Autowired constructor(
 
     init {
         describe("동시에 같은 프로젝트를 여러 번 fork하면") {
-            it("정확히 하나만 성공하고 나머지는 IllegalArgumentException(이미 존재)으로 깔끔하게 실패해야 한다") {
+            it("정확히 하나만 성공하고 나머지는 이름 충돌 또는 사용 중으로 실패해야 한다") {
                 roleRepository.findById(RoleType.MANAGER.roleType).orElseGet {
                     roleRepository.save(Role(id = RoleType.MANAGER.roleType, name = "MANAGER"))
                 }
@@ -74,11 +74,12 @@ class ProjectForkConcurrencyIntegrationSpec @Autowired constructor(
 
                     successes.size shouldBe 1
                     failures.size shouldBe (threadCount - 1)
-                    // 회귀 확인의 핵심: 실패가 전부 "이미 존재합니다" IllegalArgumentException이어야
-                    // 한다 — FileAlreadyExistsException 등 원시 예외가 그대로 새면 안 된다.
+                    // Contenders fail closed while the winner holds the name, or see its committed row.
                     failures.forEach { e ->
-                        (e is IllegalArgumentException) shouldBe true
-                        (e.message?.contains("이미 존재합니다") == true) shouldBe true
+                        val occupied = e is IllegalArgumentException && e.message?.contains("이미 존재합니다") == true
+                        val busy = e is IllegalStateException &&
+                            e.message == "Repository name is busy; retry after the current operation finishes"
+                        (occupied || busy) shouldBe true
                     }
 
                     val forkedRows = projectRepository.findAll()

@@ -1,5 +1,8 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.domain.project.ProjectRepository
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import com.github.yonaprojects.yona.domain.vcs.SvnRepository
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -9,10 +12,12 @@ import io.mockk.verify
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpMethod
 import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.mock.web.MockServletContext
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import java.io.File
 import java.net.URI
 import java.nio.file.Files
 
@@ -29,9 +34,51 @@ class SvnControllerSpec : DescribeSpec({
 
     fun newTempBaseDir(): String = Files.createTempDirectory("yona-svnctrl-test").toFile().absolutePath
 
-    fun buildController(baseDir: String) = SvnController(baseDir, MockServletContext())
+    fun buildController(baseDir: String) = SvnController(baseDir, MockServletContext(), mockk<RepositoryWriteGuard>(relaxed = true))
 
     fun buildMockMvc(controller: SvnController) = MockMvcBuilders.standaloneSetup(controller).build()
+
+    describe("Direct DAV mutations recheck persisted mode without the authorization filter") {
+        for (method in listOf("PUT", "DELETE", "MKCOL", "COPY", "MOVE", "MERGE", "PROPPATCH", "LOCK", "UNLOCK", "CHECKOUT", "MKACTIVITY")) {
+            it("denies MIRROR $method before initializing DAV or creating directories") {
+                val baseDir = newTempBaseDir()
+                try {
+                    val projects = mockk<ProjectRepository>()
+                    every { projects.findRepositoryModeByOwnerAndName("owner", "repo") } returns RepositoryMode.MIRROR
+                    val controller = SvnController(baseDir, MockServletContext(), RepositoryWriteGuard(projects))
+                    val response = MockHttpServletResponse()
+                    controller.service(MockHttpServletRequest(method, "/svn/owner/repo/trunk"), response)
+                    response.status shouldBe 403
+                    File(baseDir, "owner").exists() shouldBe false
+                    verify(exactly = 1) { projects.findRepositoryModeByOwnerAndName("owner", "repo") }
+                } finally {
+                    File(baseDir).deleteRecursively()
+                }
+            }
+        }
+
+        it("preserves HOSTED native DAV failures and rechecks the next write") {
+            val baseDir = newTempBaseDir()
+            try {
+                val projects = mockk<ProjectRepository>()
+                var mode = RepositoryMode.HOSTED
+                every { projects.findRepositoryModeByOwnerAndName("owner", "repo") } answers { mode }
+                val controller = SvnController(baseDir, MockServletContext(), RepositoryWriteGuard(projects))
+                val baseline = MockHttpServletResponse()
+                val hosted = MockHttpServletResponse()
+                buildController(baseDir).service(MockHttpServletRequest("PUT", "/svn/owner/repo/trunk"), baseline)
+                controller.service(MockHttpServletRequest("PUT", "/svn/owner/repo/trunk"), hosted)
+                hosted.status shouldBe baseline.status
+                mode = RepositoryMode.MIRROR
+                val denied = MockHttpServletResponse()
+                controller.service(MockHttpServletRequest("PUT", "/svn/owner/repo/trunk"), denied)
+                denied.status shouldBe 403
+                verify(exactly = 2) { projects.findRepositoryModeByOwnerAndName("owner", "repo") }
+            } finally {
+                File(baseDir).deleteRecursively()
+            }
+        }
+    }
 
     describe("경로 형식 검증 (legacy SvnApp.service():94-96 대응)") {
         // legacy conf/routes의 "/svn/*path" catch-all(Play 와일드카드)과 달리 이전 yona 매핑
@@ -58,7 +105,7 @@ class SvnControllerSpec : DescribeSpec({
     describe("실제 로컬 SVN 저장소에 대한 WebDAV 서빙(DAVServlet 배선)") {
         it("PROPFIND 요청에 207 Multi-Status와 실제 WebDAV XML 본문으로 응답해야 한다") {
             val baseDir = newTempBaseDir()
-            val repo = SvnRepository("gildong2", "myproject2", baseDir) { null }
+            val repo = SvnRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "gildong2", "myproject2", baseDir) { null }
             repo.create()
 
             val controller = buildController(baseDir)
@@ -113,9 +160,9 @@ class SvnControllerSpec : DescribeSpec({
 
         it("owner별로 DAVServlet 인스턴스를 캐시하면서도 서로 다른 owner의 저장소를 모두 정상 서빙해야 한다") {
             val baseDir = newTempBaseDir()
-            val repoA = SvnRepository("ownerA", "projA", baseDir) { null }
+            val repoA = SvnRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "ownerA", "projA", baseDir) { null }
             repoA.create()
-            val repoB = SvnRepository("ownerB", "projB", baseDir) { null }
+            val repoB = SvnRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "ownerB", "projB", baseDir) { null }
             repoB.create()
 
             val controller = buildController(baseDir)
@@ -139,7 +186,7 @@ class SvnControllerSpec : DescribeSpec({
 
         it("커밋된 파일이 있는 저장소를 PROPFIND하면 그 파일명이 응답 XML에 포함되어야 한다") {
             val baseDir = newTempBaseDir()
-            val repo = SvnRepository("gildong3", "myproject3", baseDir) { null }
+            val repo = SvnRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "gildong3", "myproject3", baseDir) { null }
             repo.create()
 
             // 저수준 커밋 에디터로 실제 파일 하나를 커밋해둔다(SvnRepositorySpec의 commitFile과 동일 기법).
@@ -181,7 +228,7 @@ class SvnControllerSpec : DescribeSpec({
         // 도달시키기 어렵다는 점은 클래스 상단 주석 참고).
         it("serviceOptions()는 service()로 그대로 위임해야 한다") {
             val baseDir = newTempBaseDir()
-            val repo = SvnRepository("gildong4", "myproject4", baseDir) { null }
+            val repo = SvnRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "gildong4", "myproject4", baseDir) { null }
             repo.create()
             val controller = buildController(baseDir)
 

@@ -15,6 +15,7 @@ import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.pullrequest.ReviewCommentRepository
 import com.github.yonaprojects.yona.domain.pullrequest.CommitCommentRepository
 import com.github.yonaprojects.yona.domain.milestone.MilestoneRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearMocks
@@ -57,7 +58,9 @@ class HgAuthorizationFilterSpec : DescribeSpec({
         milestoneRepositoryForAccessControl
     )
     val repoAccessPolicy = RepoAccessPolicy(projectService, userRepository, accessControl)
-    val filter = HgAuthorizationFilter(repoAccessPolicy)
+    val writeGuard = mockk<RepositoryWriteGuard>()
+    every { writeGuard.isWritable(any(), any()) } returns true
+    val filter = HgAuthorizationFilter(repoAccessPolicy, writeGuard)
     val filterChain = mockk<FilterChain>(relaxed = true)
 
     beforeTest {

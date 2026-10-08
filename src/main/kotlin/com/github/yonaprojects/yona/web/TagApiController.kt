@@ -5,6 +5,7 @@ import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -23,7 +24,8 @@ class TagApiController(
     private val projectRepository: ProjectRepository,
     private val userRepository: UserRepository,
     private val repositoryService: RepositoryService,
-    private val accessControl: AccessControl
+    private val accessControl: AccessControl,
+    private val writeGuard: RepositoryWriteGuard
 ) {
 
     @DeleteMapping("/{owner}/{projectName}/tags/{tag}")
@@ -46,6 +48,10 @@ class TagApiController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
         // BranchApiController.deleteBranch()와 동일한 권한(Operation.DELETE, 매니저/조직관리자 전용).
         if (!accessControl.isAllowed(loginUser, project, Operation.DELETE)) {
+            model.addAttribute("project", project)
+            return "error/forbidden"
+        }
+        if (!writeGuard.isWritable(project)) {
             model.addAttribute("project", project)
             return "error/forbidden"
         }

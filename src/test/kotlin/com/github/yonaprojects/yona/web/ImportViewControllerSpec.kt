@@ -62,6 +62,7 @@ class ImportViewControllerSpec : DescribeSpec({
             gitService,
             messageSource
         )
+        every { projectRepository.findRepositoryModeByOwnerAndName(any(), any()) } returns null
     }
 
     describe("ImportViewController 테스트") {

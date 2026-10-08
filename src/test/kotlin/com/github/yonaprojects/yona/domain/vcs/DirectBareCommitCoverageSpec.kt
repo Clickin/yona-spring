@@ -20,7 +20,7 @@ class DirectBareCommitCoverageSpec : DescribeSpec({
             
             val project = Project(id = 1L, owner = "tester", name = "repo")
             val user = User(id = 1L, loginId = "tester", name = "tester", email = "tester@yona.io")
-            val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+            val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
             
             val mockRepo = mockk<Repository>(relaxed = true)
             val mockRef = mockk<Ref>(relaxed = true)

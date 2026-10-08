@@ -7,6 +7,9 @@ import com.github.yonaprojects.yona.domain.gpgkey.GpgKeyRepository
 import com.github.yonaprojects.yona.domain.gpgkey.GpgKeyService
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import com.github.yonaprojects.yona.domain.user.UserState
+import org.springframework.security.access.AccessDeniedException
 import com.github.yonaprojects.yona.domain.project.ProjectUser
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.role.Role
@@ -53,6 +56,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.Instant
 import java.util.UUID
+import jakarta.persistence.EntityManager
 
 @Transactional
 class PullRequestServiceSpec @Autowired constructor(
@@ -83,7 +87,8 @@ class PullRequestServiceSpec @Autowired constructor(
     private val emailRepository: EmailRepository,
     // yona-wiki P3-15(PR 승인/변경요청 워크플로) — submitReview/getReviews/getLatestReviewStates 및
     // require_approvals 연결(checkApprovalsForMerge) 검증용.
-    private val pullRequestReviewRepository: PullRequestReviewRepository
+    private val pullRequestReviewRepository: PullRequestReviewRepository,
+    private val entityManager: EntityManager
 ) : AbstractIntegrationTest() {
 
     init {
@@ -239,6 +244,80 @@ class PullRequestServiceSpec @Autowired constructor(
                     git.close()
                 } finally {
                     tempWorkingDir.deleteRecursively()
+                }
+            }
+
+            it("MIRROR rejects merge, merge-check and GET preview refs even for a site administrator") {
+                val directory = repositoryService.getRepository(toProject).getDirectory()
+                createCommit(directory, "master", "README.md", "Initial", "Initial")
+                val pr = pullRequestRepository.saveAndFlush(
+                    PullRequest(
+                        title = "Read-only target", fromProject = fromProject, toProject = toProject,
+                        fromBranch = "feature", toBranch = "master", contributor = contributor,
+                        state = State.OPEN, number = 1L
+                    )
+                )
+                receiver.state = UserState.SITE_ADMIN
+                userRepository.saveAndFlush(receiver)
+                val refsBefore = Git.open(directory).use { git ->
+                    git.repository.refDatabase.getRefsByPrefix("refs/").associate { it.name to it.objectId.name }
+                }
+                // Mode is insert-only; model a persisted mirror while retaining a stale HOSTED entity.
+                entityManager.createNativeQuery("UPDATE project SET repository_mode = 'MIRROR' WHERE id = :id")
+                    .setParameter("id", toProject.id!!).executeUpdate()
+                projectRepository.findRepositoryModeById(toProject.id!!) shouldBe RepositoryMode.MIRROR
+                toProject.repositoryMode shouldBe RepositoryMode.HOSTED
+                try {
+                    shouldThrow<AccessDeniedException> { pullRequestService.merge(pr.id!!, receiver) }
+                    shouldThrow<AccessDeniedException> { pullRequestService.attemptMerge(pr.id!!) }
+                    shouldThrow<AccessDeniedException> {
+                        pullRequestService.processMergeCheck(pr.id!!, receiver, false)
+                    }
+                    shouldThrow<AccessDeniedException> {
+                        pullRequestService.previewMerge(fromProject, toProject, "feature", "master")
+                    }
+                    shouldThrow<AccessDeniedException> {
+                        pullRequestService.createPullRequest(
+                            "Denied", null, fromProject.id!!, toProject.id!!, "feature", "master", receiver
+                        )
+                    }
+                    Git.open(directory).use { git ->
+                        git.repository.refDatabase.getRefsByPrefix("refs/").associate { it.name to it.objectId.name } shouldBe refsBefore
+                    }
+                    pr.state shouldBe State.OPEN
+                    pr.lastCommitId shouldBe null
+                } finally {
+                    entityManager.createNativeQuery("UPDATE project SET repository_mode = 'HOSTED' WHERE id = :id")
+                        .setParameter("id", toProject.id!!).executeUpdate()
+                }
+            }
+
+            it("MIRROR source branches cannot be deleted or recovered even when the target remains hosted") {
+                val directory = repositoryService.getRepository(fromProject).getDirectory()
+                createCommit(directory, "feature", "README.md", "Initial", "Initial")
+                val refsBefore = Git.open(directory).use { git ->
+                    git.repository.refDatabase.getRefsByPrefix("refs/").associate { it.name to it.objectId.name }
+                }
+                val pr = pullRequestRepository.saveAndFlush(
+                    PullRequest(
+                        title = "Read-only source", fromProject = fromProject, toProject = toProject,
+                        fromBranch = "feature", toBranch = "master", contributor = contributor,
+                        state = State.MERGED, number = 1L, lastCommitId = refsBefore.getValue("refs/heads/feature")
+                    )
+                )
+                entityManager.createNativeQuery("UPDATE project SET repository_mode = 'MIRROR' WHERE id = :id")
+                    .setParameter("id", fromProject.id!!).executeUpdate()
+                projectRepository.findRepositoryModeById(fromProject.id!!) shouldBe RepositoryMode.MIRROR
+                fromProject.repositoryMode shouldBe RepositoryMode.HOSTED
+                try {
+                    shouldThrow<AccessDeniedException> { pullRequestService.deleteFromBranch(pr.id!!) }
+                    shouldThrow<AccessDeniedException> { pullRequestService.restoreFromBranch(pr.id!!) }
+                    Git.open(directory).use { git ->
+                        git.repository.refDatabase.getRefsByPrefix("refs/").associate { it.name to it.objectId.name } shouldBe refsBefore
+                    }
+                } finally {
+                    entityManager.createNativeQuery("UPDATE project SET repository_mode = 'HOSTED' WHERE id = :id")
+                        .setParameter("id", fromProject.id!!).executeUpdate()
                 }
             }
 

@@ -2,6 +2,7 @@ package com.github.yonaprojects.yona.config.hg
 
 import com.github.yonaprojects.yona.config.git.DeployKeyAuthenticationToken
 import com.github.yonaprojects.yona.config.vcs.RepoAccessPolicy
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -10,6 +11,8 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.util.regex.Pattern
 
 // GitAuthorizationFilter/SvnAuthorizationFilter와
@@ -25,7 +28,8 @@ import java.util.regex.Pattern
 // registerPreChangegroupHook에서 이미 계산된 이 필터의 판정 결과에 따라 최종 강제된다.
 @Component
 class HgAuthorizationFilter(
-    private val repoAccessPolicy: RepoAccessPolicy
+    private val repoAccessPolicy: RepoAccessPolicy,
+    private val repositoryWriteGuard: RepositoryWriteGuard
 ) : OncePerRequestFilter() {
 
     private val hgUriPattern = Pattern.compile("^/hg/([^/]+)/([^/]+?)(?:/.*)?$")
@@ -61,6 +65,10 @@ class HgAuthorizationFilter(
         }
 
         val isWriteRequest = isWriteRequest(request)
+        if ((isWriteRequest || isHgMirrorMutationRequest(request)) && !repositoryWriteGuard.isWritable(project)) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Mirror repository is read-only")
+            return
+        }
         val requiresAuth = repoAccessPolicy.requiresAuth(project, isWriteRequest)
 
         if (requiresAuth) {
@@ -145,4 +153,32 @@ class HgAuthorizationFilter(
     private fun isAnonymous(authentication: Authentication): Boolean {
         return authentication is AnonymousAuthenticationToken
     }
+}
+
+// hg4j 1.0.0 bypasses pushkey hooks in v1 batch and v2. T5 supports SVN mirrors only;
+// reject the entire MIRROR batch (including read batches), without changing HOSTED authorization.
+internal fun isHgMirrorMutationRequest(request: HttpServletRequest): Boolean {
+    val uri = request.requestURI
+    val apiIndex = uri.lastIndexOf("/api/")
+    if (apiIndex >= 0) {
+        val segments = uri.substring(apiIndex + 5).split("/")
+        if (segments.size >= 2 && segments[1] == "rw") return true
+        // Native v2 dispatch does not enforce the URL's ro/rw permission segment.
+        if (segments.size >= 3 && (segments[2] == "pushkey" || segments[2] == "multirequest")) return true
+    }
+    val query = request.queryString ?: return false
+    for (pair in query.split("&")) {
+        val equals = pair.indexOf('=')
+        if (equals < 0) continue
+        try {
+            val key = URLDecoder.decode(pair.substring(0, equals), StandardCharsets.UTF_8)
+            if (key != "cmd") continue
+            val value = URLDecoder.decode(pair.substring(equals + 1), StandardCharsets.UTF_8)
+            if (value == "unbundle" || value == "pushkey" || value == "batch") return true
+        } catch (_: IllegalArgumentException) {
+            // The native decoder also rejects malformed escapes before dispatch.
+            return false
+        }
+    }
+    return false
 }

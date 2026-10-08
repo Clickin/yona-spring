@@ -27,3 +27,32 @@ legacy Yona의 `docs/ko/technical/` + `docs/technical/`(두 세트를 합침, �
   → 컨트롤러 내 직접 호출
 - [view-hierarchy.md](view-hierarchy.md) — `.scala.html` include 트리(파일명만 기계적으로
   치환, 전수 재검증은 아직 안 함 — `docs/TEMPLATE_BACKLOG.md`가 더 신뢰할 수 있는 소스)
+
+## SVN 읽기 전용 미러
+
+### 저장소 모드와 업그레이드
+
+`Project.repositoryMode`는 VCS와 별개인 `HOSTED`/`MIRROR`이며 일반 프로젝트 JSON에는
+노출하지 않는다. 기존 행은 Hibernate 스키마 갱신 전에 `HOSTED`로 채우고, 컬럼의 기본값과
+NOT NULL을 확인한다. 대상 DB는 H2, MariaDB, PostgreSQL, MySQL, SQL Server, CUBRID다.
+`RepositoryModeMigrationSpec`은 이전 스키마와 컬럼만 추가된 중단 상태를 만들고 재실행을 검사한다.
+
+`yona.repository-mirror.enabled`의 기본값은 `false`다. 꺼도 이미 저장된 `MIRROR`의 쓰기
+거부는 유지된다. HTTP/SSH, 웹/API, 실제 저장소 writer가 최신 DB 모드를 확인하며 관리자도
+우회하지 못한다. 별도 위키 저장소와 일반 게시글은 계속 쓸 수 있다. 새 미러는 SVN만 지원한다.
+hg4j의 중첩 batch/pushkey 경로를 안전하게 허용할 수 없어, 지원하지 않는 Hg MIRROR의 SSH
+세션과 HTTP batch/v2 multirequest는 읽기 전용 요청을 포함해 거부한다. HOSTED 분류는 바꾸지 않는다.
+
+프로젝트 이름에는 DB unique 제약이 없다. 생성·개명·이전·포크는 이름별 파일 잠금을 DB
+transaction 완료까지 유지하고 READ_COMMITTED에서 목적지를 다시 확인한다. Git clone도 같은
+이름 잠금을 사용하며 기존 목적지를 덮어쓰지 않는다. 미러 예약 표식은 SVN 루트의
+`.mirror-owners/<이름 해시>.owner`에 먼저 기록하고 디렉터리를 만든다. DB rollback 뒤 표식이나
+디렉터리가 남으면 일반 프로젝트 생성도 이를 인수하지 않는다. 운영자가 DB 행, 표식의
+project ID/generation/경로, 실제 디렉터리를 대조해야 하며 자동 삭제하지 않는다.
+
+업그레이드는 **구버전 writer 전부 중지 → DB·저장소·예약 표식 백업 → 한 신버전 노드에서
+스키마 갱신 → 기본값/NULL/기존 데이터 확인 → 신버전 기동** 순서다. 혼합 버전 rolling upgrade는
+지원하지 않는다. 기능을 끄는 것은 스키마나 모드의 rollback이 아니다. 구버전은 미러를 쓸 수
+있으므로, 이전 버전으로 되돌릴 때는 writer를 중지하고 업그레이드 전 DB와 저장소 백업을 함께
+복원한다. mirror 테이블만 삭제하거나 모드를 HOSTED로 바꾸지 않는다.
+

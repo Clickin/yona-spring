@@ -1,5 +1,8 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.domain.project.ProjectRepository
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -19,10 +22,12 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers
 
 class LfsStorageControllerSpec : DescribeSpec({
     val tempDir = Files.createTempDirectory("yona-lfs-test").toFile()
-    val controller = LfsStorageController(tempDir.absolutePath)
+    val projects = mockk<ProjectRepository>()
+    val controller = LfsStorageController(tempDir.absolutePath, RepositoryWriteGuard(projects))
     val mockMvc = MockMvcBuilders.standaloneSetup(controller).build()
 
     afterSpec { tempDir.deleteRecursively() }
+    beforeEach { every { projects.findRepositoryModeByOwnerAndName(any(), any()) } returns RepositoryMode.HOSTED }
 
     describe("GET /git-lfs/{owner}/{project}/objects/{oid}") {
         it("oid 길이가 4 미만이면 400을 반환해야 한다") {
@@ -56,6 +61,24 @@ class LfsStorageControllerSpec : DescribeSpec({
     }
 
     describe("PUT /git-lfs/{owner}/{project}/objects/{oid}") {
+        it("denies a persisted mirror before touching or deleting its existing object") {
+            val oid = "aabbccdd5555"
+            val objectFile = File(tempDir, "owner/proj/objects/aa/bb/$oid")
+            objectFile.parentFile.mkdirs()
+            objectFile.writeBytes(byteArrayOf(7, 8, 9))
+            every { projects.findRepositoryModeByOwnerAndName("owner", "proj") } returns RepositoryMode.MIRROR
+            mockMvc.perform(put("/git-lfs/owner/proj/objects/$oid").content(byteArrayOf(1)))
+                .andExpect(status().isForbidden)
+            objectFile.readBytes() shouldBe byteArrayOf(7, 8, 9)
+        }
+        it("keeps the separate wiki object store writable for a mirror project") {
+            every { projects.findRepositoryModeByOwnerAndName("owner", "proj") } returns RepositoryMode.MIRROR
+            mockMvc.perform(put("/git-lfs/owner/proj.wiki/objects/aabbccdd7777").content(byteArrayOf(4)))
+                .andExpect(status().isCreated)
+            File(tempDir, "owner/proj.wiki/objects/aa/bb/aabbccdd7777").readBytes() shouldBe byteArrayOf(4)
+        }
+
+
         it("oid 길이가 4 미만이면 400을 반환해야 한다") {
             mockMvc.perform(put("/git-lfs/owner/proj/objects/abc").content(byteArrayOf(1)))
                 .andExpect(status().isBadRequest)

@@ -55,6 +55,7 @@ import java.util.zip.ZipOutputStream
 import com.github.yonaprojects.yona.domain.support.FileUtil
 
 class GitRepository(
+    private val writeGuard: RepositoryWriteGuard,
     private val ownerName: String,
     private val projectName: String,
     private val baseDir: String,
@@ -62,15 +63,20 @@ class GitRepository(
     // 새 저장소의 초기 브랜치명. JGit의 Git.init() 기본값은 이 서버가 돌아가는 머신의 전역 git 설정
     // (init.defaultBranch)을 따라 환경마다 달라질 수 있어(GitRepositorySpec.kt의 defaultBranchRef
     // 프로브 참고), 애플리케이션 차원에서 결정론적으로 강제한다(RepositoryService가
-    // yona.git.default-branch 설정값을 넘겨줌). userResolver 뒤에 둬서(파라미터 순서 유지) 기존
-    // `GitRepository(a, b, c, userResolver)` 형태의 수십 개 테스트 호출부가 그대로 동작하게 한다.
+    // yona.git.default-branch 설정값을 넘겨줌).
     private val defaultBranch: String = "main",
     // 커밋 목록/상세 화면의 GPG Verified 배지 계산. 기본값(no-op, 항상 UNSIGNED)을 둬서
     // defaultBranch와 마찬가지로 기존 호출부가 그대로 동작하게 한다 — RepositoryService가 실제
     // 구현을 주입한다.
     private val gpgVerifier: (RevCommit) -> GpgVerificationStatus =
-        { GpgVerificationStatus.UNSIGNED }
+        { GpgVerificationStatus.UNSIGNED },
+    private val repositoryKind: RepositoryKind = RepositoryKind.CODE
 ) : PlayRepository {
+    init {
+        require(repositoryKind != RepositoryKind.WIKI || projectName.endsWith(".wiki"))
+    }
+
+    private fun requireWritable() = writeGuard.requireWritable(ownerName, projectName, repositoryKind)
 
     private val objectMapper = ObjectMapper()
 
@@ -81,6 +87,7 @@ class GitRepository(
     }
 
     override fun create() {
+        requireWritable()
         val gitDir = File(File(baseDir), "$ownerName/$projectName.git")
         if (!gitDir.exists()) {
             gitDir.mkdirs()
@@ -267,6 +274,7 @@ class GitRepository(
     }
 
     override fun delete() {
+        requireWritable()
         val gitDir = File(File(baseDir), "$ownerName/$projectName.git")
         if (gitDir.exists()) {
             gitDir.deleteRecursively()
@@ -674,6 +682,7 @@ class GitRepository(
     }
 
     override fun setDefaultBranch(target: String) {
+        requireWritable()
         useRepository { repo ->
             val refUpdate = repo.updateRef(Constants.HEAD)
             val targetRef = if (target.startsWith("refs/")) target else "refs/heads/$target"
@@ -709,6 +718,7 @@ class GitRepository(
     }
 
     override fun deleteBranch(branchName: String) {
+        requireWritable()
         useRepository { repo ->
             Git(repo).use { git ->
                 git.branchDelete()
@@ -720,6 +730,7 @@ class GitRepository(
     }
 
     override fun createBranch(branchName: String, startPoint: String) {
+        requireWritable()
         useRepository { repo ->
             Git(repo).use { git ->
                 git.branchCreate()
@@ -764,6 +775,7 @@ class GitRepository(
     }
 
     override fun deleteTag(tagName: String) {
+        requireWritable()
         useRepository { repo ->
             Git(repo).use { git ->
                 git.tagDelete()
@@ -774,6 +786,7 @@ class GitRepository(
     }
 
     override fun createTag(tagName: String, startPoint: String, message: String?, taggerName: String?, taggerEmail: String?) {
+        requireWritable()
         useRepository { repo ->
             Git(repo).use { git ->
                 val revWalk = RevWalk(repo)
@@ -821,6 +834,10 @@ class GitRepository(
     }
 
     override fun move(srcProjectOwner: String, srcProjectName: String, destProjectOwner: String, destProjectName: String): Boolean {
+        requireWritable()
+        require(repositoryKind != RepositoryKind.WIKI || (srcProjectName.endsWith(".wiki") && destProjectName.endsWith(".wiki")))
+        writeGuard.requireWritable(srcProjectOwner, srcProjectName, repositoryKind)
+        writeGuard.requireDestinationWritable(destProjectOwner, destProjectName, repositoryKind)
         val rootDir = File(baseDir)
         val src = File(rootDir, "$srcProjectOwner/$srcProjectName.git")
         val dest = File(rootDir, "$destProjectOwner/$destProjectName.git")

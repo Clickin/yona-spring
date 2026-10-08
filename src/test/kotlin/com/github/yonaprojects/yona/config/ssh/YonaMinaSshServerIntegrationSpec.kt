@@ -207,7 +207,7 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
                     Project(name = "mina-public-repo", owner = owner.loginId, projectScope = ProjectScope.PUBLIC, vcs = "GIT")
                 )
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# mina-public-repo", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# mina-public-repo", "초기 커밋")
 
                 val reader = userRepository.save(User(loginId = "mina-reader", name = "미나리더", email = "mina-reader@example.com"))
                 val (privateKeyFile, publicKey) = generateKeyPair("reader")
@@ -232,7 +232,7 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
                     Project(name = "mina-private-repo", owner = owner.loginId, projectScope = ProjectScope.PRIVATE, vcs = "GIT")
                 )
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# mina-private-repo", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# mina-private-repo", "초기 커밋")
 
                 val outsider = userRepository.save(User(loginId = "mina-outsider", name = "미나외부인", email = "mina-outsider@example.com"))
                 val (privateKeyFile, publicKey) = generateKeyPair("outsider")
@@ -256,7 +256,7 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
                     Project(name = "mina-dk-repo", owner = owner.loginId, projectScope = ProjectScope.PRIVATE, vcs = "GIT")
                 )
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# mina-dk-repo", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# mina-dk-repo", "초기 커밋")
 
                 val (privateKeyFile, publicKey) = generateKeyPair("deploykey-write")
                 deployKeyService.create(project, "쓰기 허용 Deploy Key", publicKey, readOnly = false)
@@ -299,8 +299,8 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
                 val otherProject = projectRepository.save(Project(name = "mina-other-repo", owner = owner.loginId, vcs = "GIT"))
                 repositoryService.getRepository(ownProject).create()
                 repositoryService.getRepository(otherProject).create()
-                BareCommit(ownProject, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# own", "초기 커밋")
-                BareCommit(otherProject, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# other", "초기 커밋")
+                BareCommit(ownProject, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# own", "초기 커밋")
+                BareCommit(otherProject, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# other", "초기 커밋")
 
                 val (privateKeyFile, publicKey) = generateKeyPair("deploykey-scope")
                 deployKeyService.create(ownProject, "own 전용 Deploy Key", publicKey, readOnly = false)
@@ -322,7 +322,7 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
                 val owner = userRepository.save(User(loginId = "mina-ro-owner", name = "미나읽기전용오너", email = "mina-ro-owner@example.com"))
                 val project = projectRepository.save(Project(name = "mina-ro-repo", owner = owner.loginId, vcs = "GIT"))
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# ro", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# ro", "초기 커밋")
 
                 val (privateKeyFile, publicKey) = generateKeyPair("deploykey-readonly")
                 deployKeyService.create(project, "읽기전용 Deploy Key", publicKey, readOnly = true)
@@ -362,7 +362,7 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
                 val owner = userRepository.save(User(loginId = "mina-bp-owner", name = "미나브랜치보호오너", email = "mina-bp-owner@example.com"))
                 val project = projectRepository.save(Project(name = "mina-bp-repo", owner = owner.loginId, vcs = "GIT"))
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# bp", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# bp", "초기 커밋")
                 protectedBranchRepository.save(
                     ProtectedBranch(project = project, branchPattern = "main", requirePullRequest = true, adminsCanBypass = false)
                 )
@@ -404,7 +404,7 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
                 val owner = userRepository.save(User(loginId = "mina-sig-owner", name = "미나서명오너", email = "mina-sig-owner@example.com"))
                 val project = projectRepository.save(Project(name = "mina-sig-repo", owner = owner.loginId, vcs = "GIT"))
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# sig", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# sig", "초기 커밋")
                 protectedBranchRepository.save(
                     ProtectedBranch(project = project, branchPattern = "main", requireSignedCommits = true, adminsCanBypass = false)
                 )
@@ -453,7 +453,7 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
                 val owner = userRepository.save(User(loginId = "mina-sig-ok-owner", name = "미나서명성공오너", email = generatedKey.email))
                 val project = projectRepository.save(Project(name = "mina-sig-ok-repo", owner = owner.loginId, vcs = "GIT"))
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# sig-ok", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# sig-ok", "초기 커밋")
                 protectedBranchRepository.save(
                     ProtectedBranch(project = project, branchPattern = "main", requireSignedCommits = true, adminsCanBypass = false)
                 )

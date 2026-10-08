@@ -6,6 +6,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -21,7 +22,8 @@ class TagViewController(
     private val projectUserRepository: ProjectUserRepository,
     private val userRepository: UserRepository,
     private val repositoryService: RepositoryService,
-    private val accessControl: AccessControl
+    private val accessControl: AccessControl,
+    private val writeGuard: RepositoryWriteGuard
 ) {
 
     @GetMapping("/{owner}/{projectName}/tags")
@@ -56,7 +58,7 @@ class TagViewController(
         // 태그 생성/삭제 모두 브랜치 삭제와 동일한 권한 체계(Operation.DELETE, PROJECT 리소스 —
         // AccessControl.isAllowed()에서 매니저/조직관리자 전용)를 따른다(BranchApiController.
         // deleteBranch()와 동일한 근거).
-        val canDelete = accessControl.isAllowed(loginUser, project, Operation.DELETE)
+        val canDelete = writeGuard.isWritable(project) && accessControl.isAllowed(loginUser, project, Operation.DELETE)
 
         model.addAttribute("project", project)
         model.addAttribute("tags", tags)

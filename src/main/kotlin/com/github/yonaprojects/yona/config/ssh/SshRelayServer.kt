@@ -9,6 +9,7 @@ import com.github.yonaprojects.yona.domain.sshkey.SshAuthPrincipal
 import com.github.yonaprojects.yona.domain.sshkey.SshAuthService
 import com.github.yonaprojects.yona.domain.sshkey.SshCommandAuthorization
 import com.github.yonaprojects.yona.domain.vcs.PushedBranchRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import io.github.search5.hg4j.transport.HgSshWireServer
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PostConstruct
@@ -66,6 +67,7 @@ class SshRelayServer(
     private val pushedBranchRepository: PushedBranchRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val meterRegistry: MeterRegistry,
+    private val repositoryWriteGuard: RepositoryWriteGuard,
     // YonaMinaSshServer의 yona.ssh.mina.enabled와 동일한 취지 — 테스트 프로파일 등 소켓 경로를
     // 쓸 수 없거나 원치 않는 환경에서 기동을 건너뛸 수 있게 한다. 운영 기본값은 활성화.
     @Value("\${yona.ssh.relay.enabled:true}")
@@ -75,10 +77,10 @@ class SshRelayServer(
 ) {
     private val logger = LoggerFactory.getLogger(SshRelayServer::class.java)
 
-    private val gitProtocolHandler = GitSshProtocolHandler(protectedBranchRepository, projectUserRepository, gpgSignatureVerifier)
+    private val gitProtocolHandler = GitSshProtocolHandler(protectedBranchRepository, projectUserRepository, gpgSignatureVerifier, repositoryWriteGuard)
     private val hgProtocolHandler = HgSshProtocolHandler(
         protectedBranchRepository, projectUserRepository, gpgSignatureVerifier,
-        projectRepository, pullRequestRepository, pushedBranchRepository, eventPublisher, meterRegistry
+        projectRepository, pullRequestRepository, pushedBranchRepository, eventPublisher, meterRegistry, repositoryWriteGuard
     )
 
     private var serverChannel: ServerSocketChannel? = null

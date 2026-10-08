@@ -10,6 +10,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.security.core.Authentication
@@ -52,7 +53,8 @@ class BoardViewController(
     private val gitBaseDir: String,
     private val recentIssueService: RecentIssueService,
     private val accessControl: AccessControl,
-    private val attachmentService: AttachmentService
+    private val attachmentService: AttachmentService,
+    private val writeGuard: RepositoryWriteGuard
 ) {
 
     @GetMapping("/{owner}/{projectName}/posts")
@@ -223,6 +225,10 @@ class BoardViewController(
             model.addAttribute("project", project)
             return "error/forbidden"
         }
+        if ((readme == true || issueTemplate == true || !path.isNullOrBlank()) && !writeGuard.isWritable(project)) {
+            model.addAttribute("project", project)
+            return "error/forbidden"
+        }
 
         val isAllowedToNotice = loginUser != null && (projectUserRepository.existsByProjectIdAndUserId(project.id!!, loginUser.id!!) || accessControl.isAllowedIfGroupMember(project, loginUser))
 
@@ -358,6 +364,10 @@ class BoardViewController(
         // 같은 결과를 내도록 통일했다. 이전에는 여기서 stale한 posting.readme(기존 DB 값)를 써서
         // 체크박스로 readme를 새로 켜는 게 반영되지 않는 버그가 있었음.
         val isReadme = request.readme ?: false
+        if (isReadme && !writeGuard.isWritable(project)) {
+            model.addAttribute("project", project)
+            return "error/forbidden"
+        }
 
         // yona BoardApp.editPost의 isSelectedToSendNotificationMail() 대응 — 서비스 계층에 위임.
         postingService.updatePosting(
@@ -401,6 +411,12 @@ class BoardViewController(
             model.addAttribute("project", project)
             return "error/forbidden"
         }
+        if ((request.readme == true || request.issueTemplate == "true" || !request.path.isNullOrBlank()) &&
+            !writeGuard.isWritable(project)
+        ) {
+            model.addAttribute("project", project)
+            return "error/forbidden"
+        }
 
         // yona BoardApp.newPost()의 "if (post.readme) { Posting readmePosting = ...; if (readmePosting
         // != null) return editPost(...); }" 대응 — README 게시글은 프로젝트당 하나만 존재해야 하는데,
@@ -418,7 +434,7 @@ class BoardViewController(
         // return redirect(...); }" 대응 — 게시글 DB 행을 만들지 않고 ISSUE_TEMPLATE.md만 커밋.
         if (request.issueTemplate == "true") {
             try {
-                val bare = BareCommit(project, loginUser, gitBaseDir)
+                val bare = BareCommit(project, loginUser, gitBaseDir, writeGuard)
                 bare.commitTextFile("ISSUE_TEMPLATE.md", request.body ?: "", request.title)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -449,7 +465,7 @@ class BoardViewController(
                 }
             } else {
                 try {
-                    val bare = BareCommit(project, loginUser, gitBaseDir)
+                    val bare = BareCommit(project, loginUser, gitBaseDir, writeGuard)
                     bare.setRefName(Constants.R_HEADS + branch)
                     bare.commitTextFile(branch, path, body, request.title)
                 } catch (e: Exception) {
@@ -492,7 +508,7 @@ class BoardViewController(
 
         if (saved.readme) {
             try {
-                val bare = BareCommit(project, loginUser, gitBaseDir)
+                val bare = BareCommit(project, loginUser, gitBaseDir, writeGuard)
                 bare.commitTextFile("README.md", saved.body ?: "", saved.title ?: "")
             } catch (e: Exception) {
                 e.printStackTrace()

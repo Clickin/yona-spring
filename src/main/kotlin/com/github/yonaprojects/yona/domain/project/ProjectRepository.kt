@@ -15,6 +15,13 @@ interface ProjectRepository : JpaRepository<Project, Long> {
     fun findByOwner(owner: String): List<Project>
     fun countByLabelsId(labelId: Long): Long
 
+    // Scalar projections bypass an already-loaded Project in the persistence context.
+    @Query("SELECT p.repositoryMode FROM Project p WHERE p.id = :id")
+    fun findRepositoryModeById(@Param("id") id: Long): RepositoryMode?
+
+    @Query("SELECT p.repositoryMode FROM Project p WHERE p.owner = :owner AND p.name = :name")
+    fun findRepositoryModeByOwnerAndName(@Param("owner") owner: String, @Param("name") name: String): RepositoryMode?
+
     // issue/posting 번호 채번(project.lastIssueNumber/lastPostingNumber
     // 증가)이 전부 "읽고-증가시켜-저장"하는 read-modify-write 패턴인데, 그 사이 프로젝트 행에 아무
     // 잠금도 걸지 않아 동시 요청 두 개가 같은 값을 읽고 각각 저장하는 경쟁 상태에 노출돼 있었다

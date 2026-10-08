@@ -11,6 +11,8 @@ import com.github.yonaprojects.yona.domain.vcs.Commit
 import com.github.yonaprojects.yona.domain.vcs.GitTag
 import com.github.yonaprojects.yona.domain.vcs.PlayRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import io.kotest.core.spec.style.DescribeSpec
 import io.mockk.every
 import io.mockk.mockk
@@ -64,12 +66,14 @@ class TagViewControllerSpec : DescribeSpec({
         projectUserRepository,
         userRepository,
         repositoryService,
-        accessControl
+        accessControl,
+        RepositoryWriteGuard(projectRepository)
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(tagViewController).build()
 
     beforeTest {
         clearMocks(projectRepository, projectUserRepository, userRepository, repositoryService, playRepository)
+        every { projectRepository.findRepositoryModeById(any()) } returns RepositoryMode.HOSTED
     }
 
     describe("TagViewController 웹 API 테스트") {
@@ -78,6 +82,24 @@ class TagViewControllerSpec : DescribeSpec({
         every { mockCommit.getCommitterDate() } returns Date(0)
         val lightweightTag = GitTag(name = "refs/tags/v1.0", targetCommit = mockCommit, annotated = false)
         val annotatedTag = GitTag(name = "refs/tags/v2.0", targetCommit = mockCommit, message = "릴리즈 메모", annotated = true)
+
+        it("keeps MIRROR tags readable but hides deletion from a manager") {
+            val manager = User(id = 10L, loginId = "manager", name = "Manager")
+            manager.projectUsers.add(ProjectUser(
+                id = 11L, user = manager, project = project, role = Role(id = RoleType.MANAGER.roleType)
+            ))
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProject") } returns Optional.of(project)
+            every { projectRepository.findRepositoryModeById(1L) } returns RepositoryMode.MIRROR
+            every { userRepository.findByLoginId("manager") } returns Optional.of(manager)
+            every { repositoryService.getRepository(project) } returns playRepository
+            every { playRepository.getTags() } returns listOf(lightweightTag)
+
+            mockMvc.perform(get("/owner/TestProject/tags").principal(
+                UsernamePasswordAuthenticationToken("manager", "password")
+            ))
+                .andExpect(view().name("code/tags"))
+                .andExpect(model().attribute("canDelete", false))
+        }
 
         describe("GET /{owner}/{projectName}/tags") {
             it("성공 시 200 OK와 올바른 뷰 이름, 모델 속성을 반환해야 한다") {

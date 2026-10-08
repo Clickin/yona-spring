@@ -89,7 +89,7 @@ class PullRequestListTemplateEquivalenceSpec @Autowired constructor(
                 val gitDir = File(File(gitBaseDir), "${prProj.owner}/${prProj.name}.git")
                 if (!gitDir.exists()) {
                     repo.create()
-                    val bareCommit = BareCommit(prProj, owner, gitBaseDir)
+                    val bareCommit = BareCommit(prProj, owner, gitBaseDir, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                     bareCommit.commitTextFile("README.md", "# pr-list-proj", "initial commit")
                 }
             }

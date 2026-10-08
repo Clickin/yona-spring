@@ -10,6 +10,9 @@ import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.PlayRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import com.github.yonaprojects.yona.domain.user.UserState
 import io.kotest.core.spec.style.DescribeSpec
 import io.mockk.every
 import io.mockk.mockk
@@ -62,17 +65,29 @@ class TagApiControllerSpec : DescribeSpec({
         projectRepository,
         userRepository,
         repositoryService,
-        accessControl
+        accessControl,
+        RepositoryWriteGuard(projectRepository)
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(tagApiController).build()
 
     beforeTest {
         clearMocks(projectRepository, projectUserRepository, userRepository, repositoryService, playRepository)
+        every { projectRepository.findRepositoryModeById(any()) } returns RepositoryMode.HOSTED
     }
 
     describe("TagApiController 웹 API 테스트") {
         val project = Project(id = 1L, name = "TestProject", owner = "owner", vcs = "git", projectScope = ProjectScope.PUBLIC)
         val userAuth = UsernamePasswordAuthenticationToken("testuser", "password")
+
+        it("rejects tag deletion on persisted MIRROR even for a site administrator") {
+            val admin = User(id = 10L, loginId = "testuser", name = "Admin", state = UserState.SITE_ADMIN)
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProject") } returns Optional.of(project)
+            every { projectRepository.findRepositoryModeById(1L) } returns RepositoryMode.MIRROR
+            every { userRepository.findByLoginId("testuser") } returns Optional.of(admin)
+            mockMvc.perform(delete("/owner/TestProject/tags/v1.0").principal(userAuth))
+                .andExpect(view().name("error/forbidden"))
+            verify(exactly = 0) { repositoryService.getRepository(any()) }
+        }
 
         describe("DELETE /{owner}/{projectName}/tags/{tag}") {
             it("매니저가 삭제를 요청하면 302 리다이렉트와 deleteTag 메소드가 정상 호출되어야 한다") {

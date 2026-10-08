@@ -3,9 +3,12 @@ package com.github.yonaprojects.yona.domain.project
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.annotation.Isolation
 import java.time.Instant
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
 import com.github.yonaprojects.yona.domain.vcs.nextVcsInCycle
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import com.github.yonaprojects.yona.domain.vcs.RepositoryNamespaceGuard
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.FavoriteProjectRepository
@@ -32,6 +35,9 @@ import com.github.yonaprojects.yona.domain.watch.WatchService
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.Path
 import java.security.SecureRandom
 import java.util.Optional
@@ -73,7 +79,9 @@ class ProjectServiceImpl(
     @Value("\${yona.svn.base-dir:/tmp/yona/svn}")
     private val svnBaseDir: String,
     @Value("\${yona.hg.base-dir:/tmp/yona/hg}")
-    private val hgBaseDir: String
+    private val hgBaseDir: String,
+    private val writeGuard: RepositoryWriteGuard,
+    private val namespaceGuard: RepositoryNamespaceGuard
 ) : ProjectService {
 
     // 프로젝트가 이전/개명된 뒤에도 이 서비스 메서드를 쓰는 모든 호출부(SVN/Git 인가 필터 등)가
@@ -86,11 +94,14 @@ class ProjectServiceImpl(
         return projectRepository.findByOwner(owner)
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = [Exception::class])
     override fun createProject(project: Project, creator: User): Project {
+        writeGuard.requireWritable(project)
         if (ProjectNameValidator.isRestricted(project.name)) {
             throw IllegalArgumentException("Project name is restricted: ${project.name}")
         }
+        namespaceGuard.holdUntilTransactionCompletion(project.owner ?: "", project.name)
+        namespaceGuard.requireUnreserved(project.owner ?: "", project.name)
         if (exists(project.owner ?: "", project.name)) {
             throw IllegalArgumentException("Already exists project name: ${project.owner}/${project.name}")
         }
@@ -124,7 +135,7 @@ class ProjectServiceImpl(
         return projectUserRepository.existsByProjectIdAndUserLoginId(projectId, loginId)
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = [Exception::class])
     override fun updateProject(projectId: Long, param: UpdateProjectParam): Project {
         val project = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
@@ -132,6 +143,7 @@ class ProjectServiceImpl(
         // 개명 검사를 가장 먼저 수행해, 다른 필드가 바뀌기 전에 실패하면 아무 것도 반영되지
         // 않게 한다.
         if (param.name != null && param.name != project.name) {
+            writeGuard.requireWritable(project)
             // legacy도 서버 사이드에서는 예약어 검사만 했다(rxPrjName 형식 검사는 클라이언트
             // 전용) - 클라이언트 검증이 뚫려도 막히도록 createProject()와 동일한 검증을 적용한다.
             if (ProjectNameValidator.isRestricted(param.name)) {
@@ -139,12 +151,13 @@ class ProjectServiceImpl(
             }
 
             val owner = project.owner ?: ""
+            namespaceGuard.holdUntilTransactionCompletion(owner, param.name)
+            namespaceGuard.requireUnreserved(owner, param.name)
             if (projectRepository.existsByOwnerIgnoreCaseAndNameIgnoreCaseAndIdNot(owner, param.name, projectId)) {
                 throw IllegalArgumentException("이미 사용 중인 프로젝트 이름입니다.")
             }
 
             val originalName = project.name
-            recordRenameOrTransferHistoryIfLastChangePassed24HoursFrom(project, owner, originalName)
 
             // yona `repository.renameTo(updatedProject.name)`가 실패하면 FileOperationException을
             // 던져 저장을 막는다 — yona는 대응하는 체크 예외가 없어 IllegalStateException으로 이식.
@@ -153,6 +166,7 @@ class ProjectServiceImpl(
                 throw IllegalStateException("저장소 이름 변경에 실패했습니다: $owner/${param.name}")
             }
 
+            recordRenameOrTransferHistoryIfLastChangePassed24HoursFrom(project, owner, originalName)
             project.name = param.name
 
             // 이 프로젝트를 즐겨찾기한 모든 사용자의 비정규화된 owner/projectName도 함께 최신화한다.
@@ -181,6 +195,7 @@ class ProjectServiceImpl(
         if (param.isWikiEnabled != null) project.isWikiEnabled = param.isWikiEnabled
 
         if (!param.defaultBranch.isNullOrBlank()) {
+            writeGuard.requireWritable(project)
             try {
                 val repository = repositoryService.getRepository(project)
                 repository.setDefaultBranch("refs/heads/${param.defaultBranch}")
@@ -196,6 +211,7 @@ class ProjectServiceImpl(
     override fun deleteProject(projectId: Long) {
         val project = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
+        writeGuard.requireWritable(project)
 
         projectTransferRepository.deleteAll(projectTransferRepository.findByProjectId(projectId))
 
@@ -283,6 +299,7 @@ class ProjectServiceImpl(
     override fun requestNewTransfer(projectId: Long, senderId: Long, destination: String): ProjectTransfer {
         val project = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("Project not found") }
+        writeGuard.requireWritable(project)
         val sender = userRepository.findById(senderId)
             .orElseThrow { IllegalArgumentException("Sender not found") }
 
@@ -342,7 +359,7 @@ class ProjectServiceImpl(
         }
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     override fun acceptTransfer(transferId: Long, confirmKey: String, acceptorId: Long) {
         val limit = Instant.now().minusSeconds(86400) // 24시간 전 유효
         val pt = projectTransferRepository.findByIdAndAcceptedAndRequestedAfter(transferId, false, limit)
@@ -359,16 +376,18 @@ class ProjectServiceImpl(
         }
 
         val project = pt.project
+        writeGuard.requireWritable(project)
         val originalOwner = project.owner ?: ""
         val originalName = project.name
         val newOwner = pt.destination
         val newName = pt.newProjectName
         val senderId = pt.sender.id!!
 
-        // 마지막 이전/개명 기록으로부터 24시간이 지났을 때만(또는 최초일 때만) 예전 위치를 갱신한다
-        // — 짧은 시간 내 연속 이전이 일어나도 "예전 위치" 포인터가 계속 최신으로만 덮어써지지
-        // 않도록 방지한다.
-        recordRenameOrTransferHistoryIfLastChangePassed24HoursFrom(project, originalOwner, originalName)
+        namespaceGuard.holdUntilTransactionCompletion(newOwner, newName)
+        namespaceGuard.requireUnreserved(newOwner, newName)
+        if (projectRepository.findByOwnerAndName(newOwner, newName).isPresent) {
+            throw IllegalArgumentException("Destination project already exists.")
+        }
 
         // 물리 저장소 폴더명 이동 — SvnRepository/HgRepository는 접미사 없는 "$owner/$name" 경로를
         // 쓰므로, git만 ".git" 접미사를 붙여야 한다(그렇지 않으면 SVN/Mercurial 프로젝트는
@@ -385,12 +404,45 @@ class ProjectServiceImpl(
         }
         val sourceDir = File(baseDir, "$originalOwner/$originalName$dirSuffix")
         val targetDir = File(baseDir, "$newOwner/$newName$dirSuffix")
-        if (sourceDir.exists()) {
-            targetDir.parentFile.mkdirs()
-            sourceDir.renameTo(targetDir)
+        val sourceExists = sourceDir.exists()
+        val targetPath = targetDir.toPath()
+        var reservationKey: Any? = null
+        try {
+            Files.createDirectories(targetPath.parent)
+            Files.createDirectory(targetPath)
+            reservationKey = Files.readAttributes(targetPath, BasicFileAttributes::class.java, NOFOLLOW_LINKS).fileKey()
+                ?: throw IllegalStateException("Repository transfer failed.")
+            val current = Files.readAttributes(targetPath, BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+            check(current.isDirectory && current.fileKey() == reservationKey) { "Repository transfer failed." }
+            Files.newDirectoryStream(targetPath).use {
+                check(!it.iterator().hasNext()) { "Repository transfer failed." }
+            }
+            if (sourceExists) {
+                check(Files.isDirectory(sourceDir.toPath(), NOFOLLOW_LINKS)) { "Repository transfer failed." }
+                Files.move(sourceDir.toPath(), targetPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            } else {
+                // Legacy projects without a physical repository still transfer metadata.
+                Files.delete(targetPath)
+            }
+        } catch (e: Exception) {
+            if (reservationKey != null) {
+                try {
+                    val current = Files.readAttributes(targetPath, BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+                    if (current.isDirectory && current.fileKey() == reservationKey) {
+                        Files.delete(targetPath) // Never recursively remove a changed or populated destination.
+                    }
+                } catch (_: IOException) {
+                    // Leave anything whose identity or emptiness can no longer be established.
+                }
+            }
+            if (e is FileAlreadyExistsException) {
+                throw IllegalArgumentException("Destination repository already exists.")
+            }
+            throw IllegalStateException("Repository transfer failed.")
         }
 
         // DB 메타데이터 변경 반영
+        recordRenameOrTransferHistoryIfLastChangePassed24HoursFrom(project, originalOwner, originalName)
         project.owner = newOwner
         project.name = newName
         // 목적지가 조직이면 그 조직으로, 개인이면 null로 명시적으로 갱신한다.
@@ -455,7 +507,7 @@ class ProjectServiceImpl(
     // 대상으로 삼아 체크 예외는 커밋 대상으로 취급한다 — 그러면 파일시스템 작업이 실패해도 이미
     // 실행된 DB 저장은 커밋되어 owner+name이 중복된 Project 행이 남는다. rollbackFor =
     // [Exception::class]로 체크 예외도 롤백 대상에 포함시켜 부분 커밋을 막는다.
-    @Transactional(rollbackFor = [Exception::class])
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = [Exception::class])
     override fun forkProject(
         projectId: Long,
         forkerId: Long,
@@ -464,6 +516,7 @@ class ProjectServiceImpl(
     ): Project {
         val original = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("Original project not found") }
+        writeGuard.requireWritable(original)
         val forker = userRepository.findById(forkerId)
             .orElseThrow { IllegalArgumentException("Forker user not found") }
 
@@ -476,6 +529,9 @@ class ProjectServiceImpl(
         if (!isAuthorizedToAcceptTransfer(destOwner, forker)) {
             throw IllegalArgumentException("'$destOwner' 이름으로 포크할 권한이 없습니다 — 본인 계정이거나 관리자(ORG_ADMIN)로 속한 조직만 목적지로 지정할 수 있습니다.")
         }
+
+        namespaceGuard.holdUntilTransactionCompletion(destOwner, destName)
+        namespaceGuard.requireUnreserved(destOwner, destName)
 
         // 목적지가 이미 존재하면 파일시스템 하드링크를 시도하기도 전에 400 계열로 거절한다 —
         // 예측 가능한 충돌이므로 트랜잭션 롤백에 기대는 대신 사전 검증으로 막는 게 더 저렴하다.
@@ -566,6 +622,7 @@ class ProjectServiceImpl(
     @Transactional
     override fun changeVCS(projectId: Long): Project {
         val project = projectRepository.findById(projectId).orElseThrow { IllegalArgumentException("Project not found") }
+        writeGuard.requireWritable(project)
 
         for (fork in project.forkingProjects) {
             fork.originalProject = null

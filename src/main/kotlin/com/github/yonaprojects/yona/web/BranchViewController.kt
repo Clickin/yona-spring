@@ -7,6 +7,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.pullrequest.PullRequestRepository
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -20,7 +21,8 @@ class BranchViewController(
     private val userRepository: UserRepository,
     private val repositoryService: RepositoryService,
     private val accessControl: AccessControl,
-    private val pullRequestRepository: PullRequestRepository
+    private val pullRequestRepository: PullRequestRepository,
+    private val writeGuard: RepositoryWriteGuard
 ) {
 
     @GetMapping("/{owner}/{projectName}/branches")
@@ -87,10 +89,10 @@ class BranchViewController(
         }
 
         // yona code/branches.scala.html 대응 — DELETE 또는 UPDATE 권한이 있을 때만 액션 컬럼(빈 th 포함) 자체를 렌더링한다.
-        val showActionsColumn = accessControl.isAllowed(loginUser, project, Operation.DELETE) ||
-            accessControl.isAllowed(loginUser, project, Operation.UPDATE)
-        val canUpdate = accessControl.isAllowed(loginUser, project, Operation.UPDATE)
-        val canDelete = accessControl.isAllowed(loginUser, project, Operation.DELETE)
+        val writable = writeGuard.isWritable(project)
+        val canUpdate = writable && accessControl.isAllowed(loginUser, project, Operation.UPDATE)
+        val canDelete = writable && accessControl.isAllowed(loginUser, project, Operation.DELETE)
+        val showActionsColumn = canUpdate || canDelete
 
         model.addAttribute("project", project)
         model.addAttribute("allBranches", filteredBranches)
