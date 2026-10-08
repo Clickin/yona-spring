@@ -14,6 +14,7 @@ import com.github.yonaprojects.yona.domain.vcs.RepositoryService
 import io.kotest.assertions.withClue
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
@@ -36,7 +37,8 @@ class HgHttpProtocolIntegrationSpec @Autowired constructor(
     private val projectRepository: ProjectRepository,
     private val repositoryService: RepositoryService,
     private val projectUserRepository: ProjectUserRepository,
-    private val roleRepository: RoleRepository
+    private val roleRepository: RoleRepository,
+    private val mirrorRepository: com.github.yonaprojects.yona.domain.vcs.RepositoryMirrorRepository
 ) : AbstractIntegrationTest() {
 
     private fun hashPassword(password: String, salt: String): String {
@@ -115,6 +117,52 @@ class HgHttpProtocolIntegrationSpec @Autowired constructor(
                     File(cloneDest, "README.md").exists() shouldBe true
                 } finally {
                     cloneDest.deleteRecursively()
+                }
+            }
+
+            it("serves a Mercurial mirror to a real hg clone and pull while refusing push") {
+                if (!hgAvailable()) return@it
+
+                val owner = userRepository.findByLoginId("hg-mirror-owner").orElseGet {
+                    userRepository.save(User(loginId = "hg-mirror-owner", name = "Hg mirror owner", email = "hg-mirror-owner@yona.io"))
+                }
+                val project = projectRepository.save(Project(
+                    name = "hg-mirror-proj", owner = owner.loginId, projectScope = ProjectScope.PUBLIC, vcs = "MERCURIAL",
+                    repositoryMode = com.github.yonaprojects.yona.domain.project.RepositoryMode.MIRROR
+                ))
+                mirrorRepository.save(com.github.yonaprojects.yona.domain.vcs.RepositoryMirror(
+                    project = project, sourceUrl = "https://hg.example.test/repo", initialImportDone = true,
+                    status = com.github.yonaprojects.yona.domain.vcs.RepositoryMirrorStatus.INCREMENTAL
+                ))
+                val repoDir = File(hgBaseDirHolder, "${project.owner}/${project.name}").also { it.mkdirs() }
+                fun hgOk(dir: File?, vararg args: String) {
+                    val (exit, output) = runHg(dir, *args)
+                    withClue(output) { exit shouldBe 0 }
+                }
+                hgOk(repoDir, "init")
+                File(repoDir, "README.md").writeText("# mirrored")
+                hgOk(repoDir, "add", "README.md")
+                hgOk(repoDir, "--config", "ui.username=upstream <upstream@example.test>", "commit", "-m", "mirrored #1")
+                hgOk(repoDir, "bookmark", "main")
+
+                val url = "http://127.0.0.1:$port/hg/${project.owner}/${project.name}"
+                val clone = Files.createTempDirectory("hg-mirror-clone-").toFile()
+                try {
+                    hgOk(null, "clone", url, clone.absolutePath)
+                    File(clone, "README.md").readText() shouldBe "# mirrored"
+                    File(repoDir, "README.md").writeText("# mirrored 2")
+                    hgOk(repoDir, "--config", "ui.username=upstream <upstream@example.test>", "commit", "-m", "second")
+                    hgOk(clone, "pull", "-u")
+                    File(clone, "README.md").readText() shouldBe "# mirrored 2"
+
+                    File(clone, "local.txt").writeText("local")
+                    hgOk(clone, "add", "local.txt")
+                    hgOk(clone, "--config", "ui.username=x <x@example.test>", "commit", "-m", "local change")
+                    val (pushExit, _) = runHg(clone, "push", url)
+                    pushExit shouldNotBe 0
+                    runHg(repoDir, "log", "-r", "tip", "--template", "{desc}").second shouldBe "second"
+                } finally {
+                    clone.deleteRecursively()
                 }
             }
 

@@ -39,7 +39,8 @@ Yona에서 관리한다. VCS와 무관한 부분(모드와 쓰기 보호, 이름
 알림을 직접 쓰지 않는다.
 
 - 로컬 저장소는 해당 VCS의 hosted 경로를 그대로 쓴다: `<svn>/owner/name`, `<git>/owner/name.git`,
-  `<hg>/owner/name`. 기존 HTTP/SSH 읽기 경로가 그대로 서빙하고 쓰기는 모드로 거부된다.
+  `<hg>/owner/name`. 기존 읽기 경로가 그대로 서빙하고 쓰기는 모드로 거부된다. 단 Mercurial 미러는
+  HTTP로만 clone·pull할 수 있다(SSH 미지원, 아래 참고).
 - 진행 위치는 SVN·Mercurial은 선형 커서(`lastVerifiedRevision`, `lastIndexedRevision`, 고정 목표 R),
   Git은 ref별 색인 위치(`repository_mirror_ref`)다. Git의 새 커밋은 가져온 ref에서 닿고 색인한 어느
   위치에서도 닿지 않는 커밋이다.
@@ -58,8 +59,11 @@ NOT NULL을 확인한다. 대상 DB는 H2, MariaDB, PostgreSQL, MySQL, SQL Serve
 거부는 유지된다. HTTP/SSH, 웹/API, 실제 저장소 writer가 최신 DB 모드를 확인하며 관리자도
 우회하지 못한다. 별도 위키 저장소와 일반 게시글은 계속 쓸 수 있다. 새 미러는 등록된 엔진이 있는
 VCS만 만들 수 있다.
-hg4j의 중첩 batch/pushkey 경로를 안전하게 허용할 수 없어, 지원하지 않는 Hg MIRROR의 SSH
-세션과 HTTP batch/v2 multirequest는 읽기 전용 요청을 포함해 거부한다. HOSTED 분류는 바꾸지 않는다.
+hg4j 1.0.0은 v1 batch와 v2 안의 pushkey에서 hook을 거치지 않는다. 그래서 Mercurial MIRROR의 HTTP
+batch는 하위 명령이 모두 읽기(`heads`, `known`, `lookup`, `listkeys`, `branchmap` 등)일 때만 허용하고,
+하위 명령을 읽을 수 없거나 `pushkey`·`unbundle`이 섞이면 거부한다. `cmd`가 여러 번 오면 모두 검사한다.
+v2 multirequest와 SSH 세션은 같은 검사를 할 수 없어 Mercurial MIRROR에서 거부한다. HOSTED 분류는
+바꾸지 않는다.
 
 프로젝트 이름에는 DB unique 제약이 없다. 생성·개명·이전·포크는 이름별 파일 잠금을 DB
 transaction 완료까지 유지하고 READ_COMMITTED에서 목적지를 다시 확인한다. Git clone도 같은

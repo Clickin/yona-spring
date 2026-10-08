@@ -98,7 +98,9 @@ class RepositoryProtocolMirrorGuardSpec : DescribeSpec({
             Triple("POST", "/hg/owner/repo", "cmd=pushkey&namespace=bookmarks"),
             Triple("POST", "/hg/owner/repo", "cmd=pushkey&namespace=phases"),
             Triple("POST", "/hg/owner/repo", "cmd=batch&cmds=pushkey%20namespace%3Dbookmarks%2Ckey%3Dmain%2Cold%3D%2Cnew%3Dabc"),
-            Triple("GET", "/hg/owner/repo", "cmd=batch&cmds=heads"),
+            Triple("GET", "/hg/owner/repo", "cmd=batch&cmds=heads%3Bpushkey%20namespace%3Dbookmarks"),
+            Triple("GET", "/hg/owner/repo", "cmd=batch"),
+            Triple("GET", "/hg/owner/repo", "cmd=heads&cmd=batch&cmds=heads%3Bunbundle%20heads%3D"),
             Triple("POST", "/hg/owner/repo", "cmd=heads&%63md=%62atch"),
             Triple("POST", "/hg/owner/repo", "cmd=heads&%63md=push%6bey"),
             Triple("POST", "/hg/owner/repo/api/exp/ro/pushkey", null),
@@ -119,6 +121,19 @@ class RepositoryProtocolMirrorGuardSpec : DescribeSpec({
                 verify(exactly = 0) { chain.doFilter(any(), any()) }
                 project.repositoryMode shouldBe RepositoryMode.HOSTED
             }
+        }
+        it("lets a MIRROR batch through when every subcommand reads, from the query or X-HgArg headers") {
+            persistedMode = RepositoryMode.MIRROR
+            request("GET", "/hg/owner/repo", "cmd=batch&cmds=heads%20%3Bknown%20nodes%3D").status shouldBe 200
+            val viaHeaders = MockHttpServletRequest("GET", "/hg/owner/repo").apply {
+                queryString = "cmd=batch"
+                addHeader("X-HgArg-1", "cmds=heads+%3Bknown+nodes%3D;listkeys")
+                addHeader("X-HgArg-2", "+namespace%3Dbookmarks")
+            }
+            com.github.yonaprojects.yona.config.hg.isHgMirrorMutationRequest(viaHeaders) shouldBe false
+            viaHeaders.removeHeader("X-HgArg-2")
+            viaHeaders.addHeader("X-HgArg-2", ";pushkey+namespace%3Dbookmarks")
+            com.github.yonaprojects.yona.config.hg.isHgMirrorMutationRequest(viaHeaders) shouldBe true
         }
         it("keeps authenticated HTTP wiki writes available but not unauthorized wiki writes") {
             persistedMode = RepositoryMode.MIRROR

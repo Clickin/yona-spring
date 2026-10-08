@@ -155,8 +155,8 @@ class HgAuthorizationFilter(
     }
 }
 
-// hg4j 1.0.0 bypasses pushkey hooks in v1 batch and v2. Only SVN mirrors are supported;
-// reject the entire MIRROR batch (including read batches), without changing HOSTED authorization.
+// hg4j 1.0.0 bypasses pushkey hooks in v1 batch and v2, so a MIRROR accepts a batch only when every
+// subcommand is a read (clients use batch for clone/pull discovery). HOSTED authorization is unchanged.
 internal fun isHgMirrorMutationRequest(request: HttpServletRequest): Boolean {
     val uri = request.requestURI
     val apiIndex = uri.lastIndexOf("/api/")
@@ -166,19 +166,39 @@ internal fun isHgMirrorMutationRequest(request: HttpServletRequest): Boolean {
         // Native v2 dispatch does not enforce the URL's ro/rw permission segment.
         if (segments.size >= 3 && (segments[2] == "pushkey" || segments[2] == "multirequest")) return true
     }
-    val query = request.queryString ?: return false
-    for (pair in query.split("&")) {
+    val query = formArguments(request.queryString ?: return false) ?: return false
+    // Every repeated value counts: the native dispatcher's choice among duplicates must not matter.
+    val commands = query["cmd"].orEmpty()
+    return commands.any { it == "unbundle" || it == "pushkey" } || ("batch" in commands && !isReadOnlyBatch(request, query))
+}
+
+private val HG_READ_BATCH_COMMANDS = setOf(
+    "heads", "known", "lookup", "listkeys", "branchmap", "branches", "between", "capabilities", "hello", "clonebundles"
+)
+
+/** Fail closed: a batch whose `cmds` cannot be read from the query or X-HgArg headers counts as a mutation. */
+private fun isReadOnlyBatch(request: HttpServletRequest, query: Map<String, List<String>>): Boolean {
+    val headerArgs = generateSequence(1) { it + 1 }
+        .map { request.getHeader("X-HgArg-$it") }
+        .takeWhile { it != null }
+        .joinToString("")
+    val cmds = (query["cmds"].orEmpty() + formArguments(headerArgs)?.get("cmds").orEmpty()).ifEmpty { return false }
+    val names = cmds.flatMap { it.split(';') }.map { it.substringBefore(' ') }
+    return names.all { it in HG_READ_BATCH_COMMANDS }
+}
+
+private fun formArguments(encoded: String): Map<String, List<String>>? {
+    val result = mutableMapOf<String, MutableList<String>>()
+    for (pair in encoded.split("&")) {
         val equals = pair.indexOf('=')
         if (equals < 0) continue
         try {
-            val key = URLDecoder.decode(pair.substring(0, equals), StandardCharsets.UTF_8)
-            if (key != "cmd") continue
-            val value = URLDecoder.decode(pair.substring(equals + 1), StandardCharsets.UTF_8)
-            if (value == "unbundle" || value == "pushkey" || value == "batch") return true
+            result.getOrPut(URLDecoder.decode(pair.substring(0, equals), StandardCharsets.UTF_8)) { mutableListOf() }
+                .add(URLDecoder.decode(pair.substring(equals + 1), StandardCharsets.UTF_8))
         } catch (_: IllegalArgumentException) {
             // The native decoder also rejects malformed escapes before dispatch.
-            return false
+            return null
         }
     }
-    return false
+    return result
 }
