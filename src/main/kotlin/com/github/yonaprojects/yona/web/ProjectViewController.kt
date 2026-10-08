@@ -81,7 +81,8 @@ class ProjectViewController(
     private val accessControl: AccessControl,
     // legacy Application.java의 HIDE_PROJECT_LISTING 설정과 대응.
     @Value("\${yona.application.hide-project-listing:false}")
-    private val hideProjectListing: Boolean = false
+    private val hideProjectListing: Boolean = false,
+    private val mirrorReadiness: com.github.yonaprojects.yona.domain.vcs.RepositoryMirrorReadiness? = null
 ) {
 
 
@@ -101,6 +102,7 @@ class ProjectViewController(
             model.addAttribute("project", project)
             return "error/forbidden"
         }
+        model.addAttribute("mirrorPreparing", mirrorReadiness?.isReady(project) == false)
 
         if (loginUser != null) {
             addVisitHistory(loginUser, project)

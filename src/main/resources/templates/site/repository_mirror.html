@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{site/layout :: head(#{mirror.title})}"></head>
+<body class="theme-default">
+<div id="main" class="main">
+  <div th:replace="~{site/layout :: gnb}"></div>
+  <div th:replace="~{site/layout :: breadcrumb}"></div>
+  <div class="page-wrap-outer"><div class="site-setting-wrap"><div class="row-fluid">
+    <div th:replace="~{site/layout :: sidebar('repositoryMirrors')}"></div>
+    <main class="span10">
+      <h2 th:text="#{mirror.title}">SVN read-only mirrors</h2>
+      <p role="status" th:if="${mirrorNotice != null}" th:text="#{${mirrorNotice}}"></p>
+      <p class="alert" th:unless="${mirrorEnabled}" th:text="#{mirror.disabled}"></p>
+      <p th:text="#{mirror.warning}"></p>
+      <p th:text="#{mirror.sourceImmutable}"></p>
+      <p th:text="#{mirror.pauseHelp}"></p>
+      <form th:if="${mirrorEnabled}" th:action="@{/site/repository-mirrors}" method="post">
+        <fieldset>
+          <legend th:text="#{mirror.create}"></legend>
+          <p th:text="#{mirror.createHelp}"></p>
+          <label for="mirror-name" th:text="#{project.name}"></label>
+          <input id="mirror-name" name="name" required maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,99}" autocomplete="off">
+          <label for="mirror-source" th:text="#{mirror.source}"></label>
+          <input id="mirror-source" name="sourceUrl" type="url" required maxlength="2048" placeholder="https://svn.example.org/repository" autocomplete="off" class="span10">
+          <label for="mirror-credential" th:text="#{mirror.credential}"></label>
+          <select id="mirror-credential" name="credentialRef">
+            <option value="" th:text="#{mirror.anonymous}"></option>
+            <option th:each="ref : ${credentialRefs}" th:value="${ref}" th:text="${ref}"></option>
+          </select>
+          <button type="submit" class="ybtn ybtn-primary" th:text="#{mirror.create}"></button>
+        </fieldset>
+      </form>
+      <p th:if="${mirrors.empty}" th:text="#{mirror.empty}"></p>
+      <section th:each="mirror : ${mirrors.content}" class="well">
+        <h3><a th:href="@{/{owner}/{name}(owner=${mirror.projectOwner},name=${mirror.projectName})}" th:text="${mirror.projectOwner + '/' + mirror.projectName}"></a></h3>
+        <p><strong th:text="#{${'mirror.status.' + mirror.status}}"></strong> — <span th:text="${mirror.enabled} ? #{mirror.enabled} : #{mirror.paused}"></span></p>
+        <p class="alert" th:unless="${mirror.ready}" th:text="#{mirror.preparing}"></p>
+        <p th:if="${mirror.ready}" th:text="#{mirror.ready}"></p>
+        <p class="alert" role="alert" th:if="${mirror.hasError}" th:text="#{${mirror.errorMessage}}"></p>
+        <dl>
+          <dt th:text="#{mirror.source}"></dt><dd th:text="${mirror.source}"></dd>
+          <dt th:text="#{mirror.credential}"></dt><dd th:text="${mirror.credentialConfigured} ? #{mirror.configured} : #{mirror.anonymous}"></dd>
+          <dt th:text="#{mirror.target}"></dt><dd th:text="${mirror.initialImportTargetRevision != null ? 'r' + mirror.initialImportTargetRevision : '—'}"></dd>
+          <dt th:text="#{mirror.verified}"></dt><dd th:text="${mirror.lastVerifiedRevision}"></dd>
+          <dt th:text="#{mirror.indexed}"></dt><dd th:text="${mirror.lastIndexedRevision}"></dd>
+          <dt th:text="#{mirror.youngest}"></dt><dd th:text="${mirror.localYoungestRevision}"></dd>
+          <dt th:text="#{mirror.sourceYoungest}"></dt><dd th:text="${mirror.sourceYoungestRevision}"></dd>
+          <dt th:text="#{mirror.generation}"></dt><dd th:text="${mirror.generation}"></dd>
+          <dt th:text="#{mirror.lastSync}"></dt><dd th:text="${mirror.lastSyncedAt ?: '—'}"></dd>
+          <dt th:text="#{mirror.nextSync}"></dt><dd th:text="${mirror.nextSyncAt ?: '—'}"></dd>
+          <dt th:text="#{mirror.retryCount}"></dt><dd th:text="${mirror.retryCount}"></dd>
+          <dt th:text="#{mirror.lease}"></dt><dd><span th:text="${mirror.leaseActive} ? #{mirror.running} : #{mirror.idle}"></span> <span th:text="${mirror.leaseUntil}"></span></dd>
+        </dl>
+        <div th:if="${mirrorEnabled}">
+          <form th:action="@{/site/repository-mirrors/{id}/pause(id=${mirror.id})}" method="post">
+            <button class="ybtn" type="submit" th:disabled="${!mirror.enabled}" th:text="#{mirror.pause}"></button>
+          </form>
+          <form th:action="@{/site/repository-mirrors/{id}/retry(id=${mirror.id})}" method="post">
+            <button class="ybtn" type="submit" th:disabled="${mirror.leaseActive}" th:text="#{mirror.retry}"></button>
+          </form>
+          <form th:action="@{/site/repository-mirrors/{id}/credential(id=${mirror.id})}" method="post">
+            <label th:for="${'credential-' + mirror.id}" th:text="#{mirror.credential}"></label>
+            <select th:id="${'credential-' + mirror.id}" name="credentialRef" th:disabled="${mirror.leaseActive}">
+              <option value="" th:text="#{mirror.anonymous}"></option>
+              <option th:each="ref : ${credentialRefs}" th:value="${ref}" th:text="${ref}"></option>
+            </select>
+            <button class="ybtn" type="submit" th:disabled="${mirror.leaseActive}" th:text="#{mirror.replaceCredential}"></button>
+          </form>
+        </div>
+      </section>
+      <nav aria-label="Pagination">
+        <a th:if="${mirrors.hasPrevious()}" th:href="@{/site/repository-mirrors(page=${mirrors.number - 1})}" th:text="#{mirror.previous}"></a>
+        <a th:if="${mirrors.hasNext()}" th:href="@{/site/repository-mirrors(page=${mirrors.number + 1})}" th:text="#{mirror.next}"></a>
+      </nav>
+    </main>
+  </div></div></div>
+  <footer th:replace="~{site/layout :: footer}"></footer>
+</div>
+<th:block th:replace="~{site/layout :: scripts}"></th:block>
+</body>
+</html>
