@@ -68,3 +68,54 @@ project ID/generation/경로, 실제 디렉터리를 대조해야 하며 자동 
 재시도는 R·generation·검증/색인 커서를 초기화하지 않으며 유효한 임대를 빼앗지 않는다.
 원본 URL/UUID를 다른 저장소로 바꾸는 기능은 없고, 다른 원본에는 새 미러를 만든다.
 
+### 원본 접속과 SVN 복제
+
+원본은 정확히 허용된 HTTPS origin의 **저장소 루트**여야 한다. 하위 디렉터리, userinfo,
+query/fragment, HTTP, file, svn+ssh, redirect는 허용하지 않는다. 모든 DNS 주소를 검사하고,
+사설·loopback·link-local·multicast 등 비공개 주소는 명시적인 CIDR 예외가 없으면 거부한다.
+
+DNS 사전 검사는 connect-time 주소 고정을 대신하지 않는다. 활성화에는 실제
+**목적지 제한 CONNECT 프록시**가 필수다. SVNKit은 설정된 loopback 프록시로만 연결하며 직접
+연결로 fallback하지 않는다. 운영자는 프록시가 매 CONNECT마다 정확한 호스트/포트와 실제 IP를
+검사·고정하도록 설정하고, 직접 원본 egress도 차단해야 한다. 호스트 이름만 검사하고 나중에
+다시 DNS 조회하는 프록시는 이 조건을 충족하지 않는다. `egress-restricted=true`는 그 배포
+조건의 확인이지 애플리케이션 자체의 DNS pinning 구현을 뜻하지 않는다.
+
+```yaml
+yona:
+  repository-mirror:
+    enabled: false
+    egress-restricted: false
+    proxy-host: "127.0.0.1"
+    proxy-port: 3128
+    node-id: "writer-a"
+    writer-node-id: "writer-a"
+    allowed-origins: ["https://svn.example.org:443"]
+    allowed-cidrs: []
+    credentials:
+      svn-reader: "/run/secrets/svn-reader.properties"
+```
+
+프록시 제한·TLS 신뢰·writer 경로를 검증한 뒤 두 boolean을 `true`로 바꾼다. 인증서는 JVM
+truststore와 HTTPS 호스트명 검증을 통과해야 한다. 필요한 사설 CA는
+`javax.net.ssl.trustStore`/`javax.net.ssl.trustStorePassword`로 제공하며 인증서 검증을 끄지 않는다.
+
+credentialRef는 위 map의 논리 이름만 받는다. 파일은 `username`/`password` 두 키를 가진
+UTF-8 Java properties 형식이며, 절대 real path, symlink 없음, 프로세스 사용자 또는 root 소유,
+0400/0600 권한이어야 한다. properties의 backslash escape 규칙이 적용된다. 읽기 전용 SVN
+계정을 사용하고 secret provisioning/rotation은 운영자가 수행한다. 화면·DB에는 비밀번호를
+저장하지 않으며 SVNKit 디스크 자격증명 cache도 사용하지 않는다.
+
+복제는 SVNKit `SVNRepositoryReplicator`를 사용하고 실행마다 목표 HEAD를 고정한다.
+재시작하면 local youngest를 직접 읽어 이미 commit됐지만 미검증인 구간의 author/date/log와
+custom 속성 및 삭제를 먼저 보정한다. 복제 함수의 성공만으로 검증 커서를 올리지 않는다.
+SVNKit 1.10.11의 마지막 속성 삭제가 revprops 파일까지 지우는 동작을 피하도록 추가 후
+삭제하며, 속성이 전혀 없는 유효한 r0은 FSFS 잠금 아래 빈 END hash 파일로 보존한다.
+
+r1 이후 날짜는 유효한 SVN 날짜여야 하고 author는 최대 255 UTF-16 code units다.
+초과·잘못된 날짜는 잘라내거나 현재 시각으로 대신하지 않고 검증 커서 이전에서
+`NEEDS_ATTENTION`으로 멈춘다. 원본 운영자가 해당 속성을 고친 뒤 재시도하면 미검증
+구간을 보정한다. UUID 변경, 원본 HEAD 감소, 대상 손상에는 자동 삭제/재생성을 하지 않는다.
+이미 검증한 과거 속성 수정은 지속해서 탐지·재색인하지 않으며, 발견한 불일치는 운영자 확인으로
+보낸다. 임의 cursor rewind는 지원하지 않는다.
+
