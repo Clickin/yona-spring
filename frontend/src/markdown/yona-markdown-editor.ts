@@ -1,4 +1,5 @@
-import {createApp, h, nextTick, shallowRef, type App} from 'vue';
+import {createApp, nextTick} from 'vue';
+import MarkdownEditor from './MarkdownEditor.ce.vue';
 import {mountShadow} from './shadow-styles';
 import TextExpanderElement, {type TextExpanderChangeEvent} from '@github/text-expander-element';
 import './yona-markdown-renderer';
@@ -12,14 +13,12 @@ type Suggestion = {value: string; label: string; image?: string};
 export class YonaMarkdownEditor extends HTMLElement {
   private textarea?: HTMLTextAreaElement;
   private expander?: TextExpanderElement;
-  private preview = shallowRef(false);
-  private previewHeight = 0;
   private helpMarkup?: HTMLElement;
   private notice?: HTMLElement;
   private clearDraft?: HTMLElement;
   private lifetime?: AbortController;
   private query?: AbortController;
-  private app?: App;
+  private view?: InstanceType<typeof MarkdownEditor>;
   private stylesReady: Promise<unknown> = Promise.resolve();
   get ready() { return this.stylesReady.then(() => nextTick()); }
 
@@ -27,20 +26,19 @@ export class YonaMarkdownEditor extends HTMLElement {
     const form = (this.textarea ?? this.querySelector('textarea'))?.form;
     if (!this.textarea) this.initializeTextarea();
     if (!this.shadowRoot) {
-      const shadow = mountShadow(this, `
-        :host { display: block; }
-        [hidden] { display: none !important; }
-        .markdown-editor-controls { color: #333; }
-        .markdown-editor-controls.nav-tabs.small > li { margin-bottom: -1px; }
-        .markdown-editor-controls.nav-tabs.small > li > a { padding: 4px 15px; }
-        .markdown-editor-controls a:focus-visible { outline: 2px solid #2679b5; }
-        .tab-pane.active { display: flow-root; }
-        .markdown-preview { box-sizing: border-box; overflow: auto; }
-        .markdown-preview > yona-markdown-renderer { padding: 0 !important; }
-      `);
+      const shadow = mountShadow(this, MarkdownEditor.styles ?? []);
       this.stylesReady = shadow.ready;
-      this.app = createApp({render: () => this.render()});
-      this.app.mount(shadow.mount);
+      this.view = createApp(MarkdownEditor, {
+        host: this,
+        textarea: this.textarea,
+        expander: this.expander,
+        hasClearDraft: !!this.clearDraft,
+        hasNotice: !!this.notice,
+        dismiss: () => {
+          this.query?.abort();
+          this.expander?.dismiss();
+        },
+      }).mount(shadow.mount) as InstanceType<typeof MarkdownEditor>;
     }
     if (this.textarea && this.expander) this.bindEvents(this.textarea, this.expander, form);
   }
@@ -108,30 +106,7 @@ export class YonaMarkdownEditor extends HTMLElement {
   }
 
   private edit() {
-    this.query?.abort();
-    this.expander?.dismiss();
-    this.preview.value = false;
-    if (this.expander) this.expander.hidden = false;
-  }
-
-  private showPreview() {
-    if (!this.textarea || this.preview.value) return;
-    this.query?.abort();
-    this.expander?.dismiss();
-    this.previewHeight = this.shadowRoot!.querySelector('.tab-pane')!.getBoundingClientRect().height;
-    this.preview.value = true;
-    if (this.expander) this.expander.hidden = true;
-  }
-
-  private addChecklist() {
-    const textarea = this.textarea;
-    if (!textarea) return;
-    this.edit();
-    const position = textarea.selectionStart || textarea.value.length;
-    const template = '\n- [ ] Todo A\n- [ ] Todo B\n- [ ] Todo C';
-    textarea.setRangeText(template, position, position, 'end');
-    textarea.dispatchEvent(new Event('input', {bubbles: true}));
-    void nextTick(() => textarea.focus());
+    this.view?.edit();
   }
 
   private indent(event: KeyboardEvent) {
@@ -221,42 +196,6 @@ export class YonaMarkdownEditor extends HTMLElement {
     } catch { return []; }
   }
 
-  private render() {
-    if (!this.textarea) return null;
-    const preview = this.preview.value;
-    const id = this.textarea.id;
-    const mode = this.getAttribute('editor-mode') ?? this.textarea.dataset.editorMode;
-    return [
-      h('ul', {class: 'nav nav-tabs nm small markdown-editor-controls', role: 'group', 'aria-label': 'Markdown view'}, [
-        ...[
-          {name: 'edit', active: !preview, action: () => this.edit(), label: this.dataset.editLabel ?? 'Edit'},
-          {name: 'preview', active: preview, action: () => this.showPreview(), label: this.dataset.previewLabel ?? 'Preview'},
-        ].map(({name, active, action, label}) => h('li', {class: active ? 'active' : ''}, h('a', {
-          href: `#${id}-${name}`, role: 'button', 'aria-controls': `${id}-${name}`,
-          'aria-pressed': String(active), onClick: (event: MouseEvent) => { event.preventDefault(); action(); },
-        }, label))),
-        h('li', h('div', {class: 'task-list-button'}, h('button', {
-          type: 'button', class: 'add-task-list-button ybtn ybtn-small ybtn-danger-no-outline',
-          onClick: () => this.addChecklist(),
-        }, [h('i', {class: 'yobicon-list task-list-icon', 'aria-hidden': 'true'}), ` ${this.dataset.checklistLabel ?? 'Add checklist'}`]))),
-        this.clearDraft ? h('li', h('slot', {name: 'clear-draft'})) : null,
-        this.notice ? h('li', h('slot', {name: 'notice'})) : null,
-      ]),
-      h('div', {class: 'tab-content', style: {position: 'relative', overflow: 'visible'}}, [
-        h('slot', {name: 'help'}),
-        h('div', {id: `${id}-edit`, class: ['tab-pane', {active: !preview}], hidden: preview},
-          h('div', {class: 'textarea-box'}, h('slot', {name: 'input'}))),
-        h('div', {
-          id: `${id}-preview`, class: ['tab-pane', 'markdown-preview', {active: preview}], hidden: !preview,
-          style: preview ? {height: `${this.previewHeight}px`} : undefined,
-        }, preview ? h('yona-markdown-renderer', {
-          '.sourceElement': this.textarea,
-          mode: mode === 'wiki-content' || mode === 'readme' ? 'document' : 'comment',
-          ...Object.fromEntries(['owner', 'project', 'ref', 'path'].map(name => [name, this.getAttribute(name)])),
-        }) : undefined),
-      ]),
-    ];
-  }
 }
 
 function mentionSuggestion(row: unknown, key: '@' | '#', search: string): Suggestion | undefined {
