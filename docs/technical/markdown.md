@@ -89,6 +89,8 @@ Mermaid loads only for Mermaid fences. A shared 24 ms queue renders sequentially
 
 The frontend pins TypeScript 6 because `vue-tsc` currently requires the JavaScript compiler entry point removed by native TypeScript 7. Production SFC source maps are disabled, matching the existing minified bundle build and avoiding the esbuild adapter adding JavaScript source-map comments to inline CSS.
 
+`scripts/vue-sfc.mjs` selects esbuild's text loader for compiled `type=style&inline` modules. The default CSS loader exports an empty object rather than the CSS string that the shadow root needs. Runtime geometry/style checks cover this integration; a browser smoke confirmed real CSS rules and the 4px/15px toolbar padding.
+
 ```sh
 cd frontend
 pnpm install --frozen-lockfile --ignore-scripts

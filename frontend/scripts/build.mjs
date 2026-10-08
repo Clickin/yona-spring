@@ -1,5 +1,5 @@
 import {build} from 'esbuild';
-import vue from 'unplugin-vue/esbuild';
+import {vueSfc} from './vue-sfc.mjs';
 import {mkdir, readdir, rm, writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 
@@ -25,16 +25,7 @@ const result = await build({
   format: 'esm',
   platform: 'browser',
   target: ['es2022'],
-  plugins: [vue({
-    isProduction: true,
-    sourceMap: false,
-    customElement: /\.ce\.vue$/,
-    template: {
-      compilerOptions: {
-        isCustomElement: tag => tag.startsWith('yona-'),
-      },
-    },
-  })],
+  plugins: [vueSfc()],
   define: {
     'process.env.NODE_ENV': '"production"',
     __VUE_OPTIONS_API__: 'false',
