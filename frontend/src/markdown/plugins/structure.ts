@@ -13,9 +13,6 @@ export function applyStructure(root: HTMLElement, context: MarkdownContext, sign
   root.dataset.yonaStructured = 'true';
   applyLinkPolicy(root);
   applyReferences(root, context, signal);
-  const wrap = root.closest<HTMLElement>('.markdown-wrap') ?? root;
-  const yona = (window as Window & {yona?: {initTasklist?: (root: HTMLElement) => void}}).yona;
-  yona?.initTasklist?.(wrap);
 }
 
 function addHeadingAnchors(root: HTMLElement): void {
@@ -105,10 +102,10 @@ async function resolveReferences(root: HTMLElement, nodes: Text[], context: Mark
     })));
     if (signal.aborted || !root.isConnected) return;
   }
-  replaceReferences(nodes, results);
+  replaceReferences(nodes, results, root);
 }
 
-function replaceReferences(nodes: Text[], results: Map<string, ReferenceMetadata | null>): void {
+function replaceReferences(nodes: Text[], results: Map<string, ReferenceMetadata | null>, root: HTMLElement): void {
   let linkedUser = false;
   for (const node of nodes) {
     if (!node.isConnected) continue;
@@ -125,8 +122,8 @@ function replaceReferences(nodes: Text[], results: Map<string, ReferenceMetadata
     }
     node.replaceWith(fragment);
   }
-  const common = (window as Window & {$yona?: {initHoverPopovers?: (selector: string) => void}}).$yona;
-  if (linkedUser) common?.initHoverPopovers?.('.markdown-output .user-link [data-toggle="popover"]');
+  const common = (window as Window & {$yona?: {initHoverPopovers?: (selector: string, root?: ParentNode) => void}}).$yona;
+  if (linkedUser) common?.initHoverPopovers?.('.user-link [data-toggle="popover"]', root);
 }
 
 /** Same markup as the server AutoLinkRenderer, built from text only. */

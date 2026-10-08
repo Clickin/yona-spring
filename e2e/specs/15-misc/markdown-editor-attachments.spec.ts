@@ -99,7 +99,7 @@ test('Markdown help switches panels, closes them and survives a cached form', as
   await page.locator('yona-markdown-editor').getByRole('button', { name: 'Preview', exact: true }).click();
   const boundary = await page.locator('yona-markdown-editor .tab-pane.active').evaluate(panel => {
     const style = getComputedStyle(panel);
-    const nav = panel.closest('yona-markdown-editor')!.querySelector('.markdown-help-nav')!;
+    const nav = (panel.getRootNode() as ShadowRoot).host.querySelector('.markdown-help-nav')!;
     return {
       width: style.borderTopWidth, style: style.borderTopStyle, color: style.borderTopColor,
       gap: Math.abs(panel.getBoundingClientRect().top - nav.getBoundingClientRect().bottom),

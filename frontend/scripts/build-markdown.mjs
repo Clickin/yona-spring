@@ -16,6 +16,12 @@ const result = await build({
   format: 'esm',
   platform: 'browser',
   target: ['es2022'],
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    __VUE_OPTIONS_API__: 'false',
+    __VUE_PROD_DEVTOOLS__: 'false',
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+  },
   minify: true,
   chunkNames: 'chunks/[name]-[hash]',
   metafile: true,

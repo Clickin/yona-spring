@@ -22,11 +22,11 @@ for (const [name, engine] of Object.entries({chromium, firefox, webkit})) {
       root.setAttribute('mode', 'document');
       root.textContent = '# plain\n\nNo expensive enhancements';
       document.body.append(root);
-      await root.updateComplete;
+      await root.ready;
       const {promise, resolve} = Promise.withResolvers();
       requestAnimationFrame(() => requestAnimationFrame(resolve));
       await promise;
-      return {heading: root.querySelector('h1')?.textContent, firstPaintMs: performance.now() - started};
+      return {heading: root.shadowRoot.querySelector('h1')?.textContent, firstPaintMs: performance.now() - started};
     });
     assert.equal(plain.heading, 'plain#');
     assert(!requests.some(url => /mermaid|\/chunks\/(?:core|javascript|python)-/.test(url)), 'plain Markdown downloaded expensive enhancement');
@@ -78,7 +78,7 @@ for (const [name, engine] of Object.entries({chromium, firefox, webkit})) {
         document.body.append(renderer);
       }
     });
-    await page.waitForFunction(() => document.querySelectorAll('.markdown-mermaid svg').length === 10, {timeout: 60000});
+    await page.locator('.markdown-mermaid svg').nth(9).waitFor({timeout: 60000});
     const diagrams = await page.locator('.markdown-mermaid').count();
     const diagramMetrics = await page.evaluate(() => {
       window.diagramObserver?.disconnect();
@@ -108,7 +108,7 @@ for (const [name, engine] of Object.entries({chromium, firefox, webkit})) {
         document.body.append(renderer);
       }
     });
-    await page.waitForFunction(() => document.querySelectorAll('.markdown-mermaid-error').length === 3, {timeout: 30000});
+    await page.locator('.markdown-mermaid-error').nth(2).waitFor({timeout: 30000});
     assert.match(await page.locator('#invalid pre code').textContent(), /invalid ! diagram/);
     assert((await page.locator('#large pre code').textContent()).length > 50000);
     assert.match(await page.locator('#edges pre code').textContent(), /A500-->A501/);

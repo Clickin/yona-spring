@@ -1,6 +1,6 @@
 # Markdown
 
-Browser Markdown uses main-repository Lit 3 Web Components, micromark + GFM, and DOMPurify. Server CommonMark remains for email, translation responses and `WikiRestApiController.renderedHtml`; those API contracts are unchanged.
+Browser Markdown uses main-repository Vue 3 components mounted in open Shadow DOM, micromark + GFM, and DOMPurify. Thymeleaf still owns pages and form markup; server CommonMark remains for email, translation responses and `WikiRestApiController.renderedHtml`. Those API interfaces are unchanged.
 
 ## Read-only content
 
@@ -15,17 +15,17 @@ Each element captures its source once. Replacing content requires a new element.
 
 The blocking `yona.css` stylesheet reserves loading space using the escaped source's native `pre-wrap` layout (including line breaks and width-dependent wrapping), with the renderer's typography and padding. A small head bootstrap opts JavaScript-capable browsers into source concealment and a visible loading cue before module download. No-JavaScript browsers retain readable source; module network/evaluation failures remove concealment. This is an approximate text-height reservation, not a prediction of heading, image or Mermaid dimensions. No fixed height or duplicate visible source survives rendering or resizing.
 
-`data-markdown-ready` is removed on connection, including Turbo clones, and added only after Lit mounts output and synchronous structural plugins/enhancement setup completes. The `markdown-rendered` event follows that marker. Asynchronous references, syntax highlighting, images and diagrams can settle afterward. Source removal and Lit mounting run in the same browser turn, without painting an empty intermediate host.
+`data-markdown-ready` is removed on connection, including Turbo clones, and added only after Vue mounts sanitized output, the shadow styles load, and structural plugins/enhancement setup completes. The composed `markdown-rendered` event follows that marker. The public `.ready` promise resolves at this boundary. Asynchronous references, syntax highlighting, images and diagrams can settle afterward.
 
 ## Editor
 
-`site/layout :: markdownEditor` renders the toolbar, help, tab panes and real form textarea inside `<yona-markdown-editor>`. Blocking `yona.css` supplies the same layout before and after the module upgrades that shell; no estimated editor height or loading placeholder is needed. JavaScript retains the textarea node; its `value`, `defaultValue`, selection and native form reset remain authoritative. The form is usable without JavaScript.
+`site/layout :: markdownEditor` renders the toolbar, help, tab panes and real form textarea inside `<yona-markdown-editor>`. Vue replaces the toolbar and panels inside an open shadow root. The original textarea and text-expander remain in a named light-DOM slot, preserving native `value`, `defaultValue`, selection, validation, form submission/reset and legacy attachment/autosave selectors. No duplicate hidden input or value synchronization is needed. The form remains usable without JavaScript.
 
 The editor keeps Yona 1.x's Edit/Preview tabs, checklist button, draft notice and visible Markdown help navigation, using the existing `nav nav-tabs nm small` and `ybtn` styles. Labels come from Thymeleaf messages. Checklist insertion uses the legacy three-item template in the owning textarea and exits Preview; the old page-wide handler is removed to avoid duplicate insertion. The added formatting toolbar and separate Help button are removed.
 
 The toolbar reference is the exact `v1.16.0` tag, not `upstream/master`: its checklist button includes `yobicon-list task-list-icon`, tab padding is `4px 15px`, and list bottom margin is `-1px`. Editor-scoped rules restore these values without changing other site tabs. With ko-KR labels the corrected button measures 120.48×25px (previously 104.09×24px); the prior wider tab padding shifted it 60px right. Six toolbar elements in Edit/Preview at 1440px and 390px widths matched the tag's markup, compiled Less, Bootstrap and original icon font within 1 CSS px, with exact paint/typography/spacing. This is a static browser-reference comparison, not full running Play-page parity.
 
-Markdown help is the native `help/markdown :: markdown` Thymeleaf fragment. Its ten input/output examples are static HTML and use the shared Yona styles, including the title's `.label` styling; no Vue element, Shadow DOM or copied stylesheet remains. A small [Stimulus controller enhances this server-rendered HTML](https://stimulus.hotwired.dev/handbook/introduction), independently of the editor.
+Markdown help is the native `help/markdown :: markdown` Thymeleaf fragment. Its ten input/output examples remain light-DOM HTML in the `help` slot, with the existing document-root Stimulus controller and global Yona styles. The draft notice is slotted for the same reason: autosave still updates the original node.
 
 GitHub's text expander provides completion. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea. `<yona-attachments>` binds paste/drop to that textarea: a pasted image inserts a temporary `<!--_id_-->` marker replaced by its link after upload (`e2e/specs/15-misc/markdown-editor-attachments.spec.ts`).
 
@@ -37,7 +37,7 @@ Entering Preview captures the edit pane's current outer height, including the te
 
 CM6, the Vue Markdown editor/review-form distributions, Marked, the global highlighter and the `/markdown/{owner}/{project}` preview controller are removed. Other unrelated Vue widgets are unchanged. The server renderer's obsolete repository-relative helpers were removed; server-only rendering/cache and API response fields remain.
 
-### Help ownership and Lit coexistence
+### Shadow boundary and help ownership
 
 The reuse audit found 19 `markdownEditor` include templates: issues (3), board (3), Wiki (1), milestones (2), pull requests (3), code diff/compare/SVN (3), and common comment/update/thread/review partials (4). They all receive the same help fragment; there is no separate help-only include. CodeCommentBox moves the same `#review-form` DOM with `appendChild`, so this is a shared behavior rather than an issue-form behavior.
 
@@ -52,18 +52,14 @@ The reuse audit found 19 `markdownEditor` include templates: issues (3), board (
 
 [`data-action` and its keyboard filters](https://stimulus.hotwired.dev/reference/actions#keyboardevent-filter) route click/Enter/Space to `toggle(Event)`. It handles only help controls, prevents their default action and updates `active`, `aria-expanded` and panel `hidden` through scoped `tab`/`panel` targets; existing `data-target` panel class names remain. There is no `data-toggle="markdown-help"`, editor help signal or editor-owned help listener. The DOM stores the open state; there is no `connect()` reset.
 
-The editor uses Light DOM (`createRenderRoot()` returns `this`), which [Lit explicitly supports](https://lit.dev/docs/components/shadow-dom/#implementing-createrenderroot). The document-root Stimulus application can therefore discover the help fragment without a bridge, even when Lit places the retained server DOM node in its layout. Lit owns placement, not the help subtree's state: it does not render or overwrite the child classes/attributes that Stimulus changes. No competing renderers mutate those children. [Controller scope](https://stimulus.hotwired.dev/reference/controllers#scopes) organizes behavior; it does **not** isolate CSS. Existing global Yona styles remain intentional.
+Vue owns the shadow toolbar and preview, not the slotted help, notice or input subtrees. Stimulus therefore continues to discover help through document queries and retains open panels across same-node reparenting and Turbo clones. The shadow root reuses the same cached Bootstrap, icon, Yona and highlighting stylesheets; component-only rules preserve toolbar and preview sizing.
 
-Shadow DOM is a different choice, not an automatic extension of this arrangement. [Lit uses a shadow root by default](https://lit.dev/docs/components/shadow-dom/#renderroot), providing DOM/style scoping; document queries cannot discover its internal nodes. Stimulus 3.2.2's [Application root is an `Element`, defaulting to `document.documentElement`](https://github.com/hotwired/stimulus/blob/v3.2.2/src/core/application.ts), and its [attribute discovery uses `querySelectorAll`](https://github.com/hotwired/stimulus/blob/v3.2.2/src/mutation-observers/attribute_observer.ts); `ShadowRoot` is not that typed root, and global discovery does not traverse shadow trees. [Composed events crossing a shadow root are retargeted to its host](https://lit.dev/docs/components/events/#shadowdom-retargeting); most native mouse/keyboard events cross, but constructed events need `composed: true` (and `bubbles: true` for delegation), as described in [Lit event dispatching](https://lit.dev/docs/components/events/#shadowdom-composed). Receiving an event outside is not the same as discovering its internal controller or original target. This implementation adds neither a shadow application nor bridging infrastructure.
-
-Stimulus [observes DOM changes asynchronously](https://stimulus.hotwired.dev/reference/lifecycle-callbacks#order-and-timing), disconnects removed roots and reuses the controller when the same element reconnects. A Turbo clone is a different element whose copied DOM supplies the help state. [Lit has its own custom-element lifecycle](https://lit.dev/docs/components/lifecycle/#custom-element-lifecycle); the editor does not manage the help controller's lifecycle. The recorded performance figures below predate this cutover.
-
-Cutover verification: both frontend builds/typechecks and their 9/15 unit tests passed; 14 selected Chromium editor/help/attachment tests passed. Actual board, Wiki and milestone forms retained working click/Enter/Space help across Lit Edit/Preview updates. Real-server help still worked after removing its editor, with independent cloned roots and cached state. Same-node editor reparenting preserved working keyboard behavior. A throwaway Lit shadow-root probe confirmed the document application does not discover its internal help. The preview retained its 1px `#ccc` boundary.
+Renderer output is genuinely inside its shadow root. Heading fragments scroll explicitly across that boundary, task-list integration queries the renderer's shadow root while retaining the host's permission/form context, and reference popovers initialize against the output subtree. Renderer snapshots remain inert light-DOM templates so Turbo clones preserve source. The measurements below are historical pre-Vue results, not measurements of this cutover.
 
 ### Internal functions
 
 - `yona-markdown-editor.ts`: textarea initialization, event binding and line indentation are separate operations. Completion separates the request (`mentionSuggestions`), response conversion (`mentionSuggestion`) and safe DOM construction (`suggestionOption`).
-- `yona-markdown-help.ts`: one local Stimulus controller owns help toggling through declarative actions; the Lit editor only retains/places its server-rendered root.
+- `yona-markdown-help.ts`: one local Stimulus controller owns help toggling through declarative actions; the Vue editor retains its server-rendered root in a slot.
 - `yona-markdown-renderer.ts`: snapshot initialization and post-mount enhancement stay in the element; `markdownOutput` owns parsing/sanitization, and `commentLineBreaks` owns comment-only newline rules.
 - `plugins/structure.ts`: headings, link policy, reference collection/resolution and DOM replacement each have a named function.
 - `runtime/reference-batch-resolver.ts`: `send` orchestrates the batch; `fetchMetadata` handles requests/validation, and `settleBatch` handles caching/subscriber cleanup.
@@ -76,7 +72,7 @@ The existing scanner, highlighting registry, Mermaid queue and scheduler already
 
 Raw HTML is restricted to the HTML profile, without forms, inline styles, event handlers, SVG/MathML or unsafe protocols. Structural plugins create DOM nodes and text, not user-supplied HTML. External links use `noopener`; `application.noreferrer=true` also adds `noreferrer`.
 
-Reference autolinking reproduces the server `AutoLinkRenderer` passes in order (`path#N`, `#N`, `path@sha`, `sha`, `@user|@org|@owner/project`), including the fork shorthand (`owner#N`, `owner@sha` against the current project name), ASCII-only word boundaries (so `이슈#3` links `#3`), `@`-only project links, the localized issue state (`stateLabel`) and the user hover popover (`name loginId`; the current popover is text-only, so the legacy avatar is omitted). An unresolved match stays text that later passes may still link; `frontend/test/reference-tokens.test.mjs` (`npm test`, run by Gradle `test`) covers these rules.
+Reference autolinking reproduces the server `AutoLinkRenderer` passes in order (`path#N`, `#N`, `path@sha`, `sha`, `@user|@org|@owner/project`), including fork shorthand, ASCII-only word boundaries, localized issue state and text-only user hover popovers. Unresolved matches stay text. `frontend/test/reference-tokens.test.mjs` (`pnpm test`, run by Gradle `test`) covers these rules.
 
 References are batched globally per project in a fixed 25 ms window, deduplicated and cached in page memory. `POST /api/{owner}/{project}/markdown/references/resolve` accepts at most 100 typed tokens, each at most 200 characters, and returns metadata, never HTML. Target project/issue permissions and member-only repository access are checked before lookup results are disclosed. Disconnect cancels subscribers; stale results cannot update detached content.
 
@@ -86,17 +82,19 @@ Mermaid loads only for Mermaid fences. A shared 24 ms queue renders sequentially
 
 ## Build and checks
 
-`./gradlew processResources` and `bootJar` depend on `npmCi` and `buildMarkdown`. The pinned lockfile is installed with `--ignore-scripts --no-audit --no-fund`. esbuild emits ESM and lazy chunks into `build/generated/frontend/markdown`; generated Markdown bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `npm.cmd` on Windows.
+`./gradlew processResources` and `bootJar` depend on `pnpmInstall` and `buildMarkdown`. The pinned `pnpm-lock.yaml` is installed with `--frozen-lockfile --ignore-scripts`. esbuild emits ESM and lazy chunks into `build/generated/frontend/markdown`; generated Markdown bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `pnpm.cmd` on Windows.
 
 ```sh
 cd frontend
-npm ci --ignore-scripts --no-audit --no-fund
-npm run build:markdown
-npx tsc --noEmit
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run build:markdown
+pnpm exec tsc --noEmit
 # From the repository root, against a running application:
 node frontend/scripts/check-markdown-structure.mjs http://localhost:8080
 node frontend/scripts/check-markdown-enhancements.mjs http://localhost:8080
 ```
+
+Vue/Shadow DOM cutover checks (2026-10-08): frontend build, strict TypeScript, all 9 unit tests and Gradle `buildMarkdown testMarkdown` passed. Chromium passed 7 component checks plus native attachment paste/link insertion, comment paste, 2 help checks and delayed editor upgrade. Structure and enhancement scripts passed Chromium/Firefox/WebKit (162 language identifiers, 66 grammars, 10 diagrams each). At 1366px and 390px viewports, a 320px textarea retained exactly the same editor/textarea bounds through overflowing Preview and back, with native FormData ownership. Four repository-document loading checks could not run against the demo project because it has no HEAD branch/corpus; this is not reported as a pass.
 
 Both browser scripts use the existing E2E Playwright dependency and exercise Chromium, Firefox and WebKit. Application fixtures live in `e2e/specs/15-misc/markdown-components.spec.ts`.
 

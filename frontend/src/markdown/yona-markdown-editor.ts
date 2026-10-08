@@ -1,6 +1,7 @@
-import {LitElement, html, nothing} from 'lit';
+import {createApp, h, nextTick, shallowRef, type App} from 'vue';
+import {mountShadow} from './shadow-styles';
 import TextExpanderElement, {type TextExpanderChangeEvent} from '@github/text-expander-element';
-import {YonaMarkdownRenderer} from './yona-markdown-renderer';
+import './yona-markdown-renderer';
 import {emoji} from './emoji';
 
 let nextEditorId = 0;
@@ -8,22 +9,38 @@ let nextEditorId = 0;
 type Suggestion = {value: string; label: string; image?: string};
 
 /** The server's actual textarea owns the value and native form/reset semantics. */
-export class YonaMarkdownEditor extends LitElement {
+export class YonaMarkdownEditor extends HTMLElement {
   private textarea?: HTMLTextAreaElement;
   private expander?: TextExpanderElement;
-  private preview?: YonaMarkdownRenderer;
+  private preview = shallowRef(false);
   private previewHeight = 0;
   private helpMarkup?: HTMLElement;
   private notice?: HTMLElement;
   private lifetime?: AbortController;
   private query?: AbortController;
-
-  protected createRenderRoot() { return this; }
+  private app?: App;
+  private stylesReady: Promise<unknown> = Promise.resolve();
+  get ready() { return this.stylesReady.then(() => nextTick()); }
 
   connectedCallback() {
     const form = (this.textarea ?? this.querySelector('textarea'))?.form;
     if (!this.textarea) this.initializeTextarea();
-    super.connectedCallback();
+    if (!this.shadowRoot) {
+      const shadow = mountShadow(this, `
+        :host { display: block; }
+        [hidden] { display: none !important; }
+        .markdown-editor-controls { color: #333; }
+        .markdown-editor-controls.nav-tabs.small > li { margin-bottom: -1px; }
+        .markdown-editor-controls.nav-tabs.small > li > a { padding: 4px 15px; }
+        .markdown-editor-controls a:focus-visible { outline: 2px solid #2679b5; }
+        .tab-pane.active { display: flow-root; }
+        .markdown-preview { box-sizing: border-box; overflow: auto; }
+        .markdown-preview > yona-markdown-renderer { padding: 0 !important; }
+      `);
+      this.stylesReady = shadow.ready;
+      this.app = createApp({render: () => this.render()});
+      this.app.mount(shadow.mount);
+    }
     if (this.textarea && this.expander) this.bindEvents(this.textarea, this.expander, form);
   }
 
@@ -31,8 +48,8 @@ export class YonaMarkdownEditor extends LitElement {
     const textarea = this.querySelector('textarea');
     if (!textarea) return;
     const wrapper = this.closest('[data-toggle="markdown-editor"]');
-    this.helpMarkup = wrapper?.querySelector<HTMLElement>('.markdown-help') ?? undefined;
-    this.notice = wrapper?.querySelector<HTMLElement>('.editor-notice-label') ?? undefined;
+    this.helpMarkup = this.querySelector<HTMLElement>('.markdown-help') ?? wrapper?.querySelector<HTMLElement>('.markdown-help') ?? undefined;
+    this.notice = this.querySelector<HTMLElement>('.editor-notice-label') ?? wrapper?.querySelector<HTMLElement>('.editor-notice-label') ?? undefined;
     this.textarea = textarea;
     if (!textarea.id) textarea.id = `yona-markdown-input-${++nextEditorId}`;
     textarea.hidden = false;
@@ -44,8 +61,12 @@ export class YonaMarkdownEditor extends LitElement {
     this.expander = new TextExpanderElement();
     this.expander.setAttribute('keys', ': @ #');
     this.expander.setAttribute('multiword', ':');
+    this.expander.slot = 'input';
     this.expander.append(textarea);
-    this.replaceChildren();
+    if (this.helpMarkup) this.helpMarkup.slot = 'help';
+    if (this.notice) this.notice.slot = 'notice';
+    // Keep native form controls, Stimulus help and the autosave notice in the document tree.
+    this.replaceChildren(this.expander, ...[this.helpMarkup, this.notice].filter((node): node is HTMLElement => !!node));
   }
 
   private bindEvents(textarea: HTMLTextAreaElement, expander: TextExpanderElement, form: HTMLFormElement | null | undefined) {
@@ -70,7 +91,7 @@ export class YonaMarkdownEditor extends LitElement {
     this.expander?.dismiss();
     this.query?.abort();
     this.lifetime?.abort();
-    super.disconnectedCallback();
+    // Reparenting an editor keeps its Vue state and the original textarea.
   }
 
   get value() { return (this.textarea ?? this.querySelector('textarea'))?.value ?? ''; }
@@ -86,27 +107,17 @@ export class YonaMarkdownEditor extends LitElement {
   private edit() {
     this.query?.abort();
     this.expander?.dismiss();
-    this.preview = undefined;
+    this.preview.value = false;
     if (this.expander) this.expander.hidden = false;
-    this.requestUpdate();
   }
 
   private showPreview() {
-    if (!this.textarea || this.preview) return;
+    if (!this.textarea || this.preview.value) return;
     this.query?.abort();
     this.expander?.dismiss();
-    this.previewHeight = this.textarea.closest('.tab-pane')!.getBoundingClientRect().height;
-    const renderer = new YonaMarkdownRenderer();
-    renderer.sourceElement = this.textarea;
-    const mode = this.getAttribute('editor-mode') ?? this.textarea.dataset.editorMode;
-    renderer.setAttribute('mode', mode === 'wiki-content' || mode === 'readme' ? 'document' : 'comment');
-    for (const name of ['owner', 'project', 'ref', 'path']) {
-      const value = this.getAttribute(name);
-      if (value !== null) renderer.setAttribute(name, value);
-    }
-    this.preview = renderer;
+    this.previewHeight = this.shadowRoot!.querySelector('.tab-pane')!.getBoundingClientRect().height;
+    this.preview.value = true;
     if (this.expander) this.expander.hidden = true;
-    this.requestUpdate();
   }
 
   private addChecklist() {
@@ -117,7 +128,7 @@ export class YonaMarkdownEditor extends LitElement {
     const template = '\n- [ ] Todo A\n- [ ] Todo B\n- [ ] Todo C';
     textarea.setRangeText(template, position, position, 'end');
     textarea.dispatchEvent(new Event('input', {bubbles: true}));
-    void this.updateComplete.then(() => textarea.focus());
+    void nextTick(() => textarea.focus());
   }
 
   private indent(event: KeyboardEvent) {
@@ -207,43 +218,40 @@ export class YonaMarkdownEditor extends LitElement {
     } catch { return []; }
   }
 
-  protected render() {
-    if (!this.textarea) return nothing;
-    return html`
-      <ul class="nav nav-tabs nm small markdown-editor-controls" role="group" aria-label="Markdown view">
-        <li class=${this.preview ? '' : 'active'}>
-          <a href="#${this.textarea.id}-edit" role="button" aria-controls="${this.textarea.id}-edit"
-              aria-pressed=${String(!this.preview)}
-              @click=${(event: MouseEvent) => { event.preventDefault(); this.edit(); }}>
-            ${this.dataset.editLabel ?? 'Edit'}
-          </a>
-        </li>
-        <li class=${this.preview ? 'active' : ''}>
-          <a href="#${this.textarea.id}-preview" role="button" aria-controls="${this.textarea.id}-preview"
-              aria-pressed=${String(!!this.preview)}
-              @click=${(event: MouseEvent) => { event.preventDefault(); this.showPreview(); }}>
-            ${this.dataset.previewLabel ?? 'Preview'}
-          </a>
-        </li>
-        <li>
-          <div class="task-list-button">
-            <button type="button" class="add-task-list-button ybtn ybtn-small ybtn-danger-no-outline"
-                @click=${this.addChecklist}><i class="yobicon-list task-list-icon" aria-hidden="true"></i> ${this.dataset.checklistLabel ?? 'Add checklist'}</button>
-          </div>
-        </li>
-        ${this.notice ? html`<li>${this.notice}</li>` : nothing}
-      </ul>
-      <div class="tab-content" style="position: relative; overflow: visible;">
-        ${this.helpMarkup ?? nothing}
-        <div id="${this.textarea.id}-edit" class="tab-pane ${this.preview ? '' : 'active'}" ?hidden=${!!this.preview}>
-          <div class="textarea-box">${this.expander}</div>
-        </div>
-        <div id="${this.textarea.id}-preview" class="tab-pane markdown-preview ${this.preview ? 'active' : ''}" ?hidden=${!this.preview}
-            style=${this.preview ? `height: ${this.previewHeight}px` : nothing}>
-          ${this.preview ?? nothing}
-        </div>
-      </div>
-    `;
+  private render() {
+    if (!this.textarea) return null;
+    const preview = this.preview.value;
+    const id = this.textarea.id;
+    const mode = this.getAttribute('editor-mode') ?? this.textarea.dataset.editorMode;
+    return [
+      h('ul', {class: 'nav nav-tabs nm small markdown-editor-controls', role: 'group', 'aria-label': 'Markdown view'}, [
+        ...[
+          {name: 'edit', active: !preview, action: () => this.edit(), label: this.dataset.editLabel ?? 'Edit'},
+          {name: 'preview', active: preview, action: () => this.showPreview(), label: this.dataset.previewLabel ?? 'Preview'},
+        ].map(({name, active, action, label}) => h('li', {class: active ? 'active' : ''}, h('a', {
+          href: `#${id}-${name}`, role: 'button', 'aria-controls': `${id}-${name}`,
+          'aria-pressed': String(active), onClick: (event: MouseEvent) => { event.preventDefault(); action(); },
+        }, label))),
+        h('li', h('div', {class: 'task-list-button'}, h('button', {
+          type: 'button', class: 'add-task-list-button ybtn ybtn-small ybtn-danger-no-outline',
+          onClick: () => this.addChecklist(),
+        }, [h('i', {class: 'yobicon-list task-list-icon', 'aria-hidden': 'true'}), ` ${this.dataset.checklistLabel ?? 'Add checklist'}`]))),
+        this.notice ? h('li', h('slot', {name: 'notice'})) : null,
+      ]),
+      h('div', {class: 'tab-content', style: {position: 'relative', overflow: 'visible'}}, [
+        h('slot', {name: 'help'}),
+        h('div', {id: `${id}-edit`, class: ['tab-pane', {active: !preview}], hidden: preview},
+          h('div', {class: 'textarea-box'}, h('slot', {name: 'input'}))),
+        h('div', {
+          id: `${id}-preview`, class: ['tab-pane', 'markdown-preview', {active: preview}], hidden: !preview,
+          style: preview ? {height: `${this.previewHeight}px`} : undefined,
+        }, preview ? h('yona-markdown-renderer', {
+          '.sourceElement': this.textarea,
+          mode: mode === 'wiki-content' || mode === 'readme' ? 'document' : 'comment',
+          ...Object.fromEntries(['owner', 'project', 'ref', 'path'].map(name => [name, this.getAttribute(name)])),
+        }) : undefined),
+      ]),
+    ];
   }
 }
 

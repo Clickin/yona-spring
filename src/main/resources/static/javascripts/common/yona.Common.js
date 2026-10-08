@@ -878,13 +878,13 @@ $yona = yona.Common = (function(){
      *
      * @param {String} sSelector
      */
-    function initHoverPopovers(sSelector){
-        var elVuePopover = _getVuePopover();
+    function initHoverPopovers(sSelector, root){
+        var elVuePopover = root ? null : _getVuePopover();
         if(elVuePopover){
             elVuePopover.initHoverPopovers(sSelector);
             return;
         }
-        document.querySelectorAll(sSelector).forEach(function(elTrigger){
+        (root || document).querySelectorAll(sSelector).forEach(function(elTrigger){
             if(elTrigger._yonaHoverPopoverBound){
                 return;
             }

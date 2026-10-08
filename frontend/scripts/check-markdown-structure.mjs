@@ -39,7 +39,7 @@ for (const engine of browsers) {
         renderer.setAttribute('project', 'project');
         renderer.textContent = '#1 #1 #2 #404 @reader @owner/project abcdef0 @abcdef0 `#88` [#77](/already) <pre>#66</pre>';
         document.body.append(renderer);
-        mounted.push(renderer.updateComplete);
+        mounted.push(renderer.ready);
       }
       await Promise.all(mounted);
       return performance.now() - start;
@@ -52,7 +52,7 @@ for (const engine of browsers) {
     // Unsafe and missing metadata leave the source text, as the legacy server renderer did.
     await expect(batchPage.locator('[data-yona-reference="issue:#2"], [data-yona-reference="issue:#404"]')).toHaveCount(0);
     assert.equal(await batchPage.evaluate(() => [...document.querySelectorAll('yona-markdown-renderer')]
-      .filter(renderer => /#2 #404/.test(renderer.textContent)).length), 100);
+      .filter(renderer => /#2 #404/.test(renderer.shadowRoot.textContent)).length), 100);
     assert.equal(await batchPage.evaluate(() => window.referenceXss), undefined);
     await batchPage.evaluate(async () => {
       const renderer = document.createElement('yona-markdown-renderer');
@@ -60,7 +60,7 @@ for (const engine of browsers) {
       renderer.setAttribute('project', 'project');
       renderer.textContent = '#1';
       document.body.append(renderer);
-      await renderer.updateComplete;
+      await renderer.ready;
     });
     await expect(batchPage.locator('a.issueLink')).toHaveCount(201);
     assert.equal(requests.length, 1, 'resolved metadata is cached for the page');
@@ -81,7 +81,7 @@ for (const engine of browsers) {
         renderer.setAttribute('project', project);
         renderer.textContent = '#1';
         document.body.append(renderer);
-        return renderer.updateComplete;
+        return renderer.ready;
       });
       await Promise.all(mounted);
     });
@@ -108,7 +108,7 @@ for (const engine of browsers) {
       renderer.textContent = '# Heading\n\n#31';
       document.body.replaceChildren(renderer);
       window.movedRenderer = renderer;
-      await renderer.updateComplete;
+      await renderer.ready;
     });
     await expect.poll(() => requestCount).toBe(1);
     await abortPage.evaluate(() => window.movedRenderer.remove());
@@ -116,7 +116,7 @@ for (const engine of browsers) {
     await firstRoute.abort().catch(() => {});
     await abortPage.evaluate(async () => {
       document.body.append(window.movedRenderer);
-      await window.movedRenderer.updateComplete;
+      await window.movedRenderer.ready;
     });
     await expect(abortPage.locator('a.issueLink')).toHaveText('#31.Readable');
     await expect(abortPage.locator('h1')).toHaveAttribute('id', 'heading');
@@ -141,7 +141,7 @@ for (const engine of browsers) {
         for (const [key, value] of Object.entries({mode: 'document', owner: 'owner', project: 'project', ref, path})) renderer.setAttribute(key, value);
         renderer.textContent = '[child](guide.md#section) ![picture](../images/pic.png) [site](/site) [external](https://example.com/path) [fragment](#part)';
         document.body.append(renderer);
-        await renderer.updateComplete;
+        await renderer.ready;
       }
     });
     await expect(linksPage.locator('#repository a').filter({hasText: 'child'})).toHaveAttribute('href', '/owner/project/code/feature%2Fdocs/docs/guide.md#section');
@@ -172,7 +172,7 @@ for (const engine of browsers) {
       renderer.textContent = '- [ ] task';
       fixture.querySelector('#task-view').append(renderer);
       document.body.replaceChildren(fixture);
-      await renderer.updateComplete;
+      await renderer.ready;
     });
     await expect(taskPage.locator('input[type=checkbox]')).toBeEnabled();
     await taskPage.locator('input[type=checkbox]').check();
@@ -183,7 +183,7 @@ for (const engine of browsers) {
       const renderer = document.createElement('yona-markdown-renderer');
       renderer.textContent = '- [ ] read only';
       document.body.replaceChildren(renderer);
-      await renderer.updateComplete;
+      await renderer.ready;
     });
     await expect(taskPage.locator('input[type=checkbox]')).toBeDisabled();
     await taskPage.close();

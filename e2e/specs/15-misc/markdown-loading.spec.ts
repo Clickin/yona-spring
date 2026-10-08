@@ -30,7 +30,7 @@ test('delayed editor upgrade preserves the server shell and a resized textarea',
       release();
       await page.evaluate(async () => {
         await customElements.whenDefined('yona-markdown-editor');
-        await (document.querySelector('yona-markdown-editor') as HTMLElement & {updateComplete: Promise<boolean>}).updateComplete;
+        await (document.querySelector('yona-markdown-editor') as HTMLElement & {ready: Promise<unknown>}).ready;
       });
       const after = {editor: await editor.boundingBox(), textarea: await textarea.boundingBox(),
         help: await editor.locator('.markdown-help').boundingBox()};
@@ -94,7 +94,7 @@ test('delayed module hides raw SSR Markdown without collapsing a long document',
 
     await page.setViewportSize({width: 720, height: 900});
     await expect.poll(async () => renderer.evaluate(element => {
-      const output = element.querySelector('.markdown-output')!;
+      const output = element.shadowRoot!.querySelector('.markdown-output')!;
       const style = getComputedStyle(element);
       const chrome = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
         + parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);

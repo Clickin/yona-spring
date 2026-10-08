@@ -18,11 +18,11 @@ yona.initTasklist = function(root) {
     // 이 블록(부모 클릭/호버 시 체크박스 토글)은 원래부터 죽은 코드였다. 동작 유지를 위해 그대로 둔다.
 
     markdownWraps.forEach(function (wrap) {
-        wrap.querySelectorAll(inputCheckBox).forEach(function (checkbox) {
+        (wrap.shadowRoot || wrap).querySelectorAll(inputCheckBox).forEach(function (checkbox) {
             if (checkbox.yonaTasklistBound) return;
             checkbox.yonaTasklistBound = true;
             checkbox.addEventListener("click", function () {
-                var form = checkbox.closest("div[id]").previousElementSibling.querySelector("form");
+                var form = wrap.closest("div[id]").previousElementSibling.querySelector("form");
                 var url = form.getAttribute("action");
                 var textarea = form.querySelector("textarea");
                 var originalText = textarea.value;
@@ -77,9 +77,9 @@ yona.initTasklist = function(root) {
 
         that.checked = isChecked;
 
-        var parent = that.closest(".markdown-wrap");
-        var index = Array.prototype.indexOf.call(parent.querySelectorAll(inputCheckBox), that);
-        var form = that.closest("div[id]").previousElementSibling.querySelector("form");
+        var parent = that.getRootNode().host || that.closest(".markdown-wrap");
+        var index = Array.prototype.indexOf.call((parent.shadowRoot || parent).querySelectorAll(inputCheckBox), that);
+        var form = parent.closest("div[id]").previousElementSibling.querySelector("form");
         var textarea = form.querySelector("textarea");
         var text = textarea.value;
 
@@ -110,7 +110,7 @@ yona.initTasklist = function(root) {
         targets.forEach(function (target) {
             var total = 0;
             var checked = 0;
-            target.querySelectorAll(inputCheckBox).forEach(function (checkbox) {
+            (target.shadowRoot || target).querySelectorAll(inputCheckBox).forEach(function (checkbox) {
                 total++;
                 if(checkbox.checked) {
                     checked++;
@@ -145,7 +145,7 @@ yona.initTasklist = function(root) {
                 container.previousElementSibling.querySelector("form");
             var allowed = target.dataset.allowedUpdate === "true" && editForm &&
                 editForm.querySelector("textarea") && editForm.getAttribute("action");
-            target.querySelectorAll(inputCheckBox).forEach(function (checkbox) {
+            (target.shadowRoot || target).querySelectorAll(inputCheckBox).forEach(function (checkbox) {
                 checkbox.disabled = !allowed;
             });
         });

@@ -139,7 +139,7 @@ export function queueMermaid(code: HTMLElement, signal: AbortSignal): void {
   const bounds = code.getBoundingClientRect();
   const job: Job = {
     code, signal,
-    visible: Boolean(code.closest('yona-markdown-editor')) ||
+    visible: (code.getRootNode() as ShadowRoot).host?.getRootNode() instanceof ShadowRoot ||
       (bounds.bottom >= -800 && bounds.top <= innerHeight + 800),
     cancel() {
       const index = pending.indexOf(job);
@@ -158,7 +158,7 @@ export function queueMermaid(code: HTMLElement, signal: AbortSignal): void {
     observer ??= new IntersectionObserver(entries => {
       for (const entry of entries) {
         const waiting = jobs.get(entry.target as HTMLElement);
-        if (waiting) waiting.visible = entry.isIntersecting || Boolean(waiting.code.closest('yona-markdown-editor'));
+        if (waiting) waiting.visible = entry.isIntersecting || (waiting.code.getRootNode() as ShadowRoot).host?.getRootNode() instanceof ShadowRoot;
       }
     }, { rootMargin: '800px' });
     observer.observe(code);
