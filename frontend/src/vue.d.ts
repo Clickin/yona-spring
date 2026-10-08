@@ -3,11 +3,6 @@ import type {DefineComponent} from 'vue';
 import type {YonaMarkdownRenderer} from './markdown/yona-markdown-renderer';
 
 declare module 'vue' {
-  interface ComponentCustomOptions {
-    /** Inline styles emitted by unplugin-vue for .ce.vue components. */
-    styles?: string[];
-  }
-
   interface GlobalComponents {
     // Template typing only; esbuild preserves this native custom element.
     'yona-markdown-renderer': DefineComponent<{

@@ -50,7 +50,7 @@ CM6·Vue Markdown editor/review-form bundle·Marked·전역 highlighter·서버 
 
 [`data-action`과 keyboard filter](https://stimulus.hotwired.dev/reference/actions#keyboardevent-filter)가 click/Enter/Space를 `toggle(Event)`에 연결한다. 도움말 항목의 기본 동작만 막고, controller 범위의 `tab`/`panel` target으로 `active`·`aria-expanded`·`hidden`을 변경한다. 기존 `data-target`의 panel class 이름은 유지한다. `data-toggle="markdown-help"`, 에디터의 도움말 signal/listener는 없다. 열린 상태는 DOM에 저장하며 `connect()`에서 초기화하지 않는다.
 
-`MarkdownEditor.ce.vue`와 `MarkdownRenderer.ce.vue`의 실제 `<script setup lang="ts">`·`<template>`·`<style>`이 shadow UI를 소유한다. HTMLElement bridge는 `.value`·`.ready`·`.sourceElement`, 원래 textarea와 lifecycle을 유지한다. textarea와 host는 shallow prop으로 전달하고 deep reactive 상태에 넣지 않는다. 도움말·임시저장 표시·textarea는 native slot에 유지하며, 임시저장 지우기 버튼은 체크리스트 바로 다음 toolbar slot에 놓인다. 따라서 Stimulus가 document query로 도움말을 찾고 같은 노드 이동과 Turbo clone의 열린 패널 상태도 유지한다. Shadow root는 기존 Bootstrap·아이콘·Yona·highlight stylesheet를 캐시에서 재사용하고 SFC의 style을 추가한다. renderer의 `v-html`에는 DOMPurify 처리 완료된 snapshot만 전달한다.
+`YonaMarkdownEditor.vue`의 `<script setup lang="ts">`가 원래 textarea·slot 초기화, 자동완성·요청 취소, 들여쓰기·이벤트·reset, 미리보기·체크리스트·`.value` 동작과 lifecycle을 소유한다. `YonaMarkdownRenderer.vue`는 원문 snapshot, parsing·DOMPurify, 구조·비동기 enhancement와 `.ready`를 소유한다. TS 진입점에는 표준 `defineCustomElement` 등록과 필요한 `.value` property adapter만 남는다. 도움말·임시저장 표시·textarea는 native slot에 유지하며, 임시저장 지우기 버튼은 체크리스트 바로 다음 toolbar slot에 놓인다. 따라서 원래 form/defaultValue와 Stimulus 도움말 상태를 유지한다. 같은 노드의 동기 이동은 Vue 인스턴스를 보존하고, 실제 detach 후에는 SFC를 다시 mount한다. host별 작은 exposed 객체를 유지하고 각 mount에서 메서드·ready를 갱신해 Vue 3.5의 기존 getter도 현재 동작을 가리킨다. Shadow root의 기존 stylesheet link·ready는 재사용하며, renderer의 `v-html`에는 DOMPurify 처리 완료된 snapshot만 전달한다.
 
 렌더러의 출력도 실제 shadow root 안에 있다. heading fragment 이동은 명시적으로 처리하고, tasklist는 host의 권한·폼 문맥을 유지한 채 shadow checkbox를 찾는다. 사용자 popover는 출력 subtree를 기준으로 초기화한다. Turbo 원문 snapshot은 비활성 light-DOM template에 보존한다. `.ready`는 shadow stylesheet와 동기 초기화 완료를 기다리며 `markdown-rendered`는 composed event다. 아래 측정치는 Vue 전환 이전 기록이다.
 
@@ -66,7 +66,7 @@ CM6·Vue Markdown editor/review-form bundle·Marked·전역 highlighter·서버 
 
 ## 빌드와 검증
 
-Gradle `processResources`/`bootJar`는 `pnpmInstall`의 `pnpm install --frozen-lockfile --ignore-scripts`, `typecheckFrontend`의 `vue-tsc --noEmit`, esbuild의 `unplugin-vue/esbuild`를 실행한다. `.ce.vue` custom-element mode로 template과 inline style을 컴파일하며 native slot과 `yona-*` 태그를 보존한다. Gradle `test`도 template typecheck를 실행한다. 직접 실행은 `pnpm run typecheck`를 사용한다. ESM/chunk 결과물은 `build/generated/frontend/markdown`에 생성하며 Git에 vendoring하지 않는다. 기존 Turbo build는 별도로 유지하고 Windows에서는 `pnpm.cmd`를 선택한다.
+Gradle `processResources`/`bootJar`는 `pnpmInstall`의 `pnpm install --frozen-lockfile --ignore-scripts`, `typecheckFrontend`의 `vue-tsc --noEmit`, esbuild의 `unplugin-vue/esbuild`를 실행한다. 일반 `Yona*.vue` 파일을 명시적으로 custom-element mode로 컴파일하며 native slot과 `yona-*` 태그를 보존한다. Vue가 inline style과 shadow root를 직접 관리한다. Gradle `test`도 template typecheck를 실행한다. 직접 실행은 `pnpm run typecheck`를 사용한다. ESM/chunk 결과물은 `build/generated/frontend/markdown`에 생성하며 Git에 vendoring하지 않는다. 기존 Turbo build는 별도로 유지하고 Windows에서는 `pnpm.cmd`를 선택한다.
 
 실행 명령, 상세 정책, 이전 CM6/Marked/highlight gzip·Brotli baseline은 [영문 기술 문서](../../technical/markdown.md)를 참고한다. `frontend/scripts/check-markdown-{structure,enhancements}.mjs`는 기존 E2E Playwright로 Chromium/Firefox/WebKit을 검증한다.
 

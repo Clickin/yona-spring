@@ -4,7 +4,7 @@ export function vueSfc() {
   const plugin = vue({
     isProduction: true,
     sourceMap: false,
-    customElement: /\.ce\.vue$/,
+    customElement: /(?:^|\/)Yona[^/]*\.vue$/,
     template: {compilerOptions: {isCustomElement: tag => tag.startsWith('yona-')}},
   });
   return {

@@ -5,23 +5,21 @@ const stylesheets = [
   '/javascripts/lib/highlight/styles/default.css',
 ];
 
-/** Reuse the page's cached styles inside the boundary, not the page's selectors. */
-export function mountShadow(host: HTMLElement, styles: readonly string[]) {
-  const root = host.attachShadow({mode: 'open'});
+const loaded = new WeakMap<ShadowRoot, Promise<unknown>>();
+
+/** Reuse cached page styles and their readiness when Vue remounts the same shadow root. */
+export function loadShadowStyles(root: ShadowRoot): Promise<unknown> {
+  const previous = loaded.get(root);
+  if (previous) return previous;
+  const before = root.firstChild;
   const ready = Promise.all(stylesheets.map(href => new Promise<void>(resolve => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = href;
     link.onload = () => resolve();
     link.onerror = () => resolve();
-    root.append(link);
+    root.insertBefore(link, before);
   })));
-  for (const css of styles) {
-    const style = document.createElement('style');
-    style.textContent = css;
-    root.append(style);
-  }
-  const mount = document.createElement('div');
-  root.append(mount);
-  return {root, mount, ready};
+  loaded.set(root, ready);
+  return ready;
 }
