@@ -119,3 +119,19 @@ r1 이후 날짜는 유효한 SVN 날짜여야 하고 author는 최대 255 UTF-1
 이미 검증한 과거 속성 수정은 지속해서 탐지·재색인하지 않으며, 발견한 불일치는 운영자 확인으로
 보낸다. 임의 cursor rewind는 지원하지 않는다.
 
+### 이슈 참조와 알림
+
+검증한 revision의 이슈 참조, `>R`인 경우의 DB NEW_COMMIT 알림, 색인 커서 갱신은 같은
+fenced transaction에서 처리한다. rollback이면 전부 rollback하며 재실행은 현재 커서 다음부터
+이어간다. 같은 revision의 이슈 번호는 중복 제거한다. 별도 이벤트 ledger/unique 컬럼은 없다.
+
+`<=R`에서는 원본 author와 시각으로 참조만 만들고 알림을 보내지 않는다. 알 수 없는 author를
+Yona 계정으로 가장하지 않는다. `>R`의 알림은 inbox/mail이 프로젝트를 찾도록 PROJECT와
+project ID를 대상으로 하며, 참조·웹훅의 commit ID는 숫자 문자열이다. 화면에서만 r 접두사를 쓴다.
+기존 watcher 정책에 따라 수신자가 없으면 DB 알림도 없다. Git/Hg의 기존 발신자·payload는
+바꾸지 않는다.
+
+SVN 웹훅은 DB commit 뒤 기존 `gitPush` 설정에 따라 best-effort로 보낸다. crash나 네트워크
+응답 유실에 따른 유실/중복 가능성이 있으며, 색인 커서는 원격 수신 완료를 뜻하지 않는다.
+웹훅 실패 때문에 복제나 색인을 되돌리지 않는다.
+

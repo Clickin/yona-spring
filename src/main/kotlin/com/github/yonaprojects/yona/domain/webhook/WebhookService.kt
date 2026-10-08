@@ -21,4 +21,5 @@ interface WebhookService {
         sender: User,
         resource: Any
     )
+    fun sendSvnMirrorWebhook(project: Project, commit: SvnMirrorCommit)
 }

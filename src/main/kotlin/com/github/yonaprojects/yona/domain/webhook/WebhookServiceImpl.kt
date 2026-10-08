@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
 import tools.jackson.databind.node.ObjectNode
@@ -96,6 +97,51 @@ class WebhookServiceImpl(
             val payload = buildPayload(webhook, eventType, sender, resource)
             sendRequestAsync(webhook, resource, payload)
         }
+    }
+
+    // Separate from the User-based push path: a source author is not a local pusher.
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    override fun sendSvnMirrorWebhook(project: Project, commit: SvnMirrorCommit) {
+        for (webhook in webhookRepository.findByProjectId(project.id ?: return)) {
+            if (shouldDeliverToWebhook(webhook, EventType.NEW_COMMIT)) {
+                sendRequestAsync(webhook, commit, buildSvnMirrorPayload(webhook, commit))
+            }
+        }
+    }
+
+    internal fun buildSvnMirrorPayload(webhook: Webhook, commit: SvnMirrorCommit): String {
+        val mapper = ObjectMapper()
+        val root = mapper.createObjectNode()
+        val project = webhook.project
+        if (webhook.webhookType != WebhookType.JSON) {
+            root.put("text", "[${project?.name ?: ""}] SVN r${commit.revision} (${commit.author ?: "unknown author"})")
+            return mapper.writeValueAsString(root)
+        }
+
+        root.set("ref", mapper.createArrayNode())
+        val node = mapper.createObjectNode()
+        node.put("id", commit.revision)
+        node.put("message", commit.message)
+        node.put("timestamp", commit.created.toString())
+        node.put("url", "${projectUrl(project)}/commit/${commit.revision}")
+        val author = mapper.createObjectNode()
+        author.put("name", commit.author)
+        author.putNull("email")
+        node.set("author", author)
+        node.set("committer", author.deepCopy())
+        root.set("commits", mapper.createArrayNode().add(node))
+        root.set("head_commit", node)
+        root.putNull("sender")
+        root.putNull("pusher")
+        val repository = mapper.createObjectNode()
+        repository.put("id", project?.id ?: 0L)
+        repository.put("name", project?.name ?: "")
+        repository.put("owner", project?.owner ?: "")
+        repository.put("html_url", projectUrl(project))
+        repository.put("overview", project?.overview ?: "")
+        repository.put("private", project?.projectScope != ProjectScope.PUBLIC)
+        root.set("repository", repository)
+        return mapper.writeValueAsString(root)
     }
 
     /**
