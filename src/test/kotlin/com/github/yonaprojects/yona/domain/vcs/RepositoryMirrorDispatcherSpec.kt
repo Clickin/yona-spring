@@ -16,7 +16,7 @@ class RepositoryMirrorDispatcherSpec : DescribeSpec({
     describe("bounded mirror dispatcher") {
         it("does not claim or execute while disabled or on a nondesignated node") {
             val store = mockk<RepositoryMirrorStore>()
-            val sync = mockk<SvnMirrorSynchronizer>()
+            val sync = mockk<RepositoryMirrorSynchronizer>()
             val config = properties().apply { enabled = false }
             val dispatcher = RepositoryMirrorDispatcher(store, sync, config)
             try {
@@ -29,7 +29,7 @@ class RepositoryMirrorDispatcherSpec : DescribeSpec({
         }
         it("skips a misconfigured activation without throwing on every tick") {
             val store = mockk<RepositoryMirrorStore>()
-            val sync = mockk<SvnMirrorSynchronizer>()
+            val sync = mockk<RepositoryMirrorSynchronizer>()
             val dispatcher = RepositoryMirrorDispatcher(store, sync, properties().apply { proxyHost = "" })
             try {
                 dispatcher.dispatch()
@@ -39,7 +39,7 @@ class RepositoryMirrorDispatcherSpec : DescribeSpec({
         }
         it("does not reclaim a mirror whose local writer is still running after its lease expired") {
             val store = mockk<RepositoryMirrorStore>(relaxed = true)
-            val sync = mockk<SvnMirrorSynchronizer>()
+            val sync = mockk<RepositoryMirrorSynchronizer>()
             every { store.due(2) } returns listOf(1)
             every { store.claim(1, any(), any()) } returns 1
             every { store.heartbeat(any(), any(), any(), any()) } returns true
@@ -58,7 +58,7 @@ class RepositoryMirrorDispatcherSpec : DescribeSpec({
         }
         it("releases only its submitted fence on executor rejection and recovers the slot") {
             val store = mockk<RepositoryMirrorStore>(relaxed = true)
-            val sync = mockk<SvnMirrorSynchronizer>()
+            val sync = mockk<RepositoryMirrorSynchronizer>()
             every { store.due(1) } returns listOf(7)
             every { store.claim(7, any(), any()) } returnsMany listOf(2, 3)
             val dispatcher = RepositoryMirrorDispatcher(store, sync, properties())
@@ -73,7 +73,7 @@ class RepositoryMirrorDispatcherSpec : DescribeSpec({
         }
         it("bounds admitted work and waits for the actual writer on shutdown") {
             val store = mockk<RepositoryMirrorStore>(relaxed = true)
-            val sync = mockk<SvnMirrorSynchronizer>()
+            val sync = mockk<RepositoryMirrorSynchronizer>()
             every { store.due(1) } returns listOf(1, 2)
             every { store.claim(1, any(), any()) } returns 1
             every { store.heartbeat(any(), any(), any(), any()) } returns true

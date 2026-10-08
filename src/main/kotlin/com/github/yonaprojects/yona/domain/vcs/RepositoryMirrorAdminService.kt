@@ -18,7 +18,7 @@ import java.time.Instant
 @Service
 class RepositoryMirrorAdminService(
     private val settings: RepositoryMirrorProperties,
-    private val sourcePolicy: SvnMirrorSourcePolicy,
+    private val sourcePolicy: MirrorSourcePolicy,
     private val storage: RepositoryMirrorStorage,
     private val projects: ProjectRepository,
     private val users: UserRepository,
@@ -39,7 +39,7 @@ class RepositoryMirrorAdminService(
         mirrors.findAllByOrderByIdDesc(PageRequest.of(page.coerceAtLeast(0), 25)).map { RepositoryMirrorAdminStatus.from(it, now) }
     }!!
 
-    fun create(loginId: String, name: String, sourceUrl: String, credentialRef: String?): Long {
+    fun create(loginId: String, name: String, sourceUrl: String, credentialRef: String?, vcs: MirrorVcs = MirrorVcs.SUBVERSION): Long {
         admin(loginId)
         settings.requireActivation()
         if (!RepositoryMirrorStorage.validSegment(name) || ProjectNameValidator.isRestricted(name)) throw MirrorFailure("PROJECT_NAME")
@@ -50,14 +50,14 @@ class RepositoryMirrorAdminService(
             return transaction.execute {
                 val creator = admin(loginId)
                 namespaceGuard.holdUntilTransactionCompletion(creator.loginId, name)
-                existing(creator, name, source)?.let { return@execute it }
+                existing(creator, name, source, vcs)?.let { return@execute it }
                 if (projects.existsByOwnerIgnoreCaseAndNameIgnoreCaseAndIdNot(creator.loginId, name, -1)) {
                     throw MirrorFailure("PROJECT_EXISTS")
                 }
                 namespaceGuard.requireUnreserved(creator.loginId, name)
                 val managerRole = roles.findById(RoleType.MANAGER.roleType).orElseThrow { MirrorFailure("MANAGER_ROLE_REQUIRED") }
                 val project = projects.saveAndFlush(Project(
-                    name = name, owner = creator.loginId, vcs = "SUBVERSION", createdDate = Instant.now(),
+                    name = name, owner = creator.loginId, vcs = vcs.projectVcs, createdDate = Instant.now(),
                     projectScope = ProjectScope.PRIVATE, repositoryMode = RepositoryMode.MIRROR,
                     isPullRequestEnabled = false
                 ))
@@ -73,7 +73,7 @@ class RepositoryMirrorAdminService(
                 transaction.execute {
                     val creator = admin(loginId)
                     namespaceGuard.holdUntilTransactionCompletion(creator.loginId, name)
-                    existing(creator, name, source)
+                    existing(creator, name, source, vcs)
                 }
             } catch (_: Exception) { null }
             if (committed != null) return committed
@@ -118,10 +118,10 @@ class RepositoryMirrorAdminService(
         return user
     }
 
-    private fun existing(creator: User, name: String, source: String): Long? {
+    private fun existing(creator: User, name: String, source: String, vcs: MirrorVcs): Long? {
         val project = projects.findByOwnerAndNameOrPreviousPlace(creator.loginId, name).orElse(null) ?: return null
         val mirror = mirrors.findByProjectId(project.id!!)
-        if (project.owner != creator.loginId || project.name != name || project.repositoryMode != RepositoryMode.MIRROR ||
+        if (project.owner != creator.loginId || project.name != name || project.repositoryMode != RepositoryMode.MIRROR || MirrorVcs.of(project) != vcs ||
             mirror == null || mirror.sourceUrl != source
         ) throw MirrorFailure("PROJECT_EXISTS")
         storage.directory(mirror)
@@ -133,6 +133,7 @@ data class RepositoryMirrorAdminStatus(
     val id: Long,
     val projectOwner: String,
     val projectName: String,
+    val vcs: String,
     val source: String,
     val credentialConfigured: Boolean,
     val status: String,
@@ -161,10 +162,9 @@ data class RepositoryMirrorAdminStatus(
             } catch (_: Exception) { "[hidden]" }
             val target = mirror.initialImportTargetRevision
             return RepositoryMirrorAdminStatus(
-                mirror.id!!, mirror.project.owner ?: "", mirror.project.name, source, mirror.credentialRef != null,
+                mirror.id!!, mirror.project.owner ?: "", mirror.project.name, mirror.project.vcs ?: "", source, mirror.credentialRef != null,
                 mirror.status.name, mirror.enabled,
-                mirror.status != RepositoryMirrorStatus.NEEDS_ATTENTION && target != null &&
-                    mirror.lastVerifiedRevision >= target && mirror.lastIndexedRevision >= target,
+                mirror.initialImportDone && mirror.status != RepositoryMirrorStatus.NEEDS_ATTENTION,
                 target, mirror.lastVerifiedRevision, mirror.lastIndexedRevision, mirror.localYoungestRevision, mirror.sourceYoungestRevision,
                 mirror.generation, mirror.lastSyncedAt, mirror.nextSyncAt, mirror.retryCount,
                 mirror.lastErrorCode != null || mirror.lastError != null,
@@ -183,6 +183,7 @@ internal fun mirrorErrorMessage(code: String?): String = when (code) {
     "DIRECTORY_OWNERSHIP", "CREATE_UNCERTAIN" -> "mirror.error.directory"
     "PROJECT_NAME", "PROJECT_EXISTS", "MANAGER_ROLE_REQUIRED" -> "mirror.error.project"
     "SOURCE_CONNECTION" -> "mirror.error.connection"
+    "UNSUPPORTED_VCS" -> "mirror.error.vcs"
     "AUTHOR_INVALID", "AUTHOR_USER", "AUTHOR_MAPPING_EXISTS", "AUTHOR_MAPPING_NOT_FOUND" -> "mirror.error.author"
     else -> "mirror.actionFailed"
 }

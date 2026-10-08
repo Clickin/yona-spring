@@ -16,7 +16,7 @@ import org.tmatesoft.svn.core.replicator.SVNRepositoryReplicator
 import java.nio.file.Files
 import java.time.Instant
 
-class SvnMirrorSynchronizerSpec : DescribeSpec({
+class SvnMirrorEngineSpec : DescribeSpec({
     FSRepositoryFactory.setup()
     fun repository(name: String, root: java.nio.file.Path): SVNRepository = SVNRepositoryFactory.create(
         SVNRepositoryFactory.createLocalRepository(root.resolve(name).toFile(), true, false)
@@ -34,7 +34,7 @@ class SvnMirrorSynchronizerSpec : DescribeSpec({
         return revision
     }
     fun run(source: SVNRepository, target: SVNRepository, state: RepositoryMirror, goal: Long, afterIndex: (Long, SVNProperties) -> Unit = { _, _ -> }) {
-        SvnMirrorSynchronizer.synchronize(source, target, state, goal, 1, {}, { false },
+        SvnMirrorEngine.synchronize(source, target, state, goal, 1, {}, { false },
             verified = { revision, youngest -> state.lastVerifiedRevision = revision; state.localYoungestRevision = youngest },
             indexed = { revision, props -> afterIndex(revision, props); state.lastIndexedRevision = revision })
     }
@@ -229,7 +229,7 @@ class SvnMirrorSynchronizerSpec : DescribeSpec({
                 source.setRevisionPropertyValue(2, SVNRevisionProperty.DATE, null)
                 val state = RepositoryMirror(initialImportTargetRevision = 2)
                 val failure = shouldThrow<MirrorFailure> {
-                    SvnMirrorSynchronizer.synchronize(source, target, state, 2, 2, {}, { false },
+                    SvnMirrorEngine.synchronize(source, target, state, 2, 2, {}, { false },
                         verified = { revision, youngest -> state.lastVerifiedRevision = revision; state.localYoungestRevision = youngest },
                         indexed = { revision, _ -> state.lastIndexedRevision = revision })
                 }
@@ -281,7 +281,7 @@ class SvnMirrorSynchronizerSpec : DescribeSpec({
                 commit(source, 1)
                 val state = RepositoryMirror()
                 shouldThrow<IllegalStateException> {
-                    SvnMirrorSynchronizer.synchronize(source, target, state, 1, 1, {}, { false },
+                    SvnMirrorEngine.synchronize(source, target, state, 1, 1, {}, { false },
                         verified = { r, youngest -> state.lastVerifiedRevision = r; state.localYoungestRevision = youngest },
                         indexed = { r, _ -> if (r == 1L) error("crash"); state.lastIndexedRevision = r })
                 }
@@ -303,7 +303,7 @@ class SvnMirrorSynchronizerSpec : DescribeSpec({
                 commit(source, 1)
                 shouldThrow<MirrorFailure> { run(source, target, RepositoryMirror(lastVerifiedRevision = 2), 2) }
                 shouldThrow<MirrorLeaseLost> {
-                    SvnMirrorSynchronizer.synchronize(source, target, RepositoryMirror(), 1, 1, { throw MirrorLeaseLost() }, { true }, { _, _ -> }, { _, _ -> })
+                    SvnMirrorEngine.synchronize(source, target, RepositoryMirror(), 1, 1, { throw MirrorLeaseLost() }, { true }, { _, _ -> }, { _, _ -> })
                 }
                 target.latestRevision shouldBe 0
             } finally { source.closeSession(); target.closeSession(); root.toFile().deleteRecursively() }

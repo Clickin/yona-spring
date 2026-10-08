@@ -16,7 +16,7 @@ import org.springframework.web.server.ResponseStatusException
 
 class RepositoryMirrorReadinessSpec : DescribeSpec({
     describe("mirror preparation is not an empty completed repository") {
-        it("requires the fixed target to be verified and indexed even when paused or disabled") {
+        it("requires a completed first import even when paused or disabled") {
             val mirrors = mockk<RepositoryMirrorRepository>()
             val project = Project(id = 7, owner = "owner", name = "mirror", vcs = "SUBVERSION", repositoryMode = RepositoryMode.MIRROR)
             val mirror = RepositoryMirror(project = project)
@@ -24,12 +24,13 @@ class RepositoryMirrorReadinessSpec : DescribeSpec({
             val readiness = RepositoryMirrorReadiness(mirrors)
             readiness.isReady(Project()) shouldBe true
             shouldThrow<ResponseStatusException> { readiness.requireReady(project) }.statusCode.value() shouldBe 503
+            // Cursors alone do not make a mirror ready; only a completed first import does.
             mirror.initialImportTargetRevision = 3
             mirror.lastVerifiedRevision = 3
-            mirror.lastIndexedRevision = 2
+            mirror.lastIndexedRevision = 3
             mirror.enabled = false
             readiness.isReady(project) shouldBe false
-            mirror.lastIndexedRevision = 3
+            mirror.initialImportDone = true
             readiness.isReady(project) shouldBe true
             mirror.status = RepositoryMirrorStatus.NEEDS_ATTENTION
             readiness.isReady(project) shouldBe false

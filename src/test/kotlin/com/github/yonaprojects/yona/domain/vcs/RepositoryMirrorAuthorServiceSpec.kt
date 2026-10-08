@@ -57,9 +57,10 @@ class RepositoryMirrorAuthorServiceSpec @Autowired constructor(
     }
     private val transaction = TransactionTemplate(transactionManager)
     private val base = Files.createTempDirectory("mirror-author-it-").toRealPath()
-    private val namespaceGuard = RepositoryNamespaceGuard(base.resolve("_data").toString(), base.toString())
+    private val namespaceGuard = RepositoryNamespaceGuard(base.resolve("_data").toString())
     private val storage = RepositoryMirrorStorage(base.toString(), base.resolve("_git").toString(), base.resolve("_hg").toString(), namespaceGuard)
-    private val service = RepositoryMirrorAuthorService(mappings, users, storage, store, entityManager, transactionManager)
+    private val service = RepositoryMirrorAuthorService(mappings, users, storage, store, entityManager, transactionManager,
+        listOf(SvnMirrorEngine(store, io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true))))
 
     private lateinit var admin: User
     private lateinit var alice: User
@@ -104,7 +105,7 @@ class RepositoryMirrorAuthorServiceSpec @Autowired constructor(
                 project = project, sourceUrl = "https://svn.example.test/repository",
                 sourceRepositoryUuid = "source-uuid", localRepositoryUuid = "local-uuid",
                 initialImportTargetRevision = 3, lastVerifiedRevision = 3, lastIndexedRevision = 3,
-                localYoungestRevision = 4, sourceYoungestRevision = 4, status = RepositoryMirrorStatus.INCREMENTAL
+                localYoungestRevision = 4, sourceYoungestRevision = 4, status = RepositoryMirrorStatus.INCREMENTAL, initialImportDone = true
             ))
         }
 

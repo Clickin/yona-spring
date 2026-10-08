@@ -17,7 +17,9 @@ import com.github.yonaprojects.yona.domain.project.RepositoryMode
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.watch.WatchService
-import com.github.yonaprojects.yona.domain.webhook.SvnMirrorCommit
+import com.github.yonaprojects.yona.domain.webhook.PushedVcsCommit
+import com.github.yonaprojects.yona.domain.webhook.PushedVcsCommits
+import com.github.yonaprojects.yona.domain.issue.CommitIssueReferenceService
 import com.github.yonaprojects.yona.domain.webhook.WebhookService
 import com.github.yonaprojects.yona.web.IndexController
 import io.kotest.assertions.throwables.shouldThrow
@@ -66,7 +68,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
         }
         val watchers = mockk<WatchService>()
         val webhooks = mockk<WebhookService>(relaxed = true)
-        val indexer = SvnMirrorIndexer(store, issues, references, recorder, watchers, webhooks, authorMappings)
+        val indexer = SvnMirrorIndexer(MirrorCommitIndexer(store, CommitIssueReferenceService(issues, references), recorder, watchers, webhooks, authorMappings))
         val date = Instant.parse("2007-05-06T07:08:09Z")
         val author = "외부-svn-author"
         val worker = "indexer-spec"
@@ -140,7 +142,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                 cursor() shouldBe 0L
                 events().size shouldBe 0
                 notices().size shouldBe 0
-                verify(exactly = 0) { webhooks.sendSvnMirrorWebhook(any(), any()) }
+                verify(exactly = 0) { webhooks.sendMirrorPushWebhook(any(), any()) }
                 verify(exactly = 0) { watchers.findActualWatchers(any(), any(), any(), any(), any(), any()) }
             }
 
@@ -155,7 +157,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                 notices().single().resourceId shouldBe project.id.toString()
                 cursor() shouldBe 1L
                 store.snapshot(mirror.id!!).initialImportTargetRevision shouldBe 0L
-                verify(exactly = 1) { webhooks.sendSvnMirrorWebhook(any(), any()) }
+                verify(exactly = 1) { webhooks.sendMirrorPushWebhook(any(), any()) }
             }
 
             it("requires a source identity and positive generation before indexing") {
@@ -193,7 +195,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                 cursor() shouldBe 1L
                 notices().size shouldBe 0
                 store.snapshot(mirror.id!!).initialImportTargetRevision shouldBe 1L
-                verify(exactly = 0) { webhooks.sendSvnMirrorWebhook(any(), any()) }
+                verify(exactly = 0) { webhooks.sendMirrorPushWebhook(any(), any()) }
             }
 
             it("initial R remains the cutoff when source HEAD grows and revisions repeat") {
@@ -205,14 +207,14 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                 val notification = notices().single()
                 notification.resourceType shouldBe ResourceType.PROJECT
                 notification.resourceId shouldBe project.id.toString()
-                notification.title shouldBe "[${project.name}] SVN r2"
+                notification.title shouldBe "[${project.name}] 1개의 커밋이 미러에 반영되었습니다."
                 notification.eventType shouldBe EventType.NEW_COMMIT
                 notification.senderId shouldBe null
                 notification.created shouldBe date
                 transaction.execute { mail.findByNotificationEvent(notification) != null } shouldBe true
                 store.snapshot(mirror.id!!).initialImportTargetRevision shouldBe 1L
                 cursor() shouldBe 2L
-                verify(exactly = 1) { webhooks.sendSvnMirrorWebhook(any(), SvnMirrorCommit("2", author, date, properties().getStringValue(SVNRevisionProperty.LOG))) }
+                verify(exactly = 1) { webhooks.sendMirrorPushWebhook(any(), PushedVcsCommits(listOf(PushedVcsCommit("2", properties().getStringValue(SVNRevisionProperty.LOG), author, null, date)), emptyList())) }
             }
 
             it("renders project commit links in inbox and mail for a persisted post-import SVN notification") {
@@ -293,14 +295,14 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                         events().size shouldBe 2
                         notices().size shouldBe 1
                         cursor() shouldBe 2L
-                        verify(exactly = 0) { webhooks.sendSvnMirrorWebhook(any(), any()) }
+                        verify(exactly = 0) { webhooks.sendMirrorPushWebhook(any(), any()) }
                         error("injected interruption before commit")
                     }
                 }
                 cursor() shouldBe 1L
                 events().size shouldBe 1
                 notices().size shouldBe 0
-                verify(exactly = 0) { webhooks.sendSvnMirrorWebhook(any(), any()) }
+                verify(exactly = 0) { webhooks.sendMirrorPushWebhook(any(), any()) }
                 index(2)
                 cursor() shouldBe 2L
                 events().size shouldBe 2
@@ -312,21 +314,21 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                 val failedMail = mockk<NotificationMailRepository>()
                 every { failedMail.save(any()) } throws IllegalStateException("injected mail marker failure")
                 val failedRecorder = NotificationEventRecorder(notifications, failedMail, SimpleMeterRegistry())
-                val failedIndexer = SvnMirrorIndexer(store, issues, references, failedRecorder, watchers, webhooks, authorMappings)
+                val failedIndexer = SvnMirrorIndexer(MirrorCommitIndexer(store, CommitIssueReferenceService(issues, references), failedRecorder, watchers, webhooks, authorMappings))
                 shouldThrow<IllegalStateException> {
                     failedIndexer.index(mirror.id!!, worker, fence, 2, properties())
                 }
                 cursor() shouldBe 1L
                 events().size shouldBe 1
                 notices().size shouldBe 0
-                verify(exactly = 0) { webhooks.sendSvnMirrorWebhook(any(), any()) }
+                verify(exactly = 0) { webhooks.sendMirrorPushWebhook(any(), any()) }
             }
 
             it("sends only after durable commit and webhook failure never rewinds or duplicates local data") {
                 index(1)
                 var committedCursor: Long? = null
                 var committedNotices: Int? = null
-                every { webhooks.sendSvnMirrorWebhook(any(), any()) } answers {
+                every { webhooks.sendMirrorPushWebhook(any(), any()) } answers {
                     independent.executeWithoutResult {
                         committedCursor = cursor()
                         committedNotices = notices().size
@@ -340,7 +342,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                 cursor() shouldBe 2L
                 events().size shouldBe 2
                 notices().size shouldBe 1
-                verify(exactly = 1) { webhooks.sendSvnMirrorWebhook(any(), any()) }
+                verify(exactly = 1) { webhooks.sendMirrorPushWebhook(any(), any()) }
             }
 
             it("keeps recorder empty-recipient semantics while still requesting the incremental webhook") {
@@ -349,7 +351,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                 index(2)
                 notices().size shouldBe 0
                 cursor() shouldBe 2L
-                verify(exactly = 1) { webhooks.sendSvnMirrorWebhook(any(), any()) }
+                verify(exactly = 1) { webhooks.sendMirrorPushWebhook(any(), any()) }
             }
 
             it("never substitutes indexing time for a missing or malformed original date") {

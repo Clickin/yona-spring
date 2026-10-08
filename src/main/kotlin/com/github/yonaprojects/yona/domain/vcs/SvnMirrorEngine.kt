@@ -11,55 +11,70 @@ import org.tmatesoft.svn.core.io.SVNRepository
 import org.tmatesoft.svn.core.io.SVNRepositoryFactory
 import org.tmatesoft.svn.core.replicator.ISVNReplicationHandler
 import org.tmatesoft.svn.core.replicator.SVNRepositoryReplicator
+import java.io.File
 import java.nio.file.Files
 
 @Service
-class SvnMirrorSynchronizer(
+class SvnMirrorEngine(
     private val store: RepositoryMirrorStore,
-    private val sourcePolicy: SvnMirrorSourcePolicy,
-    private val storage: RepositoryMirrorStorage,
-    private val locks: RepositoryMirrorLock,
+    private val sourcePolicy: MirrorSourcePolicy,
     private val indexer: SvnMirrorIndexer,
     private val properties: RepositoryMirrorProperties
-) {
-    fun syncOneMirror(id: Long, owner: String, fence: Long, cancelled: () -> Boolean) {
-        properties.requireActivation()
-        val initial = store.snapshot(id)
-        locks.withLock(requireNotNull(initial.project.id)) {
-            val checkActive = {
-                if (cancelled()) throw MirrorLeaseLost()
-                store.fenced(id, owner, fence) { }
+) : MirrorEngine {
+    override val vcs = MirrorVcs.SUBVERSION
+
+    override fun sync(context: MirrorSyncContext) {
+        val (id, owner, fence) = Triple(context.id, context.owner, context.fence)
+        val initial = context.mirror
+        val source = sourcePolicy.openSvn(initial.sourceUrl, initial.credentialRef)
+        var target: SVNRepository? = null
+        try {
+            source.setCanceller { if (context.cancelled()) throw cancelledException() }
+            if (source.getRepositoryRoot(true) != source.location) throw MirrorFailure("SOURCE_MUST_BE_REPOSITORY_ROOT")
+            val sourceUuid = source.getRepositoryUUID(true)
+            val head = source.latestRevision
+            val directory = context.directory
+            FSRepositoryFactory.setup()
+            if (!directory.resolve("format").exists()) {
+                if (initial.localRepositoryUuid != null || directory.list()?.isNotEmpty() != false) throw MirrorFailure("TARGET_INCOMPLETE", attention = true)
+                context.checkActive()
+                // enableRevisionProperties=true; force=false never overwrites an existing repository.
+                SVNRepositoryFactory.createLocalRepository(directory, true, false)
             }
-            checkActive()
-            val source = sourcePolicy.open(initial.sourceUrl, initial.credentialRef)
-            var target: SVNRepository? = null
-            try {
-                source.setCanceller { if (cancelled()) throw cancelledException() }
-                if (source.getRepositoryRoot(true) != source.location) throw MirrorFailure("SOURCE_MUST_BE_REPOSITORY_ROOT")
-                val sourceUuid = source.getRepositoryUUID(true)
-                val head = source.latestRevision
-                val directory = storage.directory(initial)
-                FSRepositoryFactory.setup()
-                if (!directory.resolve("format").exists()) {
-                    if (initial.localRepositoryUuid != null || directory.list()?.isNotEmpty() != false) throw MirrorFailure("TARGET_INCOMPLETE", attention = true)
-                    checkActive()
-                    // enableRevisionProperties=true; force=false never overwrites an existing repository.
-                    SVNRepositoryFactory.createLocalRepository(directory, true, false)
-                }
-                target = SVNRepositoryFactory.create(SVNURL.fromFile(directory))
-                target.setCanceller { if (cancelled()) throw cancelledException() }
-                if (target.getRepositoryRoot(true) != target.location) throw MirrorFailure("TARGET_NOT_ROOT", attention = true)
-                val mirror = store.observe(id, owner, fence, sourceUuid, head, target.getRepositoryUUID(true), target.latestRevision)
-                val goal = if (mirror.status == RepositoryMirrorStatus.INITIAL_IMPORT) requireNotNull(mirror.initialImportTargetRevision) else head
-                synchronize(source, target, mirror, goal, properties.batchSize, checkActive, cancelled,
-                    verified = { revision, youngest -> store.verified(id, owner, fence, revision, youngest) },
-                    indexed = { revision, props -> indexer.index(id, owner, fence, revision, props) })
-                store.complete(id, owner, fence, properties.syncSeconds)
-            } finally {
-                target?.closeSession()
-                source.closeSession()
+            target = SVNRepositoryFactory.create(SVNURL.fromFile(directory))
+            target.setCanceller { if (context.cancelled()) throw cancelledException() }
+            if (target.getRepositoryRoot(true) != target.location) throw MirrorFailure("TARGET_NOT_ROOT", attention = true)
+            val mirror = store.observe(id, owner, fence, sourceUuid, head, target.getRepositoryUUID(true), target.latestRevision)
+            val goal = if (mirror.status == RepositoryMirrorStatus.INITIAL_IMPORT) requireNotNull(mirror.initialImportTargetRevision) else head
+            synchronize(source, target, mirror, goal, properties.batchSize, context.checkActive, context.cancelled,
+                verified = { revision, youngest -> store.verified(id, owner, fence, revision, youngest) },
+                indexed = { revision, props -> indexer.index(id, owner, fence, revision, props) })
+        } finally {
+            target?.closeSession()
+            source.closeSession()
+        }
+    }
+
+    override fun authorKeyOf(mirror: RepositoryMirror, directory: File, commitId: String): String? {
+        val revision = commitId.toLongOrNull()?.takeIf { it in 1..mirror.lastVerifiedRevision } ?: return null
+        return withLocal(directory) { it.getRevisionPropertyValue(revision, SVNRevisionProperty.AUTHOR)?.string }
+    }
+
+    override fun authorKeys(mirror: RepositoryMirror, directory: File, limit: Int): List<String> {
+        if (mirror.lastVerifiedRevision < 1) return emptyList()
+        val found = sortedSetOf<String>()
+        withLocal(directory) { repository ->
+            repository.log(arrayOf(""), 1, mirror.lastVerifiedRevision, false, false, 0, false, arrayOf(SVNRevisionProperty.AUTHOR)) { entry ->
+                if (found.size < limit) entry.author?.let(found::add)
             }
         }
+        return found.toList()
+    }
+
+    private fun <T> withLocal(directory: File, action: (SVNRepository) -> T): T {
+        FSRepositoryFactory.setup()
+        val repository = SVNRepositoryFactory.create(SVNURL.fromFile(directory))
+        try { return action(repository) } finally { repository.closeSession() }
     }
 
     companion object {

@@ -57,8 +57,8 @@ class RepositoryMirrorAdminIntegrationSpec @Autowired constructor(
         proxyPort = 19444
         allowedOrigins = listOf("https://example.org")
     }
-    private val sourcePolicy = SvnMirrorSourcePolicy(settings)
-    private val namespaceGuard = RepositoryNamespaceGuard(base.resolve("_data").toString(), base.toString())
+    private val sourcePolicy = MirrorSourcePolicy(settings)
+    private val namespaceGuard = RepositoryNamespaceGuard(base.resolve("_data").toString())
     private val storage = RepositoryMirrorStorage(base.toString(), base.resolve("_git").toString(), base.resolve("_hg").toString(), namespaceGuard)
     private val service by lazy {
         RepositoryMirrorAdminService(settings, sourcePolicy, storage, projects, users, roles, memberships, mirrors, store, namespaceGuard, transactionManager)
@@ -139,7 +139,7 @@ class RepositoryMirrorAdminIntegrationSpec @Autowired constructor(
                 mirrors.findById(mirrorId).isPresent shouldBe false
                 val target = base.resolve("${admin.loginId}/$name")
                 val marker = namespaceGuard.markerPath(admin.loginId, name)
-                val ownership = "yona-svn-mirror:$projectId:1\n$target\n"
+                val ownership = "yona-mirror:$projectId:1\n$target\n"
                 Files.readString(marker) shouldBe ownership
                 Files.isDirectory(target) shouldBe true
                 Files.writeString(target.resolve("keep"), "orphan must be inspected")
@@ -190,7 +190,7 @@ class RepositoryMirrorAdminIntegrationSpec @Autowired constructor(
                     projects.findByOwner(admin.loginId).count { it.name == name } shouldBe 1
                     mirrors.findByProjectId(row.project.id!!)?.id shouldBe id
                     val target = storage.directory(row).toPath()
-                    Files.readString(namespaceGuard.markerPath(admin.loginId, name)) shouldBe "yona-svn-mirror:${row.project.id}:1\n$target\n"
+                    Files.readString(namespaceGuard.markerPath(admin.loginId, name)) shouldBe "yona-mirror:${row.project.id}:1\n$target\n"
                     service.create(admin.loginId, name, "https://example.org/svn", null) shouldBe id
                     shouldThrow<AccessDeniedException> { namespaceGuard.requireUnreserved(admin.loginId, name) }
                 } finally {

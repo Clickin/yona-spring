@@ -99,49 +99,23 @@ class WebhookServiceImpl(
         }
     }
 
-    // Separate from the User-based push path: a source author is not a local pusher.
+    // Commits imported by a repository mirror have no local pusher; sender and pusher stay null.
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    override fun sendSvnMirrorWebhook(project: Project, commit: SvnMirrorCommit) {
+    override fun sendMirrorPushWebhook(project: Project, pushed: PushedVcsCommits) {
         for (webhook in webhookRepository.findByProjectId(project.id ?: return)) {
             if (shouldDeliverToWebhook(webhook, EventType.NEW_COMMIT)) {
-                sendRequestAsync(webhook, commit, buildSvnMirrorPayload(webhook, commit))
+                sendRequestAsync(webhook, pushed, buildMirrorPushPayload(webhook, pushed))
             }
         }
     }
 
-    internal fun buildSvnMirrorPayload(webhook: Webhook, commit: SvnMirrorCommit): String {
-        val mapper = ObjectMapper()
-        val root = mapper.createObjectNode()
-        val project = webhook.project
-        if (webhook.webhookType != WebhookType.JSON) {
-            root.put("text", "[${project?.name ?: ""}] SVN r${commit.revision} (${commit.author ?: "unknown author"})")
-            return mapper.writeValueAsString(root)
-        }
-
-        root.set("ref", mapper.createArrayNode())
-        val node = mapper.createObjectNode()
-        node.put("id", commit.revision)
-        node.put("message", commit.message)
-        node.put("timestamp", commit.created.toString())
-        node.put("url", "${projectUrl(project)}/commit/${commit.revision}")
-        val author = mapper.createObjectNode()
-        author.put("name", commit.author)
-        author.putNull("email")
-        node.set("author", author)
-        node.set("committer", author.deepCopy())
-        root.set("commits", mapper.createArrayNode().add(node))
-        root.set("head_commit", node)
-        root.putNull("sender")
-        root.putNull("pusher")
-        val repository = mapper.createObjectNode()
-        repository.put("id", project?.id ?: 0L)
-        repository.put("name", project?.name ?: "")
-        repository.put("owner", project?.owner ?: "")
-        repository.put("html_url", projectUrl(project))
-        repository.put("overview", project?.overview ?: "")
-        repository.put("private", project?.projectScope != ProjectScope.PUBLIC)
-        root.set("repository", repository)
-        return mapper.writeValueAsString(root)
+    internal fun buildMirrorPushPayload(webhook: Webhook, pushed: PushedVcsCommits): String {
+        if (webhook.webhookType == WebhookType.JSON) return buildPushPayloadForVcsCommits(webhook, null, pushed)
+        val branch = pushed.refNames.firstOrNull()
+        val target = if (branch == null) "" else " ($branch)"
+        val root = ObjectMapper().createObjectNode()
+        root.put("text", "[${webhook.project?.name ?: ""}] ${pushed.commits.size}개의 커밋이 미러에 반영되었습니다$target")
+        return ObjectMapper().writeValueAsString(root)
     }
 
     /**

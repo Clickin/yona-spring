@@ -11,7 +11,7 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
-class SvnMirrorSourcePolicySpec : DescribeSpec({
+class MirrorSourcePolicySpec : DescribeSpec({
     fun settings() = RepositoryMirrorProperties().apply {
         enabled = true
         egressRestricted = true
@@ -26,7 +26,7 @@ class SvnMirrorSourcePolicySpec : DescribeSpec({
         it("requires actual forced proxy configuration and a designated writer before network") {
             val config = settings()
             config.proxyHost = ""
-            shouldThrow<MirrorFailure> { SvnMirrorSourcePolicy(config).open("https://localhost:19443/svn", null) }.code shouldBe "ACTIVATION_REQUIRED"
+            shouldThrow<MirrorFailure> { MirrorSourcePolicy(config).openSvn("https://localhost:19443/svn", null) }.code shouldBe "ACTIVATION_REQUIRED"
             config.proxyHost = "127.0.0.1"
             config.egressRestricted = false
             shouldThrow<MirrorFailure> { config.requireActivation() }.code shouldBe "ACTIVATION_REQUIRED"
@@ -38,7 +38,7 @@ class SvnMirrorSourcePolicySpec : DescribeSpec({
         }
 
         it("normalizes only exact HTTPS origins and rejects credential/redirect-capable URL forms") {
-            val policy = SvnMirrorSourcePolicy(settings())
+            val policy = MirrorSourcePolicy(settings())
             policy.normalize("https://EXAMPLE.org/repo/") shouldBe "https://example.org:443/repo"
             listOf("http://example.org/repo", "file:///repo", "svn+ssh://example.org/repo", "https://example.org:8443/repo",
                 "https://other.example/repo", "https://user:secret@example.org/repo", "https://example.org/repo?secret=x",
@@ -51,17 +51,17 @@ class SvnMirrorSourcePolicySpec : DescribeSpec({
         it("blocks private IPv4 IPv6 metadata multicast and transition addresses by default") {
             listOf("127.0.0.1", "10.0.0.1", "169.254.169.254", "100.64.0.1", "192.168.1.1", "0.0.0.0",
                 "224.0.0.1", "::1", "fc00::1", "fe80::1", "ff02::1", "2002:7f00:1::1", "2001:db8::1").forEach {
-                SvnMirrorSourcePolicy.isPublic(InetAddress.getByName(it)) shouldBe false
+                MirrorSourcePolicy.isPublic(InetAddress.getByName(it)) shouldBe false
             }
-            SvnMirrorSourcePolicy.isPublic(InetAddress.getByName("8.8.8.8")) shouldBe true
-            SvnMirrorSourcePolicy.contains("10.0.0.0/24", InetAddress.getByName("10.0.0.255")) shouldBe true
-            SvnMirrorSourcePolicy.contains("10.0.0.0/24", InetAddress.getByName("10.0.1.0")) shouldBe false
-            SvnMirrorSourcePolicy.contains("::1/128", InetAddress.getByName("::1")) shouldBe true
+            MirrorSourcePolicy.isPublic(InetAddress.getByName("8.8.8.8")) shouldBe true
+            MirrorSourcePolicy.contains("10.0.0.0/24", InetAddress.getByName("10.0.0.255")) shouldBe true
+            MirrorSourcePolicy.contains("10.0.0.0/24", InetAddress.getByName("10.0.1.0")) shouldBe false
+            MirrorSourcePolicy.contains("::1/128", InetAddress.getByName("::1")) shouldBe true
         }
 
         it("requires CIDR exceptions for every resolved address and rechecks changed policy") {
             val config = settings()
-            val policy = SvnMirrorSourcePolicy(config)
+            val policy = MirrorSourcePolicy(config)
             val url = SVNURL.parseURIEncoded("https://localhost:19443/svn")
             shouldThrow<MirrorFailure> { policy.checkAddresses(url) }
             config.allowedCidrs = listOf("127.0.0.0/8", "::1/128")
@@ -87,7 +87,7 @@ class SvnMirrorSourcePolicySpec : DescribeSpec({
                     proxyPort = proxy.localPort
                     allowedCidrs = listOf("127.0.0.0/8", "::1/128")
                 }
-                shouldThrow<MirrorFailure> { SvnMirrorSourcePolicy(config).open("https://localhost:19443/svn", null) }
+                shouldThrow<MirrorFailure> { MirrorSourcePolicy(config).openSvn("https://localhost:19443/svn", null) }
                 request.get(10, TimeUnit.SECONDS) shouldBe "CONNECT localhost:19443 HTTP/1.1"
             }
         }
@@ -99,7 +99,7 @@ class SvnMirrorSourcePolicySpec : DescribeSpec({
                 Files.writeString(file, "username=readonly\npassword=never-display-this\n")
                 Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-------"))
                 val config = settings().apply { credentials = mapOf("readonly" to file.toString()) }
-                val policy = SvnMirrorSourcePolicy(config)
+                val policy = MirrorSourcePolicy(config)
                 policy.credentialRefs() shouldBe setOf("readonly")
                 policy.validateCredentialRef("readonly")
                 shouldThrow<MirrorFailure> { policy.validateCredentialRef(file.toString()) }.message shouldBe "CREDENTIAL_UNAVAILABLE"

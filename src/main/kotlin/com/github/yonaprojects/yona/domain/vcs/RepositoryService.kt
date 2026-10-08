@@ -33,6 +33,15 @@ class RepositoryService(
 ) {
     private val objectMapper = ObjectMapper()
 
+    // A mirror's commit e-mail comes from the source server: only an administrator mapping names an account.
+    private fun emailUserResolver(project: Project): (String?, String?) -> com.github.yonaprojects.yona.domain.user.User? = { _, email ->
+        when {
+            email == null -> null
+            project.repositoryMode == RepositoryMode.MIRROR -> project.id?.let { mirrorAuthors?.findUserByProjectId(it, email) }
+            else -> userRepository.findByEmail(email).orElse(null)
+        }
+    }
+
     fun getRepository(project: Project): PlayRepository {
         mirrorReadiness?.requireReady(project)
         val vcsType = project.vcs?.uppercase() ?: "GIT"
@@ -56,13 +65,7 @@ class RepositoryService(
                 ownerName = project.owner ?: "",
                 projectName = project.name,
                 baseDir = hgBaseDir,
-                userResolver = { _, email ->
-                    if (email != null) {
-                        userRepository.findByEmail(email).orElse(null)
-                    } else {
-                        null
-                    }
-                },
+                userResolver = emailUserResolver(project),
                 gpgVerifier = { nativeHgCommit -> gpgSignatureVerifier.verify(nativeHgCommit) }
             )
         } else {
@@ -71,13 +74,7 @@ class RepositoryService(
                 ownerName = project.owner ?: "",
                 projectName = project.name,
                 baseDir = gitBaseDir,
-                userResolver = { _, email ->
-                    if (email != null) {
-                        userRepository.findByEmail(email).orElse(null)
-                    } else {
-                        null
-                    }
-                },
+                userResolver = emailUserResolver(project),
                 defaultBranch = gitDefaultBranch,
                 gpgVerifier = { revCommit -> gpgSignatureVerifier.verify(revCommit) }
             )

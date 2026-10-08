@@ -12,12 +12,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.TransactionTemplate
-import org.tmatesoft.svn.core.SVNException
-import org.tmatesoft.svn.core.SVNRevisionProperty
-import org.tmatesoft.svn.core.SVNURL
-import org.tmatesoft.svn.core.internal.io.fs.FSRepositoryFactory
-import org.tmatesoft.svn.core.io.SVNRepository
-import org.tmatesoft.svn.core.io.SVNRepositoryFactory
 
 /**
  * Site-admin management of source author mappings. Changes take the mirror row lock (the same row
@@ -31,8 +25,11 @@ class RepositoryMirrorAuthorService(
     private val storage: RepositoryMirrorStorage,
     private val store: RepositoryMirrorStore,
     private val entityManager: EntityManager,
-    transactionManager: PlatformTransactionManager
+    transactionManager: PlatformTransactionManager,
+    engines: List<MirrorEngine>
 ) {
+    private val engines = engines.associateBy { it.vcs }
+
     private val transaction = TransactionTemplate(transactionManager).apply {
         isolationLevel = TransactionDefinition.ISOLATION_READ_COMMITTED
     }
@@ -101,17 +98,15 @@ class RepositoryMirrorAuthorService(
         return query.resultList
     }
 
-    // The reference keeps only the revision number, so the author is read back from the verified local copy.
+    // A reference keeps only the commit ID, so its author is read back from the verified local copy.
     private fun reattribute(mirror: RepositoryMirror, sourceAuthor: String, events: List<IssueEvent>, user: User?): Int {
         if (events.isEmpty()) return 0
-        return withLocalRepository(mirror) { repository ->
-            val authorByRevision = HashMap<Long, String?>()
+        return withLocal(mirror) { engine, directory ->
+            val authorById = HashMap<String, String?>()
             var changed = 0
             for (event in events) {
-                val revision = event.newValue?.toLongOrNull()?.takeIf { it in 1..mirror.lastVerifiedRevision } ?: continue
-                val author = authorByRevision.getOrPut(revision) {
-                    repository.getRevisionPropertyValue(revision, SVNRevisionProperty.AUTHOR)?.string
-                }
+                val commitId = event.newValue ?: continue
+                val author = authorById.getOrPut(commitId) { engine.authorKeyOf(mirror, directory, commitId) }
                 if (author != sourceAuthor) continue
                 event.senderLoginId = user?.loginId
                 event.senderEmail = user?.email
@@ -121,27 +116,14 @@ class RepositoryMirrorAuthorService(
         } ?: throw MirrorFailure("REPOSITORY_DAMAGED", attention = true)
     }
 
-    private fun sourceAuthors(mirror: RepositoryMirror): List<String> {
-        if (mirror.lastVerifiedRevision < 1) return emptyList()
-        val found = sortedSetOf<String>()
-        withLocalRepository(mirror) { repository ->
-            repository.log(arrayOf(""), 1, mirror.lastVerifiedRevision, false, false, 0, false, arrayOf(SVNRevisionProperty.AUTHOR)) { entry ->
-                if (found.size < MAX_LISTED_AUTHORS) entry.author?.let(found::add)
-            }
-        }
-        return found.toList()
-    }
+    private fun sourceAuthors(mirror: RepositoryMirror): List<String> =
+        withLocal(mirror) { engine, directory -> engine.authorKeys(mirror, directory, MAX_LISTED_AUTHORS) } ?: emptyList()
 
-    private fun <T> withLocalRepository(mirror: RepositoryMirror, action: (SVNRepository) -> T): T? {
-        val repository = try {
-            FSRepositoryFactory.setup()
-            SVNRepositoryFactory.create(SVNURL.fromFile(storage.directory(mirror)))
-        } catch (_: SVNException) {
-            return null
-        } catch (_: MirrorFailure) {
-            return null
-        }
-        return try { action(repository) } catch (_: SVNException) { null } finally { repository.closeSession() }
+    private fun <T> withLocal(mirror: RepositoryMirror, action: (MirrorEngine, java.io.File) -> T): T? {
+        val engine = engines[MirrorVcs.of(mirror.project)] ?: return null
+        val directory = try { storage.directory(mirror) } catch (_: MirrorFailure) { return null }
+        // Local read failures (missing objects, damaged metadata) mean the author cannot be established.
+        return try { action(engine, directory) } catch (e: MirrorFailure) { throw e } catch (_: Exception) { null }
     }
 
     private fun admin(loginId: String) {

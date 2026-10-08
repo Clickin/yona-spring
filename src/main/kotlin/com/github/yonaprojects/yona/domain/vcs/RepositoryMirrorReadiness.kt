@@ -12,9 +12,7 @@ class RepositoryMirrorReadiness(private val mirrors: RepositoryMirrorRepository)
         if (project.repositoryMode != RepositoryMode.MIRROR) return true
         val mirror = project.id?.let(mirrors::findByProjectId)
             ?: return false
-        val target = mirror.initialImportTargetRevision ?: return false
-        return mirror.status != RepositoryMirrorStatus.NEEDS_ATTENTION &&
-            mirror.lastVerifiedRevision >= target && mirror.lastIndexedRevision >= target
+        return mirror.initialImportDone && mirror.status != RepositoryMirrorStatus.NEEDS_ATTENTION
     }
 
     fun requireReady(project: Project) {

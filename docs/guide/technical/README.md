@@ -28,7 +28,24 @@ legacy Yona의 `docs/ko/technical/` + `docs/technical/`(두 세트를 합침, �
 - [view-hierarchy.md](view-hierarchy.md) — `.scala.html` include 트리(파일명만 기계적으로
   치환, 전수 재검증은 아직 안 함 — `docs/TEMPLATE_BACKLOG.md`가 더 신뢰할 수 있는 소스)
 
-## SVN 읽기 전용 미러
+## 읽기 전용 저장소 미러
+
+### 공통 구조
+
+외부 SVN·Git·Mercurial 저장소를 주기적으로 가져와 Yona 프로젝트로 제공하고, 커밋의 이슈 참조는
+Yona에서 관리한다. VCS와 무관한 부분(모드와 쓰기 보호, 이름 예약, 임대·fence, 물리 잠금, 원본 접속
+정책, 이슈 참조·알림·웹훅, 작성자 매핑, 관리 화면)은 공통이고, VCS별 부분은 `MirrorEngine`
+구현이 담당한다. 엔진은 원본에서 가져와 검증한 커밋을 `MirrorCommitIndexer`에 넘기며, 이슈 참조와
+알림을 직접 쓰지 않는다.
+
+- 로컬 저장소는 해당 VCS의 hosted 경로를 그대로 쓴다: `<svn>/owner/name`, `<git>/owner/name.git`,
+  `<hg>/owner/name`. 기존 HTTP/SSH 읽기 경로가 그대로 서빙하고 쓰기는 모드로 거부된다.
+- 진행 위치는 SVN·Mercurial은 선형 커서(`lastVerifiedRevision`, `lastIndexedRevision`, 고정 목표 R),
+  Git은 ref별 색인 위치(`repository_mirror_ref`)다. Git의 새 커밋은 가져온 ref에서 닿고 색인한 어느
+  위치에서도 닿지 않는 커밋이다.
+- `initialImportDone`은 첫 가져오기의 검증·색인이 끝나면 켜지고 되돌리지 않는다. 그 전의 커밋은
+  참조만 만들고, 이후 커밋부터 알림과 웹훅을 보낸다. 준비 중 판정(503)도 이 값을 쓴다.
+- 작성자 매핑 키는 SVN 사용자 이름, Git·Mercurial 커밋 이메일이다.
 
 ### 저장소 모드와 업그레이드
 
@@ -39,14 +56,15 @@ NOT NULL을 확인한다. 대상 DB는 H2, MariaDB, PostgreSQL, MySQL, SQL Serve
 
 `yona.repository-mirror.enabled`의 기본값은 `false`다. 꺼도 이미 저장된 `MIRROR`의 쓰기
 거부는 유지된다. HTTP/SSH, 웹/API, 실제 저장소 writer가 최신 DB 모드를 확인하며 관리자도
-우회하지 못한다. 별도 위키 저장소와 일반 게시글은 계속 쓸 수 있다. 새 미러는 SVN만 지원한다.
+우회하지 못한다. 별도 위키 저장소와 일반 게시글은 계속 쓸 수 있다. 새 미러는 등록된 엔진이 있는
+VCS만 만들 수 있다.
 hg4j의 중첩 batch/pushkey 경로를 안전하게 허용할 수 없어, 지원하지 않는 Hg MIRROR의 SSH
 세션과 HTTP batch/v2 multirequest는 읽기 전용 요청을 포함해 거부한다. HOSTED 분류는 바꾸지 않는다.
 
 프로젝트 이름에는 DB unique 제약이 없다. 생성·개명·이전·포크는 이름별 파일 잠금을 DB
 transaction 완료까지 유지하고 READ_COMMITTED에서 목적지를 다시 확인한다. Git clone도 같은
-이름 잠금을 사용하며 기존 목적지를 덮어쓰지 않는다. 미러 예약 표식은 SVN 루트의
-`.mirror-owners/<이름 해시>.owner`에 먼저 기록하고 디렉터리를 만든다. DB rollback 뒤 표식이나
+이름 잠금을 사용하며 기존 목적지를 덮어쓰지 않는다. 미러 예약 표식은 모든 VCS 루트 밖인
+`yona.data/.mirror-owners/<이름 해시>.owner`에 먼저 기록하고 디렉터리를 만든다. DB rollback 뒤 표식이나
 디렉터리가 남으면 일반 프로젝트 생성도 이를 인수하지 않는다. 운영자가 DB 행, 표식의
 project ID/generation/경로, 실제 디렉터리를 대조해야 하며 자동 삭제하지 않는다.
 
@@ -139,7 +157,8 @@ project ID를 대상으로 하며, 참조·웹훅의 commit ID는 숫자 문자�
 기존 watcher 정책에 따라 수신자가 없으면 DB 알림도 없다. Git/Hg의 기존 발신자·payload는
 바꾸지 않는다.
 
-SVN 웹훅은 DB commit 뒤 기존 `gitPush` 설정에 따라 best-effort로 보낸다. crash나 네트워크
+미러 웹훅은 DB commit 뒤 기존 `gitPush` 설정에 따라 best-effort로 보낸다. JSON은 Git push와 같은
+형식이며 sender·pusher는 null이다. crash나 네트워크
 응답 유실에 따른 유실/중복 가능성이 있으며, 색인 커서는 원격 수신 완료를 뜻하지 않는다.
 웹훅 실패 때문에 복제나 색인을 되돌리지 않는다.
 
@@ -150,7 +169,7 @@ SVN 웹훅은 DB commit 뒤 기존 `gitPush` 설정에 따라 best-effort로 보
 60초다. 긴 SVN I/O는 공용 scheduler나 DB transaction 안에서 실행하지 않는다.
 claim/heartbeat/checkpoint/완료는 DB 시각, owner, 증가하는 fence로 확인한다.
 
-파일 writer는 `.mirror-locks/<projectId>.lock`을 작업 전체 동안 보유한다. 임대 상실은
+파일 writer는 `yona.data/.mirror-locks/<projectId>.lock`을 작업 전체 동안 보유한다. 임대 상실은
 기존 스레드가 멈췄다는 증거가 아니므로, 취소를 요청해도 스레드가 반환하기 전에는 잠금을
 해제하지 않는다. 종료도 새 작업을 막고 실제 writer 종료를 기다린다. 이름 잠금은
 `yona.data/repository-names/`를 사용한다. 두 종류의 잠금 파일은 실행 중 rename/delete/recreate하지 않는다.
@@ -166,8 +185,8 @@ claim/heartbeat/checkpoint/완료는 DB 시각, owner, 증가하는 fence로 확
 ### 관리자 조작과 검증
 
 `/site/repository-mirrors`는 site-admin 세션 전용이다. 프로젝트 관리자나 API token만으로는
-접근하지 못하며 POST는 CSRF 보호를 받는다. 새 미러는 현재 관리자 소유의 비공개 SVN
-프로젝트로 만든다. 기존 Git 프로젝트 전환이나 저장소 덮어쓰기는 지원하지 않는다.
+접근하지 못하며 POST는 CSRF 보호를 받는다. 새 미러는 현재 관리자 소유의 비공개 프로젝트로
+만들며 VCS를 고른다. 기존 Git 프로젝트 전환이나 저장소 덮어쓰기는 지원하지 않는다.
 원본 경로·비밀 값은 숨기고, 고정 R·커서·마지막 관측 youngest·임대·안전한 오류를 표시한다.
 
 pause/retry는 DB 조작이며 HTTP 요청에서 동기 복제하지 않는다. pause는 다음 안전한

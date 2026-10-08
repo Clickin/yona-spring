@@ -16,9 +16,12 @@ class RepositoryMirrorAdminController(
     private val service: RepositoryMirrorAdminService,
     private val users: UserRepository,
     private val settings: RepositoryMirrorProperties,
-    private val sourcePolicy: SvnMirrorSourcePolicy,
-    private val authorService: RepositoryMirrorAuthorService
+    private val sourcePolicy: MirrorSourcePolicy,
+    private val authorService: RepositoryMirrorAuthorService,
+    engines: List<MirrorEngine>
 ) {
+    private val supportedVcs = engines.map { it.vcs }.sorted()
+
     @GetMapping
     fun index(authentication: Authentication?, request: HttpServletRequest,
         @RequestParam(defaultValue = "0") page: Int, model: Model): String {
@@ -26,6 +29,7 @@ class RepositoryMirrorAdminController(
         model.addAttribute("mirrors", service.list(login, page))
         model.addAttribute("mirrorEnabled", settings.enabled)
         model.addAttribute("credentialRefs", sourcePolicy.credentialRefs())
+        model.addAttribute("supportedVcs", supportedVcs)
         model.addAttribute("message", "mirror.title")
         return "site/repository_mirror"
     }
@@ -33,9 +37,14 @@ class RepositoryMirrorAdminController(
     @PostMapping
     fun create(authentication: Authentication?, request: HttpServletRequest,
         @RequestParam name: String, @RequestParam sourceUrl: String,
-        @RequestParam(required = false) credentialRef: String?, flash: RedirectAttributes): String {
+        @RequestParam(required = false) credentialRef: String?,
+        @RequestParam(defaultValue = "SUBVERSION") vcs: String, flash: RedirectAttributes): String {
         val login = checkAdmin(authentication, request)
-        return mutate(flash) { service.create(login, name, sourceUrl, credentialRef) }
+        return mutate(flash) {
+            val kind = MirrorVcs.parse(vcs)
+            if (kind !in supportedVcs) throw MirrorFailure("UNSUPPORTED_VCS")
+            service.create(login, name, sourceUrl, credentialRef, kind)
+        }
     }
 
     @PostMapping("/{id}/pause")

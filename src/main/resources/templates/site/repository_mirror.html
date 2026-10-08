@@ -18,6 +18,10 @@
         <fieldset>
           <legend th:text="#{mirror.create}"></legend>
           <p th:text="#{mirror.createHelp}"></p>
+          <label for="mirror-vcs" th:text="#{mirror.vcs}"></label>
+          <select id="mirror-vcs" name="vcs">
+            <option th:each="vcs : ${supportedVcs}" th:value="${vcs.name()}" th:text="#{${'mirror.vcs.' + vcs.name()}}"></option>
+          </select>
           <label for="mirror-name" th:text="#{project.name}"></label>
           <input id="mirror-name" name="name" required maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,99}" autocomplete="off">
           <label for="mirror-source" th:text="#{mirror.source}"></label>
@@ -38,6 +42,7 @@
         <p th:if="${mirror.ready}" th:text="#{mirror.ready}"></p>
         <p class="alert" role="alert" th:if="${mirror.hasError}" th:text="#{${mirror.errorMessage}}"></p>
         <dl>
+          <dt th:text="#{mirror.vcs}"></dt><dd th:text="${mirror.vcs}"></dd>
           <dt th:text="#{mirror.source}"></dt><dd th:text="${mirror.source}"></dd>
           <dt th:text="#{mirror.credential}"></dt><dd th:text="${mirror.credentialConfigured} ? #{mirror.configured} : #{mirror.anonymous}"></dd>
           <dt th:text="#{mirror.target}"></dt><dd th:text="${mirror.initialImportTargetRevision != null ? 'r' + mirror.initialImportTargetRevision : '—'}"></dd>

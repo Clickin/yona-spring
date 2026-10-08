@@ -62,6 +62,35 @@ class RepositoryMirrorStoreSpec @Autowired constructor(
                 shouldThrow<MirrorLeaseLost> { store.fenced(id, owner, fence) { it.lastIndexedRevision = 99 } }
                 store.snapshot(id).lastIndexedRevision shouldBe 0L
             }
+            it("finishes the first import at R for linear mirrors and with the first complete run otherwise") {
+                val linear = mirror().id!!
+                var fence = store.claim(linear, "a", 60)!!
+                store.observe(linear, "a", fence, "source", 1, "local", 0)
+                store.verified(linear, "a", fence, 0, 0)
+                store.fenced(linear, "a", fence) { it.lastIndexedRevision = 0 }
+                store.complete(linear, "a", fence, 60)
+                store.snapshot(linear).initialImportDone shouldBe false
+                store.snapshot(linear).status shouldBe RepositoryMirrorStatus.INITIAL_IMPORT
+                store.release(linear, "a", fence)
+                transaction.executeWithoutResult { mirrors.findById(linear).orElseThrow().nextSyncAt = null }
+                fence = store.claim(linear, "a", 60)!!
+                store.verified(linear, "a", fence, 1, 1)
+                store.fenced(linear, "a", fence) { it.lastIndexedRevision = 1 }
+                store.complete(linear, "a", fence, 60)
+                store.snapshot(linear).initialImportDone shouldBe true
+                store.snapshot(linear).status shouldBe RepositoryMirrorStatus.INCREMENTAL
+
+                val refBased = mirror().id!!
+                val refFence = store.claim(refBased, "b", 60)!!
+                store.complete(refBased, "b", refFence, 60)
+                store.snapshot(refBased).initialImportDone shouldBe true
+                store.release(refBased, "b", refFence)
+                transaction.executeWithoutResult {
+                    mirrors.findById(refBased).orElseThrow().status = RepositoryMirrorStatus.FAILED
+                }
+                store.retry(refBased)
+                store.snapshot(refBased).status shouldBe RepositoryMirrorStatus.INCREMENTAL
+            }
             it("rolls back checkpoint mutations and refuses UUID and cursor corruption") {
                 val id = mirror().id!!
                 val fence = store.claim(id, "a", 60)!!

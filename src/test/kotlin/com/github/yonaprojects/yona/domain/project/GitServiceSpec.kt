@@ -125,7 +125,7 @@ class GitServiceSpec : DescribeSpec({
 
         it("denies create and clone for an orphan mirror marker before creating a repository") {
             val root = tempdir()
-            val guard = RepositoryNamespaceGuard(File(root, "data").path, File(root, "svn").path)
+            val guard = RepositoryNamespaceGuard(File(root, "data").path)
             val marker = guard.markerPath("owner", "reserved")
             java.nio.file.Files.createDirectories(marker.parent)
             java.nio.file.Files.writeString(marker, "orphan reservation")

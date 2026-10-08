@@ -22,7 +22,7 @@ import javax.net.ssl.SSLException
 @Component
 class RepositoryMirrorDispatcher(
     private val store: RepositoryMirrorStore,
-    private val synchronizer: SvnMirrorSynchronizer,
+    private val synchronizer: RepositoryMirrorSynchronizer,
     private val properties: RepositoryMirrorProperties
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)

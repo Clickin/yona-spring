@@ -24,6 +24,8 @@ class RepositoryMirror(
     var status: RepositoryMirrorStatus = RepositoryMirrorStatus.INITIAL_IMPORT,
     @Column(nullable = false)
     var enabled: Boolean = true,
+    // Linear cursors (SVN revisions, Mercurial local revisions). Git keeps them at -1 and tracks
+    // per-ref positions in repository_mirror_ref instead.
     var initialImportTargetRevision: Long? = null,
     @Column(nullable = false)
     var lastVerifiedRevision: Long = -1,
@@ -35,6 +37,10 @@ class RepositoryMirror(
     var sourceYoungestRevision: Long = -1,
     var lastSyncedAt: Instant? = null,
     var nextSyncAt: Instant? = null,
+    // Set once the first import is fully verified and indexed. Commits indexed before that create
+    // references only; later commits also notify. Never reset.
+    @Column(nullable = false)
+    var initialImportDone: Boolean = false,
     @Column(nullable = false)
     var retryCount: Int = 0,
     @Column(length = 64)

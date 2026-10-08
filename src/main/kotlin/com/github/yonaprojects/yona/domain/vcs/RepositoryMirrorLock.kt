@@ -11,7 +11,7 @@ import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.StandardOpenOption.WRITE
 
 @Component
-class RepositoryMirrorLock(@Value("\${yona.svn.base-dir:/tmp/yona/svn}") private val baseDir: String) {
+class RepositoryMirrorLock(@Value("\${yona.data:data}") private val baseDir: String) {
     fun <T> withLock(projectId: Long, action: () -> T): T {
         require(projectId > 0)
         val configured = Path.of(baseDir).toAbsolutePath().normalize()

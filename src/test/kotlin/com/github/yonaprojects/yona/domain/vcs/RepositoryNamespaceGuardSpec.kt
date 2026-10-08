@@ -17,7 +17,7 @@ class RepositoryNamespaceGuardSpec @Autowired constructor(transactionManager: Pl
         describe("repository name reservations across VCS roots") {
             it("holds the stable name lock through commit and reuses it within the same transaction") {
                 val root = Files.createTempDirectory("repository-name-lock").toRealPath()
-                val guard = RepositoryNamespaceGuard(root.resolve("data").toString(), root.resolve("svn").toString())
+                val guard = RepositoryNamespaceGuard(root.resolve("data").toString())
                 val executor = Executors.newSingleThreadExecutor()
                 try {
                     TransactionTemplate(transactionManager).apply { isolationLevel = TransactionDefinition.ISOLATION_READ_COMMITTED }.executeWithoutResult {
@@ -34,7 +34,7 @@ class RepositoryNamespaceGuardSpec @Autowired constructor(transactionManager: Pl
             }
             it("releases on rollback but never makes an orphan mirror reservation available to hosted creation") {
                 val root = Files.createTempDirectory("repository-name-orphan").toRealPath()
-                val guard = RepositoryNamespaceGuard(root.resolve("data").toString(), root.resolve("svn").toString())
+                val guard = RepositoryNamespaceGuard(root.resolve("data").toString())
                 try {
                     TransactionTemplate(transactionManager).apply { isolationLevel = TransactionDefinition.ISOLATION_READ_COMMITTED }.executeWithoutResult { transaction ->
                         guard.holdUntilTransactionCompletion("owner", "project")
@@ -53,7 +53,7 @@ class RepositoryNamespaceGuardSpec @Autowired constructor(transactionManager: Pl
             it("rejects unsafe lock inode replacement and allocation without a transaction") {
                 val root = Files.createTempDirectory("repository-name-unsafe").toRealPath()
                 val elsewhere = Files.createTempDirectory("repository-name-other").toRealPath()
-                val guard = RepositoryNamespaceGuard(root.toString(), root.resolve("svn").toString())
+                val guard = RepositoryNamespaceGuard(root.toString())
                 try {
                     shouldThrow<IllegalStateException> { guard.holdUntilTransactionCompletion("owner", "project") }
                     Files.createSymbolicLink(root.resolve("repository-names"), elsewhere)

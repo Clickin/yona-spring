@@ -27,7 +27,7 @@ import java.util.logging.Level
 import javax.net.ssl.*
 
 @Component
-class SvnMirrorSourcePolicy(private val settings: RepositoryMirrorProperties) {
+class MirrorSourcePolicy(private val settings: RepositoryMirrorProperties) {
     fun normalize(sourceUrl: String): String = policy {
         if (sourceUrl.length > 2048) denied()
         val uri = URI(sourceUrl)
@@ -57,7 +57,7 @@ class SvnMirrorSourcePolicy(private val settings: RepositoryMirrorProperties) {
         if (ref != null) credentials(ref).second.fill('\u0000') // Provisioning check only; no network.
     }
 
-    fun open(sourceUrl: String, credentialRef: String?): SVNRepository {
+    fun openSvn(sourceUrl: String, credentialRef: String?): SVNRepository {
         settings.requireActivation() // Must precede DNS, secret reads, and any source connection.
         val normalized = normalize(sourceUrl)
         val url = SVNURL.parseURIEncoded(normalized)
@@ -141,9 +141,12 @@ class SvnMirrorSourcePolicy(private val settings: RepositoryMirrorProperties) {
         }
     }
 
-    internal fun checkAddresses(url: SVNURL) = policy {
+    internal fun checkAddresses(url: SVNURL) = checkHost(url.host)
+
+    /** Every resolved address must be public or inside an operator CIDR; call before each connection. */
+    fun checkHost(host: String) = policy {
         val addresses = try {
-            InetAddress.getAllByName(url.host.removeSurrounding("[", "]"))
+            InetAddress.getAllByName(host.removeSurrounding("[", "]"))
         } catch (_: java.net.UnknownHostException) {
             throw MirrorFailure("SOURCE_CONNECTION", transient = true)
         }
@@ -151,6 +154,15 @@ class SvnMirrorSourcePolicy(private val settings: RepositoryMirrorProperties) {
                 !isPublic(address) && settings.allowedCidrs.none { contains(it, address) }
             }) denied()
     }
+
+    /** Username and password of an operator credential file; the caller must clear the password. */
+    fun credential(ref: String): Pair<String, CharArray> = credentials(ref)
+
+    /** The loopback CONNECT proxy every mirror connection must use. */
+    fun proxy(): java.net.Proxy = java.net.Proxy(java.net.Proxy.Type.HTTP, java.net.InetSocketAddress(settings.proxyHost, settings.proxyPort))
+
+    /** JVM-truststore-only verification bound to [host], with HTTPS endpoint identification. */
+    fun trustManager(host: String): X509ExtendedTrustManager = strictTrustManager(host)
 
     private fun credentials(ref: String): Pair<String, CharArray> = try {
         if (!REF.matches(ref)) throw MirrorFailure("CREDENTIAL_UNAVAILABLE")

@@ -58,7 +58,7 @@ class RepositoryMirrorAdminServiceSpec : DescribeSpec({
                     throw TransactionSystemException("secret database endpoint must never reach the UI")
                 }
             }
-            val service = RepositoryMirrorAdminService(settings, SvnMirrorSourcePolicy(settings), storage, projects, users,
+            val service = RepositoryMirrorAdminService(settings, MirrorSourcePolicy(settings), storage, projects, users,
                 roles, members, mirrors, mockk(), namespaceGuard, transactions)
             service.create("admin", "mirror", "https://example.org/svn", null) shouldBe 21L
             verify(exactly = 1) { storage.reserve(any(), 1) }
@@ -88,7 +88,7 @@ class RepositoryMirrorAdminServiceSpec : DescribeSpec({
             every { users.findByLoginId("admin") } returns Optional.of(admin)
             every { transactions.getTransaction(any()) } answers { SimpleTransactionStatus() }
             every { namespaceGuard.holdUntilTransactionCompletion("admin", "mirror") } throws IllegalStateException("private lock path")
-            val service = RepositoryMirrorAdminService(settings, SvnMirrorSourcePolicy(settings), mockk(), projects, users,
+            val service = RepositoryMirrorAdminService(settings, MirrorSourcePolicy(settings), mockk(), projects, users,
                 mockk(), mockk(), mockk(), mockk(), namespaceGuard, transactions)
             shouldThrow<MirrorFailure> { service.create("admin", "mirror", "https://example.org/svn", null) }.code shouldBe "DIRECTORY_OWNERSHIP"
             verify(exactly = 0) { projects.findByOwnerAndNameOrPreviousPlace(any(), any()) }
@@ -117,6 +117,7 @@ class RepositoryMirrorAdminServiceSpec : DescribeSpec({
             dto.toString() shouldNotContain "SECRET_ERROR"
             dto.toString() shouldNotContain "internal-node-identity"
             row.lastIndexedRevision = 3
+            row.initialImportDone = true
             RepositoryMirrorAdminStatus.from(row, now.plusSeconds(60)).ready shouldBe true
             RepositoryMirrorAdminStatus.from(row, now.plusSeconds(60)).leaseActive shouldBe false
             row.status = RepositoryMirrorStatus.NEEDS_ATTENTION

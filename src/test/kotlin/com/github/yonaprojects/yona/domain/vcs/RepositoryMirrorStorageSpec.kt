@@ -13,13 +13,13 @@ class RepositoryMirrorStorageSpec : DescribeSpec({
         it("reserves an empty SVN-compatible directory and verifies external immutable ownership") {
             val base = Files.createTempDirectory("mirror-storage-").toRealPath()
             try {
-                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString(), base.toString())
+                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString())
                 val storage = RepositoryMirrorStorage(base.toString(), base.resolve("_git").toString(), base.resolve("_hg").toString(), guard)
-                val project = Project(id = 71L, owner = "admin", name = "mirror")
+                val project = Project(id = 71L, owner = "admin", name = "mirror", vcs = "SUBVERSION")
                 val mirror = RepositoryMirror(project = project, generation = 1)
                 val directory = storage.reserve(project, 1)
                 directory.list()!!.toList() shouldBe emptyList()
-                Files.readString(guard.markerPath("admin", "mirror")) shouldBe "yona-svn-mirror:71:1\n${directory.toPath()}\n"
+                Files.readString(guard.markerPath("admin", "mirror")) shouldBe "yona-mirror:71:1\n${directory.toPath()}\n"
                 SVNRepositoryFactory.createLocalRepository(directory, true, false)
                 storage.directory(mirror) shouldBe directory
                 shouldThrow<MirrorFailure> { storage.reserve(project, 1) }.attention shouldBe true
@@ -37,9 +37,9 @@ class RepositoryMirrorStorageSpec : DescribeSpec({
             try {
                 val target = Files.createDirectories(base.resolve("admin/existing"))
                 Files.writeString(target.resolve("precious"), "keep")
-                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString(), base.toString())
+                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString())
                 val storage = RepositoryMirrorStorage(base.toString(), base.resolve("_git").toString(), base.resolve("_hg").toString(), guard)
-                shouldThrow<MirrorFailure> { storage.reserve(Project(id = 72L, owner = "admin", name = "existing"), 1) }
+                shouldThrow<MirrorFailure> { storage.reserve(Project(id = 72L, owner = "admin", name = "existing", vcs = "SUBVERSION"), 1) }
                 Files.readString(target.resolve("precious")) shouldBe "keep"
                 Files.exists(guard.markerPath("admin", "existing")) shouldBe false
             } finally { base.toFile().deleteRecursively() }
@@ -50,7 +50,7 @@ class RepositoryMirrorStorageSpec : DescribeSpec({
             try {
                 val git = base.resolve("_git")
                 val hg = base.resolve("_hg")
-                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString(), base.toString())
+                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString())
                 val storage = RepositoryMirrorStorage(base.toString(), git.toString(), hg.toString(), guard)
                 for ((name, target) in listOf("imported-git" to git.resolve("admin/imported-git.git"), "imported-hg" to hg.resolve("admin/imported-hg"))) {
                     Files.createDirectories(target)
@@ -67,14 +67,14 @@ class RepositoryMirrorStorageSpec : DescribeSpec({
         it("retains a stale name reservation even when its old target and project identity are gone") {
             val base = Files.createTempDirectory("mirror-stale-").toRealPath()
             try {
-                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString(), base.toString())
+                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString())
                 val storage = RepositoryMirrorStorage(base.toString(), base.resolve("_git").toString(), base.resolve("_hg").toString(), guard)
-                val original = Project(id = 76L, owner = "admin", name = "orphan")
+                val original = Project(id = 76L, owner = "admin", name = "orphan", vcs = "SUBVERSION")
                 val directory = storage.reserve(original, 1).toPath()
                 val marker = guard.markerPath("admin", "orphan")
                 val ownership = Files.readString(marker)
                 Files.delete(directory)
-                val replacement = Project(id = 77L, owner = "admin", name = "orphan")
+                val replacement = Project(id = 77L, owner = "admin", name = "orphan", vcs = "SUBVERSION")
                 shouldThrow<MirrorFailure> { storage.reserve(replacement, 1) }.attention shouldBe true
                 Files.exists(directory) shouldBe false
                 Files.readString(marker) shouldBe ownership
@@ -93,12 +93,12 @@ class RepositoryMirrorStorageSpec : DescribeSpec({
             val base = Files.createTempDirectory("mirror-links-").toRealPath()
             val elsewhere = Files.createTempDirectory("mirror-outside-").toRealPath()
             try {
-                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString(), base.toString())
+                val guard = RepositoryNamespaceGuard(base.resolve("_data").toString())
                 val storage = RepositoryMirrorStorage(base.toString(), base.resolve("_git").toString(), base.resolve("_hg").toString(), guard)
-                shouldThrow<MirrorFailure> { storage.reserve(Project(id = 73L, owner = "..", name = "bad"), 1) }
+                shouldThrow<MirrorFailure> { storage.reserve(Project(id = 73L, owner = "..", name = "bad", vcs = "SUBVERSION"), 1) }
                 Files.createSymbolicLink(base.resolve("linked"), elsewhere)
-                shouldThrow<MirrorFailure> { storage.reserve(Project(id = 73L, owner = "linked", name = "bad"), 1) }
-                val project = Project(id = 74L, owner = "admin", name = "valid")
+                shouldThrow<MirrorFailure> { storage.reserve(Project(id = 73L, owner = "linked", name = "bad", vcs = "SUBVERSION"), 1) }
+                val project = Project(id = 74L, owner = "admin", name = "valid", vcs = "SUBVERSION")
                 val directory = storage.reserve(project, 1).toPath()
                 Files.createSymbolicLink(directory.resolve("db"), elsewhere)
                 shouldThrow<MirrorFailure> { storage.directory(RepositoryMirror(project = project)) }

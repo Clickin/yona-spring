@@ -19,8 +19,7 @@ import java.util.Locale
 /** Coordinates name allocation across VCS roots; project owner/name has no database unique key. */
 @Component
 class RepositoryNamespaceGuard(
-    @Value("\${yona.data:data}") private val dataDir: String,
-    @Value("\${yona.svn.base-dir:/tmp/yona/svn}") private val svnBaseDir: String
+    @Value("\${yona.data:data}") private val dataDir: String
 ) {
     fun acquire(owner: String, name: String): AutoCloseable {
         val configured = Path.of(dataDir).toAbsolutePath().normalize()
@@ -69,8 +68,12 @@ class RepositoryNamespaceGuard(
         }
     }
 
-    fun markerPath(owner: String, name: String): Path = Path.of(svnBaseDir).toAbsolutePath().normalize()
-        .resolve(".mirror-owners").resolve("${key(owner, name)}.owner")
+    // Outside every VCS root, so a reservation covers the name for SVN, Git and Mercurial alike.
+    fun markerPath(owner: String, name: String): Path {
+        val configured = Path.of(dataDir).toAbsolutePath().normalize()
+        Files.createDirectories(configured)
+        return configured.toRealPath().resolve(".mirror-owners").resolve("${key(owner, name)}.owner")
+    }
 
     private fun key(owner: String, name: String): String = HexFormat.of().formatHex(
         MessageDigest.getInstance("SHA-256").digest((owner.lowercase(Locale.ROOT) + '\u0000' + name.lowercase(Locale.ROOT)).toByteArray(Charsets.UTF_8))

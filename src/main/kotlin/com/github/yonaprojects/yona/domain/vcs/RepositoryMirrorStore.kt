@@ -116,7 +116,11 @@ class RepositoryMirrorStore(
 
     fun complete(id: Long, owner: String, fence: Long, syncSeconds: Long) = fenced(id, owner, fence) { mirror ->
         if (mirror.lastIndexedRevision != mirror.lastVerifiedRevision) throw MirrorFailure("INDEX_INCOMPLETE", attention = true)
-        if (mirror.lastIndexedRevision >= (mirror.initialImportTargetRevision ?: Long.MAX_VALUE)) mirror.status = RepositoryMirrorStatus.INCREMENTAL
+        // Linear mirrors finish the first import at the fixed target R; ref-based mirrors (no R) finish
+        // it with their first complete run, because every fetched ref was indexed before this point.
+        val target = mirror.initialImportTargetRevision
+        if (target == null || mirror.lastIndexedRevision >= target) mirror.initialImportDone = true
+        if (mirror.initialImportDone) mirror.status = RepositoryMirrorStatus.INCREMENTAL
         val now = databaseNow()
         mirror.lastSyncedAt = now
         mirror.nextSyncAt = now.plusSeconds(syncSeconds)
@@ -166,7 +170,7 @@ class RepositoryMirrorStore(
     fun retry(id: Long) = changeIdle(id) { mirror ->
         mirror.checkCursors()
         mirror.enabled = true
-        mirror.status = if (mirror.lastIndexedRevision >= (mirror.initialImportTargetRevision ?: Long.MAX_VALUE)) RepositoryMirrorStatus.INCREMENTAL else RepositoryMirrorStatus.INITIAL_IMPORT
+        mirror.status = if (mirror.initialImportDone) RepositoryMirrorStatus.INCREMENTAL else RepositoryMirrorStatus.INITIAL_IMPORT
         mirror.retryCount = 0
         mirror.nextSyncAt = databaseNow()
         mirror.lastError = null
