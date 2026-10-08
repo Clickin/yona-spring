@@ -25,7 +25,8 @@ class RepositoryService(
     // 사용자 요청 — 새 프로젝트 기본 브랜치를 "master" 대신 "main"으로. 호스트 git의
     // init.defaultBranch 설정에 기대지 않고 애플리케이션 설정으로 결정론적으로 고정한다.
     @Value("\${yona.git.default-branch:main}")
-    private val gitDefaultBranch: String
+    private val gitDefaultBranch: String,
+    private val writeGuard: RepositoryWriteGuard = RepositoryWriteGuard(projectRepository)
 ) {
     private val objectMapper = ObjectMapper()
 
@@ -33,6 +34,7 @@ class RepositoryService(
         val vcsType = project.vcs?.uppercase() ?: "GIT"
         return if (vcsType == "SUBVERSION" || vcsType == "SVN") {
             SvnRepository(
+                writeGuard = writeGuard,
                 ownerName = project.owner ?: "",
                 projectName = project.name,
                 baseDir = svnBaseDir
@@ -41,6 +43,7 @@ class RepositoryService(
             }
         } else if (vcsType == "MERCURIAL" || vcsType == "HG") {
             HgRepository(
+                writeGuard = writeGuard,
                 ownerName = project.owner ?: "",
                 projectName = project.name,
                 baseDir = hgBaseDir,
@@ -55,6 +58,7 @@ class RepositoryService(
             )
         } else {
             GitRepository(
+                writeGuard = writeGuard,
                 ownerName = project.owner ?: "",
                 projectName = project.name,
                 baseDir = gitBaseDir,

@@ -7,6 +7,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -22,7 +23,8 @@ class BranchApiController(
     private val projectUserRepository: ProjectUserRepository,
     private val userRepository: UserRepository,
     private val repositoryService: RepositoryService,
-    private val accessControl: AccessControl
+    private val accessControl: AccessControl,
+    private val writeGuard: RepositoryWriteGuard
 ) {
 
     @PostMapping("/{owner}/{projectName}/code/{branch}/setAsDefault")
@@ -51,6 +53,10 @@ class BranchApiController(
         val loginUser = authentication?.let { userRepository.findByLoginId(it.name).orElse(null) }
         if (loginUser == null || (!projectUserRepository.existsByProjectIdAndUserId(project.id!!, loginUser.id!!) && !accessControl.isAllowedIfGroupMember(project, loginUser))) {
             // yona error/forbidden.scala.html 대응.
+            model.addAttribute("project", project)
+            return "error/forbidden"
+        }
+        if (!writeGuard.isWritable(project)) {
             model.addAttribute("project", project)
             return "error/forbidden"
         }
@@ -92,6 +98,10 @@ class BranchApiController(
         // 아니다. 기존엔 단순 멤버십만 확인해 일반 멤버도 브랜치를 삭제할 수 있던 과잉 허용 버그였다.
         // yona error/forbidden.scala.html 대응.
         if (!accessControl.isAllowed(loginUser, project, Operation.DELETE)) {
+            model.addAttribute("project", project)
+            return "error/forbidden"
+        }
+        if (!writeGuard.isWritable(project)) {
             model.addAttribute("project", project)
             return "error/forbidden"
         }

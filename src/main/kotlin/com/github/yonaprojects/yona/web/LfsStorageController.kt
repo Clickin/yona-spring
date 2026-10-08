@@ -1,5 +1,8 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import com.github.yonaprojects.yona.domain.vcs.RepositoryKind
+import org.springframework.security.access.AccessDeniedException
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.FileSystemResource
 import org.springframework.core.io.Resource
@@ -16,7 +19,8 @@ import java.io.FileOutputStream
 @RequestMapping("/git-lfs")
 class LfsStorageController(
     @Value("\${yona.lfs.base-dir:/tmp/yona/lfs}")
-    private val lfsBaseDir: String
+    private val lfsBaseDir: String,
+    private val writeGuard: RepositoryWriteGuard
 ) {
 
     @GetMapping("/{owner}/{project}/objects/{oid}")
@@ -47,6 +51,12 @@ class LfsStorageController(
         @PathVariable oid: String,
         request: HttpServletRequest
     ): ResponseEntity<Unit> {
+        try {
+            val kind = if (project.endsWith(".wiki")) RepositoryKind.WIKI else RepositoryKind.CODE
+            writeGuard.requireWritable(owner, project.removeSuffix(".wiki"), kind)
+        } catch (_: AccessDeniedException) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+        }
         if (oid.length < 4) {
             return ResponseEntity.badRequest().build()
         }

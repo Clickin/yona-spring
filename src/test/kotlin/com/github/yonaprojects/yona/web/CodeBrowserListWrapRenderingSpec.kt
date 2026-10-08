@@ -63,7 +63,7 @@ class CodeBrowserListWrapRenderingSpec @Autowired constructor(
                 // 여부(HEAD 파일)로 판단해야 안전하다.
                 if (!File(gitDir, "HEAD").exists()) {
                     repositoryService.getRepository(project).create()
-                    BareCommit(project, owner, gitBaseDir).commitTextFile("README.md", "# cbw-proj", "테스트")
+                    BareCommit(project, owner, gitBaseDir, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# cbw-proj", "테스트")
                 }
 
                 val body = mockMvc.perform(get("/${project.owner}/${project.name}/code/main"))
@@ -100,7 +100,7 @@ class CodeBrowserListWrapRenderingSpec @Autowired constructor(
                 // 여부(HEAD 파일)로 판단해야 안전하다.
                 if (!File(gitDir, "HEAD").exists()) {
                     repositoryService.getRepository(project).create()
-                    BareCommit(project, owner, gitBaseDir).commitTextFile("README.md", "# cbw-proj", "테스트")
+                    BareCommit(project, owner, gitBaseDir, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# cbw-proj", "테스트")
                 }
 
                 val body = mockMvc.perform(get("/${project.owner}/${project.name}/code/main"))
@@ -131,7 +131,7 @@ class CodeBrowserListWrapRenderingSpec @Autowired constructor(
                 // 여부(HEAD 파일)로 판단해야 안전하다.
                 if (!File(gitDir, "HEAD").exists()) {
                     repositoryService.getRepository(project).create()
-                    BareCommit(project, owner, gitBaseDir).commitTextFile("README.md", "# cbw-proj", "테스트")
+                    BareCommit(project, owner, gitBaseDir, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# cbw-proj", "테스트")
                 }
 
                 val body = mockMvc.perform(get("/${project.owner}/${project.name}/code/main"))

@@ -7,6 +7,9 @@ import com.github.yonaprojects.yona.domain.organization.OrganizationUserReposito
 import com.github.yonaprojects.yona.domain.board.PostingService
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import com.github.yonaprojects.yona.domain.user.UserState
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.project.ProjectUser
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
@@ -102,7 +105,8 @@ class BoardViewControllerSpec : DescribeSpec({
         "/tmp/yona/git",
         recentIssueService,
         accessControl,
-        attachmentService
+        attachmentService,
+        RepositoryWriteGuard(projectRepository)
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(boardViewController)
         .setCustomArgumentResolvers(PageableHandlerMethodArgumentResolver())
@@ -111,8 +115,55 @@ class BoardViewControllerSpec : DescribeSpec({
     beforeTest {
         clearMocks(projectRepository, postingService, postingRepository, projectUserRepository, userRepository,
             postingCommentRepository, watchService, attachmentRepository)
+        every { projectRepository.findRepositoryModeById(any()) } returns RepositoryMode.HOSTED
         every { projectUserRepository.findByProjectIdAndUserId(any(), any()) } returns Optional.empty()
         every { postingRepository.findByProjectAndNotice(any(), any(), any<Pageable>()) } returns PageImpl(emptyList())
+    }
+
+    describe("MIRROR repository content guards") {
+        it("rejects README, issue-template and file writes even for a site administrator with a stale project") {
+            val project = Project(id = 71L, owner = "owner", name = "mirror", vcs = "GIT", projectScope = ProjectScope.PUBLIC)
+            val admin = User(id = 72L, loginId = "admin", name = "Admin", state = UserState.SITE_ADMIN)
+            val authentication = UsernamePasswordAuthenticationToken("admin", "password")
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "mirror") } returns Optional.of(project)
+            every { projectRepository.findRepositoryModeById(71L) } returns RepositoryMode.MIRROR
+            every { userRepository.findByLoginId("admin") } returns Optional.of(admin)
+
+            for (form in listOf(
+                PostingForm(title = "README", readme = true),
+                PostingForm(title = "Template", issueTemplate = "true"),
+                PostingForm(title = "File", path = "docs/readme.txt", branch = "master")
+            )) {
+                boardViewController.createPost("owner", "mirror", form, authentication, ExtendedModelMap()) shouldBe "error/forbidden"
+            }
+            every { postingService.getPosting(71L, 1L) } returns Posting(
+                id = 73L, project = project, number = 1L, title = "Post", authorLoginId = "admin"
+            )
+            boardViewController.editPost(
+                "owner", "mirror", 1L, PostingForm(title = "README", readme = true), authentication, ExtendedModelMap()
+            ) shouldBe "error/forbidden"
+            boardViewController.createPostForm(
+                "owner", "mirror", true, null, null, null, authentication, ExtendedModelMap()
+            ) shouldBe "error/forbidden"
+            verify(exactly = 0) { postingService.createPosting(any(), any(), any(), any()) }
+            verify(exactly = 0) { postingService.updatePosting(any(), any(), any(), any(), any(), any(), any(), any()) }
+        }
+
+        it("keeps ordinary board creation available on MIRROR") {
+            val project = Project(id = 71L, owner = "owner", name = "mirror", projectScope = ProjectScope.PUBLIC)
+            val author = User(id = 72L, loginId = "writer", name = "Writer")
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "mirror") } returns Optional.of(project)
+            every { projectRepository.findRepositoryModeById(71L) } returns RepositoryMode.MIRROR
+            every { userRepository.findByLoginId("writer") } returns Optional.of(author)
+            every { postingService.createPosting(71L, any(), 72L, any()) } answers {
+                secondArg<Posting>().apply { id = 73L; number = 1L }
+            }
+            boardViewController.createPost(
+                "owner", "mirror", PostingForm(title = "Discussion"),
+                UsernamePasswordAuthenticationToken("writer", "password"), ExtendedModelMap()
+            ) shouldBe "redirect:/owner/mirror/post/1"
+            verify(exactly = 1) { postingService.createPosting(71L, any(), 72L, any()) }
+        }
     }
 
     describe("BoardViewController 템플릿 연동 테스트") {

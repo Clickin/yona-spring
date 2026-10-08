@@ -26,13 +26,14 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 // search5/hg4j(형제 디렉터리, includeBuild로 연결)로 감싸는 PlayRepository 구현. GitRepository/
-// SvnRepository와 동일한 (ownerName, projectName, baseDir, userResolver) 생성자 형태를 따른다.
+// SvnRepository와 동일하게 쓰기 가드와 저장소 위치, 사용자 조회 함수를 받는다.
 //
 // **bare 저장소 개념 없음**: GitRepository는 서버 호스팅을 위해 bare(작업 디렉터리 없는) 저장소를
 // 쓰지만, Mercurial은 애초에 그런 구분이 없다 — `hg serve`도 일반(작업 디렉터리가 있는) 저장소를
 // 그대로 서빙한다. hg4j의 add()/commit() 포셀린 API도 디스크의 실제 파일을 스캔하는 구조라, 여기서도
 // 그냥 일반 저장소로 init한다.
 class HgRepository(
+    private val writeGuard: RepositoryWriteGuard,
     private val ownerName: String,
     private val projectName: String,
     private val baseDir: String,
@@ -43,6 +44,7 @@ class HgRepository(
     private val gpgVerifier: (NativeHgCommit) -> GpgVerificationStatus =
         { GpgVerificationStatus.UNSIGNED }
 ) : PlayRepository {
+    private fun requireWritable() = writeGuard.requireWritable(ownerName, projectName)
 
     private val objectMapper = ObjectMapper()
 
@@ -51,6 +53,7 @@ class HgRepository(
     }
 
     override fun create() {
+        requireWritable()
         val dir = getDirectory()
         if (!dir.exists()) {
             dir.mkdirs()
@@ -165,6 +168,7 @@ class HgRepository(
     }
 
     override fun delete() {
+        requireWritable()
         val dir = getDirectory()
         if (dir.exists()) {
             dir.deleteRecursively()
@@ -459,7 +463,7 @@ class HgRepository(
     // 이유로 setDefaultBranch는 no-op.
     override fun getDefaultBranch(): String = "default"
 
-    override fun setDefaultBranch(target: String) {}
+    override fun setDefaultBranch(target: String) { requireWritable() }
 
     // yona의 git 모양 "브랜치" 개념(getBranches/createBranch/deleteBranch/getHeadBranch)은
     // Mercurial의 **bookmark**에 매핑한다. Mercurial의 진짜 "named branch"(`hg branch`)는 커밋에
@@ -499,6 +503,7 @@ class HgRepository(
     }
 
     override fun deleteBranch(branchName: String) {
+        requireWritable()
         useHg { hg ->
             val name = branchName.removePrefix("refs/heads/")
             val existing = hg.bookmark().call()
@@ -510,6 +515,7 @@ class HgRepository(
     }
 
     override fun createBranch(branchName: String, startPoint: String) {
+        requireWritable()
         useHg { hg ->
             val name = branchName.removePrefix("refs/heads/")
             // hg4j의 BookmarkCommand 자체는 "tip"을 막지 않지만, 실제 hg CLI는 `hg bookmark tip`을
@@ -559,6 +565,7 @@ class HgRepository(
     }
 
     override fun deleteTag(tagName: String) {
+        requireWritable()
         useHg { hg ->
             val name = tagName.removePrefix("refs/tags/")
             val existing = hg.tags().call().any { it.name == name && it.name != "tip" }
@@ -576,6 +583,7 @@ class HgRepository(
     // 만들지 않았다). getTags()가 이 필드들을 애초에 노출하지 않는 것과 일관된 선택 — 없는
     // 기능을 지어내지 않는다.
     override fun createTag(tagName: String, startPoint: String, message: String?, taggerName: String?, taggerEmail: String?) {
+        requireWritable()
         useHg { hg ->
             val name = tagName.removePrefix("refs/tags/")
             if (name == "tip") {
@@ -614,6 +622,9 @@ class HgRepository(
     }
 
     override fun move(srcProjectOwner: String, srcProjectName: String, destProjectOwner: String, destProjectName: String): Boolean {
+        requireWritable()
+        writeGuard.requireWritable(srcProjectOwner, srcProjectName)
+        writeGuard.requireDestinationWritable(destProjectOwner, destProjectName)
         val rootDir = File(baseDir)
         val src = File(rootDir, "$srcProjectOwner/$srcProjectName")
         val dest = File(rootDir, "$destProjectOwner/$destProjectName")
@@ -697,6 +708,7 @@ class HgRepository(
         authorName: String?,
         authorEmail: String?
     ) {
+        requireWritable()
         useHg { hg ->
             val normalizedPath = path.trim('/')
             require(normalizedPath.isNotEmpty() && normalizedPath.split("/").none { it.isEmpty() || it == ".." }) {

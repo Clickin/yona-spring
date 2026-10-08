@@ -54,6 +54,23 @@ application:
   noreferrer: "${YONA_NOREFERRER:false}"
 
 yona:
+  repository-mirror:
+    enabled: false
+    # Required: a destination-restricted CONNECT proxy that validates/pins every connection.
+    # Direct SVN egress must be blocked. A boolean declaration alone never enables transport.
+    egress-restricted: false
+    proxy-host: ""
+    proxy-port: 0
+    node-id: ""
+    writer-node-id: ""
+    workers: 2
+    batch-size: 50
+    lease-seconds: 60
+    sync-seconds: 60
+    allowed-origins: []
+    allowed-cidrs: []
+    # Logical ref -> absolute operator-owned UTF-8 properties file (username/password), 0600.
+    credentials: {}
   # 설치형 배포 사용 현황 집계(GA4 gtag). send-usage=false이면 태그가 렌더링되지 않는다.
   # 서버가 GA로 직접 보내는 이벤트는 없다(브라우저 태그만).
   analytics:

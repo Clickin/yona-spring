@@ -38,6 +38,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
 import jakarta.persistence.criteria.Predicate
+import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -405,6 +406,8 @@ class PullRequestViewController(
     ): PullRequestMergeResult? {
         val mergeResult = try {
             pullRequestService.attemptMerge(pullRequest.id!!)
+        } catch (e: AccessDeniedException) {
+            throw e
         } catch (e: Exception) {
             null
         }
@@ -631,6 +634,8 @@ class PullRequestViewController(
         // 않도록 실패 시 "변경 사항 없음"으로 완화한다.
         val preview = try {
             pullRequestService.previewMerge(fromProject, toProject, resolvedFromBranch, resolvedToBranch)
+        } catch (e: AccessDeniedException) {
+            throw e
         } catch (e: Exception) {
             null
         }

@@ -1,5 +1,6 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import com.github.yonaprojects.yona.domain.vcs.SvnCommitTracker
 import jakarta.servlet.ServletConfig
 import jakarta.servlet.ServletContext
@@ -7,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.security.access.AccessDeniedException
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestMethod
 import org.springframework.web.bind.annotation.RestController
@@ -20,6 +22,7 @@ class SvnController(
     @Value("\${yona.svn.base-dir:/tmp/yona/svn}")
     private val baseDir: String,
     private val servletContext: ServletContext,
+    private val repositoryWriteGuard: RepositoryWriteGuard,
     private val svnCommitTracker: SvnCommitTracker
 ) {
 
@@ -45,6 +48,15 @@ class SvnController(
         }
 
         val ownerName = segments[1]
+        when (request.method.uppercase()) {
+            "GET", "PROPFIND", "OPTIONS", "REPORT", "HEAD" -> Unit
+            else -> try {
+                repositoryWriteGuard.requireWritable(ownerName, segments[2])
+            } catch (_: AccessDeniedException) {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Mirror repository is read-only")
+                return
+            }
+        }
 
         val davServlet = davServletCache.computeIfAbsent(ownerName) { owner ->
             val servlet = DAVServlet()

@@ -36,6 +36,8 @@ import com.github.yonaprojects.yona.domain.user.FavoriteProject
 import com.github.yonaprojects.yona.domain.user.FavoriteProjectRepository
 import com.github.yonaprojects.yona.domain.vcs.PlayRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryNamespaceGuard
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import com.github.yonaprojects.yona.domain.webhook.Webhook
 import com.github.yonaprojects.yona.domain.webhook.WebhookRepository
 import com.github.yonaprojects.yona.domain.webhook.WebhookThread
@@ -48,6 +50,7 @@ import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import java.io.File
 import java.nio.file.Files
 import java.time.Instant
@@ -78,6 +81,12 @@ class ProjectServiceImplSpec : DescribeSpec({
     val pullRequestCommitRepository = mockk<PullRequestCommitRepository>()
     val favoriteProjectRepository = mockk<FavoriteProjectRepository>(relaxed = true)
     val watchService = mockk<WatchService>(relaxed = true)
+    val namespaceGuard = mockk<RepositoryNamespaceGuard>(relaxed = true)
+    beforeTest {
+        clearMocks(namespaceGuard)
+        every { projectRepository.findByOwnerAndName(any(), any()) } returns Optional.empty()
+        every { projectRepository.findRepositoryModeById(any()) } returns RepositoryMode.HOSTED
+    }
 
     val projectService = ProjectServiceImpl(
         projectRepository,
@@ -106,8 +115,73 @@ class ProjectServiceImplSpec : DescribeSpec({
         watchService,
         "/tmp/yona/git",
         "/tmp/yona/svn",
-        "/tmp/yona/hg"
+        "/tmp/yona/hg",
+        RepositoryWriteGuard(projectRepository),
+        namespaceGuard
     )
+
+    describe("mirror lifecycle protection") {
+        it("rejects rename delete transfer fork and VCS reset using the fresh mode") {
+            val stale = Project(id = 99001L, owner = "owner", name = "mirror", vcs = "SUBVERSION")
+            every { projectRepository.findById(99001L) } returns Optional.of(stale)
+            every { projectRepository.findRepositoryModeById(99001L) } returns RepositoryMode.MIRROR
+            shouldThrow<org.springframework.security.access.AccessDeniedException> {
+                projectService.updateProject(99001L, UpdateProjectParam(name = "renamed", overview = ""))
+            }
+            shouldThrow<org.springframework.security.access.AccessDeniedException> { projectService.deleteProject(99001L) }
+            shouldThrow<org.springframework.security.access.AccessDeniedException> { projectService.requestNewTransfer(99001L, 1L, "other") }
+            shouldThrow<org.springframework.security.access.AccessDeniedException> { projectService.forkProject(99001L, 1L, "other", "fork") }
+            shouldThrow<org.springframework.security.access.AccessDeniedException> { projectService.changeVCS(99001L) }
+            stale.name shouldBe "mirror"
+            stale.vcs shouldBe "SUBVERSION"
+            verify(exactly = 0) { projectRepository.save(stale) }
+        }
+
+        it("rejects an existing pending transfer of a mirror before moving files or updating metadata") {
+            val stale = Project(id = 99002L, owner = "owner", name = "mirror", vcs = "SUBVERSION")
+            val acceptor = User(id = 99003L, loginId = "other")
+            val transfer = ProjectTransfer(id = 99004L, project = stale, sender = User(id = 1L), destination = "other", confirmKey = "key", newProjectName = "mirror", requested = Instant.now())
+            every { projectTransferRepository.findByIdAndAcceptedAndRequestedAfter(99004L, false, any()) } returns Optional.of(transfer)
+            every { userRepository.findById(99003L) } returns Optional.of(acceptor)
+            every { projectRepository.findRepositoryModeById(99002L) } returns RepositoryMode.MIRROR
+            shouldThrow<org.springframework.security.access.AccessDeniedException> { projectService.acceptTransfer(99004L, "key", 99003L) }
+            stale.owner shouldBe "owner"
+            transfer.accepted shouldBe false
+        }
+
+        it("denies orphan-reserved destinations for create rename transfer and fork before metadata changes") {
+            val source = Project(id = 99300L, owner = "reserved-owner", name = "source", vcs = "GIT")
+            val user = User(id = 99301L, loginId = "reserved-owner")
+            val transfer = ProjectTransfer(id = 99302L, project = source, sender = user,
+                destination = user.loginId, newProjectName = "reserved", confirmKey = "key", requested = Instant.now())
+            every { projectRepository.findById(99300L) } returns Optional.of(source)
+            every { userRepository.findById(99301L) } returns Optional.of(user)
+            every { projectTransferRepository.findByIdAndAcceptedAndRequestedAfter(99302L, false, any()) } returns Optional.of(transfer)
+            every { namespaceGuard.requireUnreserved("reserved-owner", "reserved") } throws
+                org.springframework.security.access.AccessDeniedException("Repository name is reserved.")
+
+            shouldThrow<org.springframework.security.access.AccessDeniedException> {
+                projectService.createProject(Project(owner = user.loginId, name = "reserved"), user)
+            }
+            shouldThrow<org.springframework.security.access.AccessDeniedException> {
+                projectService.updateProject(source.id!!, UpdateProjectParam(name = "reserved", overview = "changed"))
+            }
+            shouldThrow<org.springframework.security.access.AccessDeniedException> {
+                projectService.acceptTransfer(transfer.id!!, "key", user.id!!)
+            }
+            shouldThrow<org.springframework.security.access.AccessDeniedException> {
+                projectService.forkProject(source.id!!, user.id!!, user.loginId, "reserved")
+            }
+
+            source.owner shouldBe user.loginId
+            source.name shouldBe "source"
+            source.previousName shouldBe null
+            source.previousOwnerLoginId shouldBe null
+            source.previousNameChangedTime shouldBe null
+            transfer.accepted shouldBe false
+            verify(exactly = 0) { projectRepository.save(source) }
+        }
+    }
 
     describe("ProjectServiceImpl.acceptTransfer") {
         val sender = User(id = 1L, loginId = "sender", name = "보내는사람")
@@ -1161,6 +1235,9 @@ class ProjectServiceImplSpec : DescribeSpec({
             }
 
             project.name shouldBe "old-name"
+            project.previousName shouldBe null
+            project.previousOwnerLoginId shouldBe null
+            project.previousNameChangedTime shouldBe null
         }
 
         it("이름을 바꾸면 저장소도 rename되고, 개명 이력과 즐겨찾기 owner/projectName이 함께 갱신돼야 한다") {
@@ -1962,8 +2039,101 @@ class ProjectServiceImplSpec : DescribeSpec({
             assigneeRepository, webhookRepository, webhookThreadRepository, postingRepository, postingService,
             commentThreadRepository, pullRequestRepository, pullRequestEventRepository, pullRequestCommitRepository,
             favoriteProjectRepository, watchService,
-            customGitBase.absolutePath, customSvnBase.absolutePath, "/tmp/yona/hg"
+            customGitBase.absolutePath, customSvnBase.absolutePath, "/tmp/yona/hg",
+            RepositoryWriteGuard(projectRepository), namespaceGuard
         )
+
+        it("rejects a pending transfer when a different VCS project now occupies the destination") {
+            val source = Project(id = 9200L, owner = "transfer-source", name = "source", vcs = "GIT")
+            val acceptor = User(id = 9201L, loginId = "transfer-target")
+            val transfer = ProjectTransfer(id = 9202L, project = source, sender = User(id = 9203L),
+                destination = acceptor.loginId, newProjectName = "occupied", confirmKey = "key", requested = Instant.now())
+            val sourceDir = File(customGitBase, "transfer-source/source.git").apply { mkdirs() }
+            val sourceFile = File(sourceDir, "HEAD").apply { writeText("source") }
+            val targetDir = File(customSvnBase, "transfer-target/occupied").apply { mkdirs() }
+            val targetFile = File(targetDir, "sentinel").apply { writeText("mirror") }
+            every { projectTransferRepository.findByIdAndAcceptedAndRequestedAfter(9202L, false, any()) } returns Optional.of(transfer)
+            every { userRepository.findById(9201L) } returns Optional.of(acceptor)
+            every { projectRepository.findByOwnerAndName(acceptor.loginId, "occupied") } returns Optional.of(
+                Project(id = 9204L, owner = acceptor.loginId, name = "occupied", vcs = "SUBVERSION", repositoryMode = RepositoryMode.MIRROR)
+            )
+
+            shouldThrow<IllegalArgumentException> { customBaseDirProjectService.acceptTransfer(9202L, "key", 9201L) }
+
+            source.owner shouldBe "transfer-source"
+            source.name shouldBe "source"
+            source.previousName shouldBe null
+            source.previousOwnerLoginId shouldBe null
+            source.previousNameChangedTime shouldBe null
+            transfer.accepted shouldBe false
+            sourceFile.readText() shouldBe "source"
+            targetFile.readText() shouldBe "mirror"
+            File(customGitBase, "transfer-target/occupied.git").exists() shouldBe false
+            verify(exactly = 0) { projectRepository.save(source) }
+            verify(exactly = 0) { projectTransferRepository.delete(transfer) }
+            verifyOrder {
+                namespaceGuard.holdUntilTransactionCompletion(acceptor.loginId, "occupied")
+                namespaceGuard.requireUnreserved(acceptor.loginId, "occupied")
+                projectRepository.findByOwnerAndName(acceptor.loginId, "occupied")
+            }
+        }
+
+        it("rejects even an empty preexisting transfer destination without changing history or deleting it") {
+            val source = Project(id = 9210L, owner = "empty-source", name = "source", vcs = "SUBVERSION")
+            val acceptor = User(id = 9211L, loginId = "empty-target")
+            val transfer = ProjectTransfer(id = 9212L, project = source, sender = User(id = 9213L),
+                destination = acceptor.loginId, newProjectName = "occupied", confirmKey = "key", requested = Instant.now())
+            val sourceDir = File(customSvnBase, "empty-source/source").apply { mkdirs() }
+            val sentinel = File(sourceDir, "sentinel").apply { writeText("source") }
+            val target = File(customSvnBase, "empty-target/occupied").apply { mkdirs() }.toPath()
+            val targetKey = Files.readAttributes(target, java.nio.file.attribute.BasicFileAttributes::class.java).fileKey()
+            every { projectTransferRepository.findByIdAndAcceptedAndRequestedAfter(9212L, false, any()) } returns Optional.of(transfer)
+            every { userRepository.findById(9211L) } returns Optional.of(acceptor)
+
+            shouldThrow<IllegalArgumentException> { customBaseDirProjectService.acceptTransfer(9212L, "key", 9211L) }
+
+            source.owner shouldBe "empty-source"
+            source.name shouldBe "source"
+            source.previousName shouldBe null
+            source.previousOwnerLoginId shouldBe null
+            source.previousNameChangedTime shouldBe null
+            transfer.accepted shouldBe false
+            sentinel.readText() shouldBe "source"
+            Files.readAttributes(target, java.nio.file.attribute.BasicFileAttributes::class.java).fileKey() shouldBe targetKey
+            target.toFile().listFiles()!!.isEmpty() shouldBe true
+            verify(exactly = 0) { projectRepository.save(source) }
+            verify(exactly = 0) { projectTransferRepository.delete(transfer) }
+        }
+
+        it("keeps source metadata and history unchanged and removes only its empty reservation when the move fails") {
+            val source = Project(id = 9220L, owner = "failed-source", name = "source", vcs = "SUBVERSION")
+            val acceptor = User(id = 9221L, loginId = "failed-target")
+            val transfer = ProjectTransfer(id = 9222L, project = source, sender = User(id = 9223L),
+                destination = acceptor.loginId, newProjectName = "destination", confirmKey = "key", requested = Instant.now())
+            // A repository root must be a directory; a corrupt file must not replace the reservation.
+            val sourceFile = File(customSvnBase, "failed-source/source").apply {
+                parentFile.mkdirs()
+                writeText("preserve source")
+            }
+            val target = File(customSvnBase, "failed-target/destination")
+            every { projectTransferRepository.findByIdAndAcceptedAndRequestedAfter(9222L, false, any()) } returns Optional.of(transfer)
+            every { userRepository.findById(9221L) } returns Optional.of(acceptor)
+
+            shouldThrow<IllegalStateException> {
+                customBaseDirProjectService.acceptTransfer(9222L, "key", 9221L)
+            }.message shouldBe "Repository transfer failed."
+
+            source.owner shouldBe "failed-source"
+            source.name shouldBe "source"
+            source.previousName shouldBe null
+            source.previousOwnerLoginId shouldBe null
+            source.previousNameChangedTime shouldBe null
+            transfer.accepted shouldBe false
+            sourceFile.readText() shouldBe "preserve source"
+            target.exists() shouldBe false
+            verify(exactly = 0) { projectRepository.save(source) }
+            verify(exactly = 0) { projectTransferRepository.delete(transfer) }
+        }
 
         it("포크 시 하드코딩된 /tmp/yona/git이 아니라 주입된 gitBaseDir 설정을 따라야 한다") {
             val owner = "custom-base-fork-owner"

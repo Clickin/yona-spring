@@ -1,6 +1,8 @@
 package com.github.yonaprojects.yona.config.git
 
 import com.github.yonaprojects.yona.config.vcs.RepoAccessPolicy
+import com.github.yonaprojects.yona.domain.vcs.RepositoryKind
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -16,7 +18,8 @@ class GitAuthorizationFilter(
     // 접근 판정 로직(requiresAuth/isMember/isGuestUser)을 RepoAccessPolicy로 추출해
     // SshAuthServiceImpl(SSH 경로)/SvnAuthorizationFilter(SVN HTTP)와 공유한다(기존
     // GitAccessPolicy를 VCS 중립적인 이름/패키지로 이동). 동작은 이전과 동일(순수 리팩터링).
-    private val repoAccessPolicy: RepoAccessPolicy
+    private val repoAccessPolicy: RepoAccessPolicy,
+    private val repositoryWriteGuard: RepositoryWriteGuard
 ) : OncePerRequestFilter() {
 
     private val gitUriPattern = Pattern.compile("^/(git|git-lfs)/([^/]+)/([^/]+?)(?:\\.git)?(?:/.*)?$")
@@ -49,6 +52,11 @@ class GitAuthorizationFilter(
         }
 
         val isWriteRequest = isWriteRequest(request)
+        val repositoryKind = if (rawProjectName.endsWith(".wiki")) RepositoryKind.WIKI else RepositoryKind.CODE
+        if (isWriteRequest && !repositoryWriteGuard.isWritable(project, repositoryKind)) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Mirror repository is read-only")
+            return
+        }
         val requiresAuth = repoAccessPolicy.requiresAuth(project, isWriteRequest)
 
         if (requiresAuth) {

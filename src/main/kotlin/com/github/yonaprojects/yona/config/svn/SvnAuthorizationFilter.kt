@@ -2,6 +2,7 @@ package com.github.yonaprojects.yona.config.svn
 
 import com.github.yonaprojects.yona.config.git.DeployKeyAuthenticationToken
 import com.github.yonaprojects.yona.config.vcs.RepoAccessPolicy
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -17,7 +18,8 @@ class SvnAuthorizationFilter(
     // findProject/requiresAuth/isMember/isGuestUser는 GitAuthorizationFilter가 쓰는
     // RepoAccessPolicy와 로직을 공유한다. project.vcs 검증과 SVN 고유의 쓰기요청 판정
     // (HTTP 메서드 allowlist)만 RepoAccessPolicy에 없는 SVN 전용 로직이라 이 필터에 남겨둔다.
-    private val repoAccessPolicy: RepoAccessPolicy
+    private val repoAccessPolicy: RepoAccessPolicy,
+    private val repositoryWriteGuard: RepositoryWriteGuard
 ) : OncePerRequestFilter() {
 
     private val svnUriPattern = Pattern.compile("^/svn/([^/]+)/([^/]+?)(?:/.*)?$")
@@ -53,6 +55,10 @@ class SvnAuthorizationFilter(
         }
 
         val isWriteRequest = isWriteRequest(request)
+        if (isWriteRequest && !repositoryWriteGuard.isWritable(project)) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Mirror repository is read-only")
+            return
+        }
         val requiresAuth = repoAccessPolicy.requiresAuth(project, isWriteRequest)
 
         if (requiresAuth) {

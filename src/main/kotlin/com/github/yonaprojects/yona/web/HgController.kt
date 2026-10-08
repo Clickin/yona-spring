@@ -1,5 +1,6 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.config.hg.isHgMirrorMutationRequest
 import com.github.yonaprojects.yona.domain.branchprotection.ProtectedBranchRepository
 import com.github.yonaprojects.yona.domain.gpgkey.GpgSignatureVerifier
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
@@ -10,6 +11,7 @@ import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.HgBranchProtectionPrePushkeyHook
 import com.github.yonaprojects.yona.domain.vcs.HgYonaPostPushkeyHook
 import com.github.yonaprojects.yona.domain.vcs.PushedBranchRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import io.github.search5.hg4j.api.HgHook
 import io.github.search5.hg4j.lib.HgRepository
 import io.github.search5.hg4j.transport.HgHttpWireServer
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
 // hg4j의 HgHttpWireServer(JGit GitServlet에 대응하는
@@ -43,13 +46,8 @@ import java.util.concurrent.ConcurrentHashMap
 // 했지만, hg wire protocol은 순수 GET/POST(`?cmd=`) 기반이라 OPTIONS를 아예 쓰지 않는다
 // (HgHttpWireServer.service()가 override하는 것도 GET/POST 둘뿐이다) — 확인 후 의도적으로 생략.
 //
-// push 인가는 이 컨트롤러가 아니라 HgAuthorizationFilter가 요청 단위로 이미 끝낸다: HTTP는
-// SSH와 달리 "cmd=unbundle"(v1)/"/api/.../rw/..."(v2)로 요청 하나하나가 read/write를 URL·쿼리
-// 시점에 명시적으로 드러내므로, git-receive-pack/PUT 요청을 GitServlet/DAVServlet 진입 전에
-// GitAuthorizationFilter/SvnAuthorizationFilter가 걸러내는 것과 동일하게 필터 단계에서
-// 멤버십/읽기전용 Deploy Key 검사가 끝난 뒤에만 이 컨트롤러가 호출된다 — 그래서
-// HgSshProtocolHandler(SSH, 한 커넥션이 pull/push를 다 처리할 수 있어 명령줄만으로 미리 구분이
-// 안 되므로 pre-changegroup 훅에서 강제)와 달리 여기는 registerPreChangegroupHook이 없어도 된다.
+// 요청 인가는 HgAuthorizationFilter가 담당한다. 저장소 모드는 wire parser/batch 경로와
+// 무관하게 실제 mutation 직전 pre-changegroup 및 모든 pre-pushkey namespace에서 재확인한다.
 //
 // 브랜치 보호(require_pull_request 등)와 push 알림/웹훅/PushedBranch
 // 추적을 hg4j에 새로 추가한 registerPrePushkeyHook/registerPostPushkeyHook(HgHttpWireServer)으로
@@ -74,7 +72,8 @@ class HgController(
     private val pullRequestRepository: PullRequestRepository,
     private val pushedBranchRepository: PushedBranchRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
+    private val repositoryWriteGuard: RepositoryWriteGuard
 ) {
     private val logger = LoggerFactory.getLogger(HgController::class.java)
     private val wireServerCache = ConcurrentHashMap<String, HgHttpWireServer>()
@@ -86,10 +85,18 @@ class HgController(
         request: HttpServletRequest,
         response: HttpServletResponse
     ) {
+        if (isHgMirrorMutationRequest(request)) {
+            val resolvedProject = resolveProject(owner, project)
+            if (resolvedProject == null || !repositoryWriteGuard.isWritable(resolvedProject)) {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Mirror repository is read-only")
+                return
+            }
+        }
         val key = "$owner/$project"
         val wireServer = wireServerCache.computeIfAbsent(key) {
             val repoDir = File(File(baseDir, owner), project)
             HgHttpWireServer(HgRepository(repoDir)).apply {
+                registerWriteGuards(this, owner, project)
                 registerPrePushkeyHook(
                     HgHook { context ->
                         val resolvedProject = resolveProject(owner, project) ?: return@HgHook true
@@ -127,6 +134,18 @@ class HgController(
                 response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR)
             }
         }
+    }
+
+    internal fun registerWriteGuards(server: HgHttpWireServer, owner: String, projectName: String) {
+        val writeGuard = HgHook {
+            val project = resolveProject(owner, projectName)
+            if (project == null || !repositoryWriteGuard.isWritable(project)) {
+                throw IOException("Mirror repository is read-only")
+            }
+            true
+        }
+        server.registerPreChangegroupHook(writeGuard)
+        server.registerPrePushkeyHook(writeGuard)
     }
 
     // GitServletConfig.resolveProject()와 동일한 폴백(findByOwnerAndNameOrPreviousPlace) — 프로젝트가

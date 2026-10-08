@@ -25,6 +25,7 @@ import java.nio.file.Files
 // SvnRepository의 각 메서드가 legacy SVNRepository.java와 동일한 결과를 내는지 end-to-end로 검증한다.
 class SvnRepositorySpec : DescribeSpec({
 
+    val writeGuard = io.mockk.mockk<RepositoryWriteGuard>(relaxed = true)
     fun newTempBaseDir(): String = Files.createTempDirectory("yona-svn-test").toFile().absolutePath
 
     // legacy SVNRepository.java는 별도 커밋 헬퍼가 없지만(실제 커밋은 svn 클라이언트/DAVServlet을 통해
@@ -97,7 +98,7 @@ class SvnRepositorySpec : DescribeSpec({
 
     describe("create()/isEmpty()/delete()") {
         it("create()를 호출하면 유효한 SVN 저장소가 생성되고 초기에는 비어있어야 한다") {
-            val repo = SvnRepository("owner1", "proj1", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner1", "proj1", newTempBaseDir(), userResolver)
 
             repo.create()
 
@@ -106,7 +107,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("커밋이 하나라도 있으면 isEmpty()가 false여야 한다") {
-            val repo = SvnRepository("owner2", "proj2", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner2", "proj2", newTempBaseDir(), userResolver)
             repo.create()
 
             commitFile(repo, "a.txt", "hello", "첫 커밋")
@@ -115,21 +116,21 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("저장소가 아예 없으면 isEmpty()가 true를 반환해야 한다(디렉토리 자체가 없는 경우)") {
-            val repo = SvnRepository("owner3", "no-such-proj", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner3", "no-such-proj", newTempBaseDir(), userResolver)
 
             repo.isEmpty() shouldBe true
         }
 
         it("디렉토리는 존재하지만 유효한 SVN 저장소가 아니면 SVNException을 잡고 true를 반환해야 한다") {
             val baseDir = newTempBaseDir()
-            val repo = SvnRepository("owner33", "not-svn", baseDir, userResolver)
+            val repo = SvnRepository(writeGuard, "owner33", "not-svn", baseDir, userResolver)
             repo.getDirectory().mkdirs()
 
             repo.isEmpty() shouldBe true
         }
 
         it("delete()를 호출하면 저장소 디렉토리가 사라져야 한다") {
-            val repo = SvnRepository("owner4", "proj4", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner4", "proj4", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "hello", "커밋")
 
@@ -139,7 +140,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("디렉토리가 이미 존재하면 mkdirs 없이 그대로 저장소를 초기화해야 한다") {
-            val repo = SvnRepository("owner37", "proj37", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner37", "proj37", newTempBaseDir(), userResolver)
             repo.getDirectory().mkdirs()
 
             repo.create()
@@ -149,7 +150,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("저장소가 없는 상태에서 delete()를 호출해도 예외 없이 안전해야 한다") {
-            val repo = SvnRepository("owner38", "no-such-dir", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner38", "no-such-dir", newTempBaseDir(), userResolver)
 
             repo.delete()
 
@@ -159,7 +160,7 @@ class SvnRepositorySpec : DescribeSpec({
 
     describe("getHistory()/getCommit()/getParentCommitOf()") {
         it("여러 커밋을 만들면 getHistory()가 최신순으로 정확한 메시지/작성자를 반환해야 한다") {
-            val repo = SvnRepository("owner5", "proj5", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner5", "proj5", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "v1", "첫 번째 커밋", author = "alice")
             commitFile(repo, "a.txt", "v2", "두 번째 커밋", author = "bob")
@@ -175,7 +176,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("path를 지정하면 해당 경로 하위의 로그만 조회해야 한다") {
-            val repo = SvnRepository("owner31", "proj31", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner31", "proj31", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "dir/a.txt", "v1", "dir 커밋")
             commitFile(repo, "b.txt", "v1", "루트 커밋")
@@ -187,7 +188,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("페이지 범위가 전체 리비전을 초과하면 빈 목록을 반환해야 한다") {
-            val repo = SvnRepository("owner32", "proj32", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner32", "proj32", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "v1", "커밋")
 
@@ -197,7 +198,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("getCommit(rev)으로 특정 리비전의 커밋을 조회할 수 있어야 한다") {
-            val repo = SvnRepository("owner6", "proj6", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner6", "proj6", newTempBaseDir(), userResolver)
             repo.create()
             val rev1 = commitFile(repo, "a.txt", "v1", "리비전1")
             val rev2 = commitFile(repo, "a.txt", "v2", "리비전2")
@@ -217,7 +218,7 @@ class SvnRepositorySpec : DescribeSpec({
         // CodeHistoryApp.show()도 동일하게 호출부에서 예외를 잡는 구조), 여기서 검증할 계약은
         // "null을 반환한다"가 아니라 "legacy와 동일하게 SVNException을 던진다"이다.
         it("범위를 벗어난 리비전을 조회하면 legacy와 동일하게 SVNException을 던져야 한다(호출부가 잡아 404 처리)") {
-            val repo = SvnRepository("owner7", "proj7", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner7", "proj7", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "v1", "커밋")
 
@@ -230,7 +231,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("getParentCommitOf()는 바로 이전 리비전의 커밋을 반환해야 한다") {
-            val repo = SvnRepository("owner8", "proj8", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner8", "proj8", newTempBaseDir(), userResolver)
             repo.create()
             val rev1 = commitFile(repo, "a.txt", "v1", "부모 커밋")
             val rev2 = commitFile(repo, "a.txt", "v2", "자식 커밋")
@@ -242,7 +243,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("커밋 작성자(author)를 userResolver로 실제 User 엔티티로 해석해야 한다") {
-            val repo = SvnRepository("owner9", "proj9", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner9", "proj9", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "v1", "커밋", author = "alice")
 
@@ -254,7 +255,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("전체 리비전이 페이지 크기보다 충분히 많으면 endRevision이 1로 보정되지 않아야 한다") {
-            val repo = SvnRepository("owner39", "proj39", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner39", "proj39", newTempBaseDir(), userResolver)
             repo.create()
             repeat(10) { i -> commitFile(repo, "a.txt", "v$i", "커밋$i") }
 
@@ -269,7 +270,7 @@ class SvnRepositorySpec : DescribeSpec({
 
     describe("getMetaDataFromPath() — 파일/디렉토리 조회") {
         it("파일 경로를 조회하면 type=file과 실제 파일 내용을 반환해야 한다") {
-            val repo = SvnRepository("owner10", "proj10", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner10", "proj10", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "readme.txt", "Hello SVN", "README 추가")
 
@@ -282,7 +283,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("디렉토리 경로를 조회하면 type=folder와 하위 항목 목록을 반환해야 한다") {
-            val repo = SvnRepository("owner11", "proj11", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner11", "proj11", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "src/main.txt", "content", "src 디렉토리 파일 추가")
             commitFile(repo, "readme.txt", "readme", "루트 파일 추가")
@@ -299,7 +300,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("존재하지 않는 경로는 null을 반환해야 한다") {
-            val repo = SvnRepository("owner12", "proj12", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner12", "proj12", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "content", "커밋")
 
@@ -309,7 +310,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("특정 리비전(branch 파라미터로 전달)의 경로 상태를 조회할 수 있어야 한다") {
-            val repo = SvnRepository("owner13", "proj13", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner13", "proj13", newTempBaseDir(), userResolver)
             repo.create()
             val rev1 = commitFile(repo, "a.txt", "v1", "첫 버전")
             commitFile(repo, "a.txt", "v2", "두번째 버전")
@@ -321,7 +322,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("branch 파라미터가 숫자가 아니면 NumberFormatException을 잡고 HEAD(-1) 기준으로 조회해야 한다") {
-            val repo = SvnRepository("owner30", "proj30", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner30", "proj30", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "latest content", "커밋")
 
@@ -332,7 +333,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("파일 내용에 널 바이트가 있으면 바이너리로 판단해야 한다") {
-            val repo = SvnRepository("owner36", "proj36", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner36", "proj36", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "bin.dat", "abc" + " " + "def", "바이너리 커밋")
 
@@ -343,7 +344,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("파일 크기가 1MB를 초과하면 널 바이트가 없어도 바이너리로 판단해야 한다") {
-            val repo = SvnRepository("owner41", "proj41", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner41", "proj41", newTempBaseDir(), userResolver)
             repo.create()
             val bigContent = "a".repeat(1024 * 1024 + 1)
             commitFile(repo, "big.txt", bigContent, "대용량 파일 커밋")
@@ -357,7 +358,7 @@ class SvnRepositorySpec : DescribeSpec({
 
         it("userResolver가 사용자를 찾지 못하면 userName/userLoginId를 빈 문자열로 채워야 한다(디렉토리/파일 공통)") {
             val noSuchUserResolver: (String) -> User? = { null }
-            val repo = SvnRepository("owner42", "proj42", newTempBaseDir(), noSuchUserResolver)
+            val repo = SvnRepository(writeGuard, "owner42", "proj42", newTempBaseDir(), noSuchUserResolver)
             repo.create()
             commitFile(repo, "dir/a.txt", "content", "커밋", author = "ghost")
 
@@ -373,7 +374,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("확장자로 MIME 타입을 판별할 수 없는 파일은 기본 mimeType(application/octet-stream)으로 채워야 한다") {
-            val repo = SvnRepository("owner48", "proj48", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner48", "proj48", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "unknownext.yonatestunknown", "plain text content", "알 수 없는 확장자 커밋")
 
@@ -386,7 +387,7 @@ class SvnRepositorySpec : DescribeSpec({
 
     describe("getRawFile()") {
         it("HEAD 리비전의 파일 raw 바이트를 정확히 반환해야 한다") {
-            val repo = SvnRepository("owner14", "proj14", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner14", "proj14", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "raw content here", "커밋")
 
@@ -396,7 +397,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("과거 리비전 번호를 지정하면 그 시점의 파일 내용을 반환해야 한다") {
-            val repo = SvnRepository("owner15", "proj15", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner15", "proj15", newTempBaseDir(), userResolver)
             repo.create()
             val rev1 = commitFile(repo, "a.txt", "old content", "v1")
             commitFile(repo, "a.txt", "new content", "v2")
@@ -407,7 +408,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("존재하지 않는 파일을 조회하면 FileNotFoundException을 던져야 한다") {
-            val repo = SvnRepository("owner16", "proj16", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner16", "proj16", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "content", "커밋")
 
@@ -422,7 +423,7 @@ class SvnRepositorySpec : DescribeSpec({
 
     describe("getPatch() — unified diff") {
         it("commitId 하나로 호출하면 그 직전 리비전과의 diff를 반환해야 한다") {
-            val repo = SvnRepository("owner17", "proj17", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner17", "proj17", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "line1\nline2\n", "첫 커밋")
             val rev2 = commitFile(repo, "a.txt", "line1\nline2-changed\n", "수정 커밋")
@@ -434,7 +435,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("두 리비전을 지정하면 그 사이의 diff를 반환해야 한다") {
-            val repo = SvnRepository("owner18", "proj18", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner18", "proj18", newTempBaseDir(), userResolver)
             repo.create()
             val rev1 = commitFile(repo, "a.txt", "original\n", "v1")
             val rev2 = commitFile(repo, "a.txt", "changed\n", "v2")
@@ -446,7 +447,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("getDiff()는 legacy와 동일하게 UnsupportedOperationException을 던져야 한다") {
-            val repo = SvnRepository("owner19", "proj19", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner19", "proj19", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "content", "커밋")
 
@@ -468,7 +469,7 @@ class SvnRepositorySpec : DescribeSpec({
 
     describe("isFile()") {
         it("파일 경로는 true, 디렉토리 경로는 false를 반환해야 한다") {
-            val repo = SvnRepository("owner20", "proj20", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner20", "proj20", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "dir/a.txt", "content", "커밋")
 
@@ -477,7 +478,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("특정 리비전 문자열을 받는 오버로드도 동일하게 동작해야 한다") {
-            val repo = SvnRepository("owner21", "proj21", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner21", "proj21", newTempBaseDir(), userResolver)
             repo.create()
             val rev = commitFile(repo, "a.txt", "content", "커밋")
 
@@ -488,7 +489,7 @@ class SvnRepositorySpec : DescribeSpec({
     describe("move()/renameTo()") {
         it("move()는 저장소 디렉토리를 새 owner/name 위치로 옮겨야 한다") {
             val baseDir = newTempBaseDir()
-            val repo = SvnRepository("owner22", "old-name", baseDir, userResolver)
+            val repo = SvnRepository(writeGuard, "owner22", "old-name", baseDir, userResolver)
             repo.create()
             commitFile(repo, "a.txt", "content", "커밋")
 
@@ -496,40 +497,40 @@ class SvnRepositorySpec : DescribeSpec({
 
             moved shouldBe true
             repo.getDirectory().exists() shouldBe false
-            val movedRepo = SvnRepository("owner22", "new-name", baseDir, userResolver)
+            val movedRepo = SvnRepository(writeGuard, "owner22", "new-name", baseDir, userResolver)
             movedRepo.getDirectory().exists() shouldBe true
             movedRepo.isEmpty() shouldBe false
         }
 
         it("renameTo()는 move()에 위임해 같은 owner 아래에서 이름만 바꿔야 한다") {
             val baseDir = newTempBaseDir()
-            val repo = SvnRepository("owner23", "before-rename", baseDir, userResolver)
+            val repo = SvnRepository(writeGuard, "owner23", "before-rename", baseDir, userResolver)
             repo.create()
             commitFile(repo, "a.txt", "content", "커밋")
 
             val renamed = repo.renameTo("after-rename")
 
             renamed shouldBe true
-            val renamedRepo = SvnRepository("owner23", "after-rename", baseDir, userResolver)
+            val renamedRepo = SvnRepository(writeGuard, "owner23", "after-rename", baseDir, userResolver)
             renamedRepo.getDirectory().exists() shouldBe true
         }
 
         it("목적지의 상위 디렉토리가 없으면 새로 만들고 이동해야 한다") {
             val baseDir = newTempBaseDir()
-            val repo = SvnRepository("owner34", "proj34", baseDir, userResolver)
+            val repo = SvnRepository(writeGuard, "owner34", "proj34", baseDir, userResolver)
             repo.create()
             commitFile(repo, "a.txt", "content", "커밋")
 
             val moved = repo.move("owner34", "proj34", "brand-new-owner", "proj34")
 
             moved shouldBe true
-            val movedRepo = SvnRepository("brand-new-owner", "proj34", baseDir, userResolver)
+            val movedRepo = SvnRepository(writeGuard, "brand-new-owner", "proj34", baseDir, userResolver)
             movedRepo.getDirectory().exists() shouldBe true
         }
 
         it("원본 저장소가 존재하지 않으면 아무 것도 하지 않고 true를 반환해야 한다") {
             val baseDir = newTempBaseDir()
-            val repo = SvnRepository("owner35", "no-such", baseDir, userResolver)
+            val repo = SvnRepository(writeGuard, "owner35", "no-such", baseDir, userResolver)
 
             val moved = repo.move("owner35", "no-such", "owner35", "renamed")
 
@@ -540,38 +541,38 @@ class SvnRepositorySpec : DescribeSpec({
 
     describe("Git 전용 개념(브랜치)의 SVN no-op 동작 — legacy와 동일") {
         it("getRefNames()는 HEAD 하나만 반환해야 한다") {
-            val repo = SvnRepository("owner24", "proj24", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner24", "proj24", newTempBaseDir(), userResolver)
 
             repo.getRefNames() shouldBe listOf("HEAD")
         }
 
         it("getDefaultBranch()는 항상 HEAD를 반환해야 한다") {
-            val repo = SvnRepository("owner25", "proj25", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner25", "proj25", newTempBaseDir(), userResolver)
 
             repo.getDefaultBranch() shouldBe "HEAD"
         }
 
         it("getBranches()는 빈 목록, getHeadBranch()는 null이어야 한다(SVN에는 브랜치 개념이 없음)") {
-            val repo = SvnRepository("owner26", "proj26", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner26", "proj26", newTempBaseDir(), userResolver)
 
             repo.getBranches() shouldBe emptyList()
             repo.getHeadBranch() shouldBe null
         }
 
         it("getBlobId()는 항상 null이어야 한다(PR 코드리뷰는 Git 전용 기능)") {
-            val repo = SvnRepository("owner27", "proj27", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner27", "proj27", newTempBaseDir(), userResolver)
 
             repo.getBlobId("1", "a.txt") shouldBe null
         }
 
         it("isIntermediateFolder()는 항상 false여야 한다") {
-            val repo = SvnRepository("owner28", "proj28", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner28", "proj28", newTempBaseDir(), userResolver)
 
             repo.isIntermediateFolder("any/path") shouldBe false
         }
 
         it("getArchive()는 legacy와 동일하게 아무 것도 하지 않아야 한다(예외를 던지지 않음)") {
-            val repo = SvnRepository("owner29", "proj29", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner29", "proj29", newTempBaseDir(), userResolver)
             repo.create()
 
             val out = ByteArrayOutputStream()
@@ -581,7 +582,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("setDefaultBranch()/deleteBranch()/createBranch()는 legacy와 동일하게 아무 것도 하지 않아야 한다") {
-            val repo = SvnRepository("owner43", "proj43", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner43", "proj43", newTempBaseDir(), userResolver)
 
             repo.setDefaultBranch("develop")
             repo.deleteBranch("develop")
@@ -613,7 +614,7 @@ class SvnRepositorySpec : DescribeSpec({
         }
 
         it("authenticationManager 없이 커밋되어 author 정보가 없으면 author를 빈 문자열로 채워야 한다") {
-            val repo = SvnRepository("owner44", "proj44", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner44", "proj44", newTempBaseDir(), userResolver)
             repo.create()
             commitFileAnonymous(repo, "anon.txt", "익명 커밋 내용", "익명 커밋")
 
@@ -628,7 +629,7 @@ class SvnRepositorySpec : DescribeSpec({
 
         it("커밋 메시지 없이(null) 커밋되면 commitMessage를 빈 문자열로 채워야 한다") {
             val svnURLBuild: (SvnRepository) -> SVNURL = { SVNURL.fromFile(it.getDirectory()) }
-            val repo = SvnRepository("owner45", "proj45", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner45", "proj45", newTempBaseDir(), userResolver)
             repo.create()
             val svnRepository = SVNRepositoryFactory.create(svnURLBuild(repo))
             try {
@@ -660,7 +661,7 @@ class SvnRepositorySpec : DescribeSpec({
 
     describe("getParentCommitOf()/move() 예외 방어 처리") {
         it("존재하지 않는 리비전(범위 밖)의 부모를 조회하면 getCommit()이 SVNException을 던지고, 이를 잡아 null을 반환해야 한다") {
-            val repo = SvnRepository("owner46", "proj46", newTempBaseDir(), userResolver)
+            val repo = SvnRepository(writeGuard, "owner46", "proj46", newTempBaseDir(), userResolver)
             repo.create()
             commitFile(repo, "a.txt", "content", "커밋")
 
@@ -670,7 +671,7 @@ class SvnRepositorySpec : DescribeSpec({
 
         it("목적지가 비어있지 않은 디렉토리이면 Files.move가 IOException을 던지고, 이를 잡아 false를 반환해야 한다") {
             val baseDir = newTempBaseDir()
-            val repo = SvnRepository("owner47", "proj47", baseDir, userResolver)
+            val repo = SvnRepository(writeGuard, "owner47", "proj47", baseDir, userResolver)
             repo.create()
             commitFile(repo, "a.txt", "content", "커밋")
 

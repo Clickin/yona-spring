@@ -39,6 +39,7 @@ class RepositoryServiceSpec : DescribeSpec({
 
     beforeTest {
         clearMocks(userRepository, projectRepository)
+        every { projectRepository.findRepositoryModeByOwnerAndName(any(), any()) } returns com.github.yonaprojects.yona.domain.project.RepositoryMode.HOSTED
     }
 
     describe("getRepository") {
@@ -126,7 +127,7 @@ class RepositoryServiceSpec : DescribeSpec({
 
             // 실제 빈 bare 저장소를 만들어 getRepository()는 성공하고, getRawFile()의 HEAD 해석
             // 단계에서만 실패하게 한다 — getFileAsRaw의 "프로젝트 존재" 분기 자체가 목적.
-            GitRepository("realowner", "realproj", tempBase.absolutePath, userResolver = { _, _ -> null }).create()
+            GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "realowner", "realproj", tempBase.absolutePath, userResolver = { _, _ -> null }).create()
 
             shouldThrow<FileNotFoundException> {
                 realService.getFileAsRaw("realowner", "realproj", "HEAD", "file.txt")

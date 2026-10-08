@@ -109,13 +109,8 @@ class HgGpgSignatureVerifierSpec @Autowired constructor(
 
     private fun newHgRepository(): Pair<HgRepository, File> {
         val baseDir = Files.createTempDirectory("hg-gpg-it-repo-").toFile()
-        val repo = HgRepository(
-            ownerName = "owner",
-            projectName = "project",
-            baseDir = baseDir.absolutePath,
-            userResolver = { _, _ -> null },
-            gpgVerifier = { nativeCommit -> gpgSignatureVerifier.verify(nativeCommit) }
-        )
+        val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), ownerName = "owner", projectName = "project", baseDir = baseDir.absolutePath, userResolver = { _, _ -> null },
+        gpgVerifier = { nativeCommit -> gpgSignatureVerifier.verify(nativeCommit) })
         repo.create()
         return repo to repo.getDirectory()
     }

@@ -22,12 +22,11 @@ import java.text.MessageFormat
 import java.time.Instant
 
 class BareCommit(
-    project: Project,
+    private val project: Project,
     user: User,
     gitBaseDir: String,
-    // 위키 저장소(`<owner>/<project>.wiki.git`)처럼 프로젝트의 실제 코드 저장소가 아닌 다른
-    // bare 저장소에 커밋해야 하는 호출부를 위한 오버라이드. null이면 기존과 동일하게
-    // "${project.name}.git"을 그대로 쓴다(기존 호출부 전부 무변경).
+    private val writeGuard: RepositoryWriteGuard,
+    // null은 코드 저장소, 정확한 "<project>.wiki" 값만 별도 위키 저장소로 허용한다.
     repoNameOverride: String? = null
 ) {
     private val repository: Repository
@@ -36,8 +35,11 @@ class BareCommit(
     private var file: File? = null
     private var refName: String = Constants.HEAD
     private var headObjectId: ObjectId? = null
+    private val repositoryKind = if (repoNameOverride == "${project.name}.wiki") RepositoryKind.WIKI else RepositoryKind.CODE
 
     init {
+        require(repoNameOverride == null || repoNameOverride == "${project.name}.wiki") { "Invalid repository name override" }
+        writeGuard.requireWritable(project, repositoryKind)
         val repoName = repoNameOverride ?: project.name
         val gitDir = File(File(gitBaseDir), "${project.owner}/$repoName.git")
         this.repository = FileRepositoryBuilder().setGitDir(gitDir).build()
@@ -50,6 +52,7 @@ class BareCommit(
 
     @Throws(IOException::class)
     fun commitTextFile(fileNameWithPath: String, contents: String, message: String): ObjectId? {
+        writeGuard.requireWritable(project, repositoryKind)
         this.file = File(fileNameWithPath)
         this.commitMessage = message
         
@@ -114,6 +117,7 @@ class BareCommit(
     // 먼저 호출한 뒤 이 메서드를 호출하는 것을 전제로 한다(yona와 동일한 사용 계약).
     @Throws(IOException::class)
     fun commitTextFile(branchName: String, path: String, text: String, message: String): ObjectId? {
+        writeGuard.requireWritable(project, repositoryKind)
         this.file = File(repository.directory, path)
         this.file!!.parentFile?.mkdirs()
         this.file!!.writeText(text, Charsets.UTF_8)
@@ -154,6 +158,7 @@ class BareCommit(
     // 쓴다 — 위키는 여러 페이지가 동시에 저장될 수 있어 임시 파일 방식보다 안전하다.
     @Throws(IOException::class)
     fun commitPage(branchName: String, oldPath: String?, newPath: String, text: String, message: String): ObjectId? {
+        writeGuard.requireWritable(project, repositoryKind)
         var commitId: ObjectId? = null
         val git = Git(repository)
         try {
@@ -178,6 +183,7 @@ class BareCommit(
 
     @Throws(IOException::class)
     fun deletePage(branchName: String, path: String, message: String): ObjectId? {
+        writeGuard.requireWritable(project, repositoryKind)
         var commitId: ObjectId? = null
         val git = Git(repository)
         try {

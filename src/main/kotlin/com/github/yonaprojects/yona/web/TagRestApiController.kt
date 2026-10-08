@@ -8,6 +8,7 @@ import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.GitTag
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.api.errors.RefAlreadyExistsException
 import org.eclipse.jgit.lib.Repository
@@ -43,7 +44,8 @@ class TagRestApiController(
     private val projectRepository: ProjectRepository,
     private val userRepository: UserRepository,
     private val repositoryService: RepositoryService,
-    private val accessControl: AccessControl
+    private val accessControl: AccessControl,
+    private val writeGuard: RepositoryWriteGuard
 ) {
 
     private fun getLoginUser(authentication: Authentication?): User? {
@@ -94,6 +96,9 @@ class TagRestApiController(
         if (!isGitProject(found)) {
             return ResponseEntity.badRequest().body(mapOf("error" to "This project is not a git repository."))
         }
+        if (!writeGuard.isWritable(found)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+        }
 
         val tagName = request.name.trim().removePrefix("refs/tags/")
         // JGit의 자체 ref 이름 검증 규칙을 그대로 재사용한다 — "..", 선행/후행 "/", 제어문자, 공백 등
@@ -136,6 +141,9 @@ class TagRestApiController(
         }
         if (!isGitProject(found)) {
             return ResponseEntity.badRequest().body(mapOf("error" to "This project is not a git repository."))
+        }
+        if (!writeGuard.isWritable(found)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
 
         val decodedTagName = URLDecoder.decode(tag.trimStart('/'), StandardCharsets.UTF_8.name())

@@ -8,6 +8,8 @@ import com.github.yonaprojects.yona.domain.notification.NotificationMailReposito
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectScope
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import org.springframework.security.access.AccessDeniedException
 import com.github.yonaprojects.yona.domain.project.TitleHeadRepository
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
@@ -52,6 +54,35 @@ class PostingServiceSpec @Autowired constructor(
                 titleHeadRepository.deleteAll()
                 projectRepository.deleteAll()
                 userRepository.deleteAll()
+            }
+
+            it("MIRROR keeps ordinary posts editable but rejects README create and update before changing posts") {
+                val author = userRepository.save(User(loginId = "mirror-writer", name = "Writer", email = "mirror@yona.io"))
+                val project = projectRepository.saveAndFlush(
+                    Project(name = "mirror-board", owner = "mirror-writer", repositoryMode = RepositoryMode.MIRROR)
+                )
+                val saved = postingService.createPosting(
+                    project.id!!, Posting(title = "Discussion", body = "Original", project = project), author.id!!
+                )
+                postingService.updatePosting(
+                    project.id!!, saved.number!!, "Discussion updated", "Updated", false, false, author.id!!
+                ).body shouldBe "Updated"
+
+                shouldThrow<AccessDeniedException> {
+                    postingService.createPosting(
+                        project.id!!, Posting(title = "README", body = "Denied", readme = true, project = project), author.id!!
+                    )
+                }
+                shouldThrow<AccessDeniedException> {
+                    postingService.updatePosting(
+                        project.id!!, saved.number!!, "README", "Denied", false, true, author.id!!
+                    )
+                }
+                postingRepository.findByProjectAndNumber(project, saved.number!!)!!.let {
+                    it.body shouldBe "Updated"
+                    it.readme shouldBe false
+                }
+                project.lastPostingNumber shouldBe 1L
             }
 
             it("게시글을 새로 작성하면 신규 게시글(NEW_POSTING) 알림 이벤트가 발행되어야 한다") {

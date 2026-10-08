@@ -42,7 +42,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("create()") {
         it("빈 디렉터리에 새 hg 저장소를 만든다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
 
             repo.create()
 
@@ -53,7 +53,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("isEmpty()") {
         it("커밋이 없으면 true") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
 
             repo.isEmpty() shouldBe true
@@ -61,7 +61,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("커밋이 하나라도 있으면 false") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "hello", "첫 커밋")
 
@@ -72,7 +72,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("getDefaultBranch()") {
         it("항상 \"default\"를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
 
             repo.getDefaultBranch() shouldBe "default"
@@ -82,7 +82,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("커밋/조회") {
         it("getRawFile로 특정 리비전의 파일 내용을 읽을 수 있다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "README.md", "hello world", "초기 커밋")
 
@@ -93,7 +93,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("getHistory로 커밋 목록을 최신순으로 가져온다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             commitFile(repo.getDirectory(), "a.txt", "2", "커밋2")
@@ -107,7 +107,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("getCommit(\"tip\")으로 최신 커밋을 가져온다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -121,7 +121,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("getParentCommitOf로 부모 커밋을 가져온다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             commitFile(repo.getDirectory(), "a.txt", "2", "커밋2")
@@ -135,7 +135,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("루트 커밋의 부모는 없다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -147,7 +147,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("getMetaDataFromPath") {
         it("파일 경로면 type=file과 내용을 담은 JSON을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "README.md", "hello", "초기 커밋")
 
@@ -160,7 +160,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("루트 경로면 type=folder와 최상위 항목 목록을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "README.md", "hello", "초기 커밋")
             commitFile(repo.getDirectory(), "src/main.txt", "code", "src 추가")
@@ -176,7 +176,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 경로면 null을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "README.md", "hello", "초기 커밋")
 
@@ -187,7 +187,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("delete()/move()") {
         it("delete()는 저장소 디렉터리를 지운다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
 
             repo.delete()
@@ -197,7 +197,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("move()는 저장소를 새 owner/name 경로로 옮긴다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -215,7 +215,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("브랜치(bookmark) CRUD") {
         it("getBranches()는 hg4j로 직접 만든 bookmark를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             Hg.open(repo.getDirectory()).use { hg -> hg.bookmark().setBookmarkName("feature-x").call() }
@@ -228,7 +228,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("createBranch()로 만든 브랜치가 hg4j bookmark로도 보인다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             val tip = repo.getCommit("tip")!!
@@ -242,7 +242,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("이미 존재하는 브랜치 이름으로 createBranch()를 호출하면 예외가 발생한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             repo.createBranch("dup", "tip")
@@ -254,7 +254,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 시작점으로 createBranch()를 호출하면 예외가 발생한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -265,7 +265,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("deleteBranch()로 지운 브랜치는 getBranches()에서 사라진다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             repo.createBranch("to-delete", "tip")
@@ -277,7 +277,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("'tip'이라는 이름으로 createBranch()를 호출하면 예외가 발생한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -288,7 +288,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 브랜치를 deleteBranch()로 지우려 하면 예외가 발생한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -299,7 +299,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("getHeadBranch()는 active bookmark를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             // -r 없이 이름만 지정하면 자동으로 active가 된다(hg4j BookmarkCommand 주석 참고).
@@ -313,7 +313,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("active bookmark가 없으면 getHeadBranch()는 null을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -324,7 +324,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("태그 CRUD") {
         it("createTag()로 만든 태그가 getTagNames()/getTags()에 보인다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             val tip = repo.getCommit("tip")!!
@@ -343,7 +343,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("getTagNames()/getTags()는 pseudo-tag \"tip\"을 걸러낸다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -353,7 +353,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("이미 존재하는 태그 이름으로 createTag()를 호출하면 예외가 발생한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             repo.createTag("dup-tag", "tip", null, null, null)
@@ -365,7 +365,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("'tip'이라는 이름으로 createTag()를 호출하면 예외가 발생한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -376,7 +376,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 시작점으로 createTag()를 호출하면 예외가 발생한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -387,7 +387,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("deleteTag()로 지운 태그는 getTagNames()에서 사라진다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
             repo.createTag("to-delete", "tip", null, null, null)
@@ -399,7 +399,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 태그를 deleteTag()로 지우려 하면 예외가 발생한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "project", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "project", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "1", "커밋1")
 
@@ -415,7 +415,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("getPatch()") {
         it("commitId 하나로 호출하면 부모 커밋과의 diff를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-patch1", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-patch1", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "line1\nline2\n", "첫 커밋")
             commitFile(repo.getDirectory(), "a.txt", "line1\nline2-changed\n", "수정 커밋")
@@ -429,7 +429,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("부모가 없는 최초 커밋을 조회하면 빈 매니페스트와의 diff(전체 추가)를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-patch2", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-patch2", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "hello\n", "최초 커밋")
             val commit1 = repo.getCommit("tip")!!
@@ -441,7 +441,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 commitId는 빈 문자열을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-patch3", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-patch3", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "content", "커밋")
 
@@ -450,7 +450,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("두 리비전을 지정하면 그 사이의 diff를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-patch4", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-patch4", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "original\n", "v1")
             val commit1 = repo.getCommit("tip")!!
@@ -465,7 +465,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("revA가 존재하지 않으면 빈 문자열을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-patch5", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-patch5", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "content", "커밋")
             val commit1 = repo.getCommit("tip")!!
@@ -475,7 +475,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("revB가 존재하지 않으면 빈 문자열을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-patch6", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-patch6", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "content", "커밋")
             val commit1 = repo.getCommit("tip")!!
@@ -487,7 +487,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("getDiff() - commitId 단일/두 리비전") {
         it("commitId 하나로 호출하면 부모와의 FileDiff 목록을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-diff1", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-diff1", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "line1\n", "첫 커밋")
             commitFile(repo.getDirectory(), "a.txt", "line1\nline2\n", "수정 커밋")
@@ -503,7 +503,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("부모가 없는 최초 커밋을 조회하면 전체가 ADD로 표시된다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-diff2", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-diff2", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "hello\n", "최초 커밋")
             val commit1 = repo.getCommit("tip")!!
@@ -517,7 +517,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 commitId는 빈 리스트를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-diff3", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-diff3", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "content", "커밋")
 
@@ -526,7 +526,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("두 리비전을 지정하면 그 사이의 FileDiff 목록을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-diff4", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-diff4", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "v1\n", "v1")
             val commit1 = repo.getCommit("tip")!!
@@ -540,7 +540,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("revA가 존재하지 않으면 빈 매니페스트와의 diff(ADD)로 처리된다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-diff5", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-diff5", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "content\n", "커밋")
             val commit1 = repo.getCommit("tip")!!
@@ -553,7 +553,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("revB가 존재하지 않으면 빈 매니페스트와의 diff(DELETE)로 처리된다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-diff6", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-diff6", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "content\n", "커밋")
             val commit1 = repo.getCommit("tip")!!
@@ -568,7 +568,7 @@ class HgRepositorySpec : DescribeSpec({
     describe("getFileDiffs() - 파일별 diff 상세(getDiff를 통해 검증)") {
         it("새 파일 추가(ADD)는 pathB/텍스트 내용이 채워지고 pathA는 null이다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-fd1", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-fd1", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "new.txt", "added content\n", "추가")
             val commit1 = repo.getCommit("tip")!!
@@ -586,7 +586,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("파일 수정(MODIFY)은 editList와 hunks가 계산된다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-fd2", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-fd2", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", (0..9).joinToString("\n") { "line$it" } + "\n", "v1")
             commitFile(repo.getDirectory(), "a.txt", (0..9).joinToString("\n") { if (it == 5) "CHANGED" else "line$it" } + "\n", "v2")
@@ -602,7 +602,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("이전 커밋이 있는 상태에서 새 파일을 추가하면 그 파일 항목만 ADD로 표시된다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-fd3", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-fd3", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "existing.txt", "v1\n", "v1")
             commitFile(repo.getDirectory(), "existing.txt", "v2\n", "v2 수정")
@@ -624,7 +624,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("파일 삭제(DELETE)는 pathA만 채워지고 pathB는 null이다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-fd4", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-fd4", baseDir, ::noUser)
             repo.create()
             commitFile(repo.getDirectory(), "a.txt", "content\n", "추가")
             removeFile(repo.getDirectory(), "a.txt", "삭제")
@@ -641,7 +641,7 @@ class HgRepositorySpec : DescribeSpec({
 
         it("바이너리(NUL 포함) 파일 추가는 isBinaryB=true이고 b는 null이다") {
             val baseDir = newTempBaseDir()
-            val repo = HgRepository("owner", "p-fd5", baseDir, ::noUser)
+            val repo = HgRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "owner", "p-fd5", baseDir, ::noUser)
             repo.create()
             val binFile = File(repo.getDirectory(), "bin.dat")
             binFile.writeBytes(byteArrayOf(1, 2, 0, 3))

@@ -11,6 +11,8 @@ import com.github.yonaprojects.yona.domain.vcs.Commit
 import com.github.yonaprojects.yona.domain.vcs.GitBranch
 import com.github.yonaprojects.yona.domain.vcs.PlayRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import io.kotest.core.spec.style.DescribeSpec
 import io.mockk.every
 import io.mockk.mockk
@@ -68,12 +70,14 @@ class BranchViewControllerSpec : DescribeSpec({
         userRepository,
         repositoryService,
         accessControl,
-        pullRequestRepository
+        pullRequestRepository,
+        RepositoryWriteGuard(projectRepository)
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(branchViewController).build()
 
     beforeTest {
         clearMocks(projectRepository, projectUserRepository, userRepository, repositoryService, playRepository)
+        every { projectRepository.findRepositoryModeById(any()) } returns RepositoryMode.HOSTED
     }
 
     describe("BranchViewController 웹 API 테스트") {
@@ -81,6 +85,27 @@ class BranchViewControllerSpec : DescribeSpec({
         val mockCommit = mockk<Commit>()
         val headBranch = GitBranch(name = "refs/heads/master", headCommit = mockCommit)
         val otherBranch = GitBranch(name = "refs/heads/feature-a", headCommit = mockCommit)
+
+        it("keeps MIRROR branches readable but hides write actions from a manager") {
+            val manager = User(id = 10L, loginId = "manager", name = "Manager")
+            manager.projectUsers.add(ProjectUser(
+                id = 11L, user = manager, project = project, role = Role(id = RoleType.MANAGER.roleType)
+            ))
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProject") } returns Optional.of(project)
+            every { projectRepository.findRepositoryModeById(1L) } returns RepositoryMode.MIRROR
+            every { userRepository.findByLoginId("manager") } returns Optional.of(manager)
+            every { repositoryService.getRepository(project) } returns playRepository
+            every { playRepository.getBranches() } returns listOf(headBranch, otherBranch)
+            every { playRepository.getHeadBranch() } returns headBranch
+
+            mockMvc.perform(get("/owner/TestProject/branches").principal(
+                UsernamePasswordAuthenticationToken("manager", "password")
+            ))
+                .andExpect(view().name("code/branches"))
+                .andExpect(model().attribute("canUpdate", false))
+                .andExpect(model().attribute("canDelete", false))
+                .andExpect(model().attribute("showActionsColumn", false))
+        }
 
         describe("GET /{owner}/{projectName}/branches") {
             it("성공 시 200 OK와 올바른 뷰 이름, 모델 속성을 반환해야 한다 (HEAD 브랜치 제외 확인)") {

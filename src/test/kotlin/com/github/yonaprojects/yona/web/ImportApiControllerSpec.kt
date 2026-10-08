@@ -60,6 +60,23 @@ class ImportApiControllerSpec : DescribeSpec({
             gitService,
             messageSource
         )
+        every { projectRepository.findRepositoryModeByOwnerAndName(any(), any()) } returns null
+    }
+
+    it("rechecks persisted mode before failed-import cleanup can delete repository files") {
+        val user = User(id = 1L, loginId = "testuser")
+        every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+        every { organizationRepository.findByName("testuser") } returns Optional.empty()
+        every { projectRepository.findByOwnerAndName("testuser", "mirror") } returns Optional.empty()
+        every { projectRepository.findRepositoryModeByOwnerAndName("testuser", "mirror") } returnsMany listOf(null, RepositoryMode.MIRROR)
+        every { gitService.cloneRepository(any(), "testuser", "mirror", any(), any()) } throws IllegalStateException("failed")
+        io.kotest.assertions.throwables.shouldThrow<org.springframework.security.access.AccessDeniedException> {
+            controller.importProject(
+                ImportApiRequest(url = "https://example.test/repo", owner = "testuser", name = "mirror"),
+                UsernamePasswordAuthenticationToken("testuser", "password"), Locale.ENGLISH
+            )
+        }
+        verify(exactly = 0) { gitService.getRepositoryPath(any(), any()) }
     }
 
     describe("ImportApiController 테스트") {

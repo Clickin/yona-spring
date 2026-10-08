@@ -6,6 +6,7 @@ import com.github.yonaprojects.yona.domain.project.*
 import com.github.yonaprojects.yona.domain.role.RoleType
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import jakarta.validation.Valid
 import org.eclipse.jgit.api.errors.InvalidRemoteException
 import org.eclipse.jgit.api.errors.JGitInternalException
@@ -29,7 +30,8 @@ class ImportApiController(
     private val organizationUserRepository: OrganizationUserRepository,
     private val organizationRepository: OrganizationRepository,
     private val gitService: GitService,
-    private val messageSource: MessageSource
+    private val messageSource: MessageSource,
+    private val writeGuard: RepositoryWriteGuard = RepositoryWriteGuard(projectRepository)
 ) {
 
     private fun getLoginUser(authentication: Authentication?): User? {
@@ -81,6 +83,7 @@ class ImportApiController(
             return ResponseEntity.badRequest().body(mapOf("error" to "URL cannot be empty"))
         }
 
+        writeGuard.requireDestinationWritable(targetOwner, targetName)
         var clonedDir: File? = null
         try {
             // JGit 복제
@@ -145,6 +148,7 @@ class ImportApiController(
         } catch (e: Exception) {
             return ResponseEntity.badRequest().body(mapOf("error" to (e.message ?: "Git Import Failed")))
         } finally {
+            writeGuard.requireDestinationWritable(targetOwner, targetName)
             clonedDir?.let {
                 if (it.exists()) {
                     it.deleteRecursively()

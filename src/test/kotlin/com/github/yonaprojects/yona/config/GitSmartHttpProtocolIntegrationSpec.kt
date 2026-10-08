@@ -91,7 +91,7 @@ class GitSmartHttpProtocolIntegrationSpec @Autowired constructor(
                 val gitDir = File(gitBaseDirHolder, "${project.owner}/${project.name}.git")
                 if (!gitDir.exists()) {
                     repositoryService.getRepository(project).create()
-                    BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile(
+                    BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile(
                         "README.md", "# git-proto-proj", "초기 커밋"
                     )
                 }

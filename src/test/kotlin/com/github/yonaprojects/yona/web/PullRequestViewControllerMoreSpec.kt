@@ -31,6 +31,9 @@ import com.github.yonaprojects.yona.domain.attachment.AttachmentRepository
 import com.github.yonaprojects.yona.domain.vcs.PlayRepository
 import org.springframework.context.MessageSource
 import io.kotest.core.spec.style.DescribeSpec
+import io.kotest.assertions.throwables.shouldThrow
+import org.springframework.security.access.AccessDeniedException
+import org.springframework.ui.ExtendedModelMap
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
@@ -95,6 +98,34 @@ class PullRequestViewControllerMoreSpec : DescribeSpec({
         val user = User(id = 10L, loginId = "testuser", name = "tester")
         val userAuth = UsernamePasswordAuthenticationToken("testuser", "password")
         val project = Project(id = 100L, name = "pub")
+
+        it("does not swallow a read-only repository denial while recomputing PR GET state") {
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "pub") } returns Optional.of(project)
+            every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+            every { accessControl.isAllowed(user, project, Operation.READ) } returns true
+            every { pullRequestService.getPullRequest(100L, 1L) } returns PullRequest(
+                id = 1L, toProject = project, fromProject = project, contributor = user
+            )
+            every { pullRequestService.attemptMerge(1L) } throws AccessDeniedException("Repository is read-only")
+
+            shouldThrow<AccessDeniedException> {
+                controller.viewPullRequest("owner", "pub", 1L, userAuth, ExtendedModelMap())
+            }
+        }
+
+        it("does not render a successful empty preview when temporary refs are forbidden") {
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "pub") } returns Optional.of(project)
+            every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+            every { projectUserRepository.existsByProjectIdAndUserId(100L, 10L) } returns true
+            val repository = mockk<PlayRepository>()
+            every { repositoryService.getRepository(project) } returns repository
+            every { repository.getRefNames() } returns listOf("refs/heads/master")
+            every { pullRequestService.previewMerge(project, project, "feature", "master") } throws AccessDeniedException("Repository is read-only")
+
+            shouldThrow<AccessDeniedException> {
+                controller.mergeResult("owner", "pub", "feature", "master", null, null, userAuth, ExtendedModelMap())
+            }
+        }
 
         it("Specification evaluation") {
             every { projectRepository.findByOwnerAndNameOrPreviousPlace(any(), any()) } returns Optional.of(project)

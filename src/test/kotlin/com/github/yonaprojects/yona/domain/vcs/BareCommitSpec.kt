@@ -80,7 +80,7 @@ class BareCommitSpec : DescribeSpec({
             val project = Project(id = 1L, owner = "tester", name = "repo")
             val user = User(id = 1L, loginId = "tester", name = "테스터", email = "tester@yona.io")
 
-            val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+            val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
             bare.setRefName(Constants.R_HEADS + "develop")
             val commitId = bare.commitTextFile("develop", "src/main/Foo.kt", "package foo", "add nested file")
 
@@ -124,7 +124,7 @@ class BareCommitSpec : DescribeSpec({
             val project = Project(id = 1L, owner = "tester", name = "repo")
             val user = User(id = 1L, loginId = "tester", name = "테스터", email = "tester@yona.io")
 
-            val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+            val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
             bare.setRefName(Constants.R_HEADS + "feature")
             val commitId = bare.commitTextFile("feature", "docs/readme.txt", "hello", "new branch first commit")
 
@@ -157,7 +157,7 @@ class BareCommitSpec : DescribeSpec({
             val project = Project(id = 1L, owner = "tester", name = "repo")
             val user = User(id = 1L, loginId = "tester", name = "테스터", email = "tester@yona.io")
 
-            val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+            val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
             bare.setRefName(Constants.R_HEADS + "develop")
             val commitId = bare.commitTextFile("develop", "docs/readme.txt", "new content", "overwrite readme")
 
@@ -191,7 +191,7 @@ class BareCommitSpec : DescribeSpec({
                 val project = Project(id = 1L, owner = "tester", name = "repo")
                 val user = User(id = 1L, loginId = "tester", name = "테스터", email = "tester@yona.io")
 
-                val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+                val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                 bare.setRefName(Constants.R_HEADS + "develop")
 
                 val thrown = shouldThrow<RuntimeException> {
@@ -218,24 +218,24 @@ class BareCommitSpec : DescribeSpec({
 
             // 1) 첫 커밋: 저장소에 아직 ref가 없어 headObjectId==zeroId -- createTreeWith()의 if 분기
             //    (신규 트리 생성), 부모 없는 커밋을 검증한다.
-            val commit1 = BareCommit(project, user, gitBaseDir.absolutePath)
+            val commit1 = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                 .commitTextFile("m.txt", "m content", "commit m")
             commit1 shouldNotBe null
 
             // 2) "a.txt"는 기존 "m.txt"보다 알파벳순으로 앞선다 -- nameForComparison > fileName 분기
             //    (새 파일을 먼저 삽입한 뒤 기존 엔트리를 이어붙임).
-            val commit2 = BareCommit(project, user, gitBaseDir.absolutePath)
+            val commit2 = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                 .commitTextFile("a.txt", "a content", "commit a")
             commit2 shouldNotBe null
 
             // 3) "z.txt"는 기존 "a.txt","m.txt" 모두보다 뒤에 온다 -- 루프 내내 else(그대로 복사) 분기만
             //    타다가 루프 종료 후 !isInserted 분기로 말미에 삽입된다.
-            val commit3 = BareCommit(project, user, gitBaseDir.absolutePath)
+            val commit3 = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                 .commitTextFile("z.txt", "z content", "commit z")
             commit3 shouldNotBe null
 
             // 4) 이미 존재하는 "m.txt"에 다시 커밋 -- nameForComparison == fileName 분기(덮어쓰기).
-            val commit4 = BareCommit(project, user, gitBaseDir.absolutePath)
+            val commit4 = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                 .commitTextFile("m.txt", "m content v2", "update m")
             commit4 shouldNotBe null
 
@@ -269,7 +269,7 @@ class BareCommitSpec : DescribeSpec({
             val project = Project(id = 1L, owner = "tester", name = "repo")
             val user = User(id = 1L, loginId = "tester", name = "테스터", email = "tester@yona.io")
 
-            val commitId = BareCommit(project, user, gitBaseDir.absolutePath)
+            val commitId = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                 .commitTextFile("README.md", "# repo", "initial commit")
 
             commitId shouldNotBe null
@@ -299,7 +299,7 @@ class BareCommitSpec : DescribeSpec({
 
                 FileRepositoryBuilder().setGitDir(bareDir).build().use { repository ->
                     val parent = repository.resolve(Constants.HEAD)
-                    val commitId = BareCommit(project, user, gitBaseDir.absolutePath)
+                    val commitId = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                         .commitTextFile("README.md", "# updated", "update README")
 
                     repository.resolve(Constants.HEAD) shouldBe commitId
@@ -333,7 +333,7 @@ class BareCommitSpec : DescribeSpec({
                 FileRepositoryBuilder().setGitDir(bareDir).build().use { repository ->
                     val head = repository.resolve(Constants.HEAD)
                     val parent = repository.resolve("refs/heads/release")
-                    val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+                    val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                     bare.setRefName("refs/heads/release")
                     val commitId = bare.commitTextFile("ISSUE_TEMPLATE.md", "# issue", "update template")
 
@@ -368,7 +368,7 @@ class BareCommitSpec : DescribeSpec({
                     seedInitialCommit(bareDir, "develop", "README.md", oldContents)
                     val project = Project(id = 1L, owner = "tester", name = "repo")
                     val user = User(id = 1L, loginId = "tester", name = "tester", email = "tester@yona.io")
-                    val commitId = BareCommit(project, user, gitBaseDir.absolutePath)
+                    val commitId = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                         .commitTextFile("README.md", contents, "update README")
 
                     FileRepositoryBuilder().setGitDir(bareDir).build().use { repository ->
@@ -393,7 +393,7 @@ class BareCommitSpec : DescribeSpec({
             val project = Project(id = 1L, owner = "tester", name = "repo")
             val user = User(id = 1L, loginId = "tester", name = "테스터", email = "tester@yona.io")
 
-            val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+            val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
             val commitId = bare.commitTextFile("b.txt", "b content", "add root file before src dir")
 
             commitId shouldNotBe null
@@ -417,7 +417,7 @@ class BareCommitSpec : DescribeSpec({
                 
                 val project = Project(id = 1L, owner = "tester", name = "repo")
                 val user = User(id = 1L, loginId = "tester", name = "tester", email = "tester@yona.io")
-                val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+                val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                 
                 // "root.txt" has no parent directory, so file.parentFile is null.
                 val commitId = bare.commitTextFile("develop", "root.txt", "content", "msg")
@@ -431,7 +431,7 @@ class BareCommitSpec : DescribeSpec({
                 
                 val project = Project(id = 1L, owner = "tester", name = "repo")
                 val user = User(id = 1L, loginId = "tester", name = "tester", email = "tester@yona.io")
-                val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+                val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                 
                 // Access private field headObjectId and set to null to cover branch in createTreeWith
                 val field = BareCommit::class.java.getDeclaredField("headObjectId")
@@ -471,7 +471,7 @@ class BareCommitSpec : DescribeSpec({
                 emailField.isAccessible = true
                 emailField.set(user, null)
                 
-                val bare = BareCommit(project, user, gitBaseDir.absolutePath)
+                val bare = BareCommit(project, user, gitBaseDir.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                 bare shouldNotBe null
             }
         }

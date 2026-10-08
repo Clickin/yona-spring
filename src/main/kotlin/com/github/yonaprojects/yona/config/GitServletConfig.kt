@@ -12,10 +12,14 @@ import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.BranchProtectionPreReceiveHook
 import com.github.yonaprojects.yona.domain.vcs.PushedBranchRepository
 import com.github.yonaprojects.yona.domain.vcs.RejectPushToReservedRefsPreReceiveHook
+import com.github.yonaprojects.yona.domain.vcs.RepositoryKind
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWritePreReceiveHook
 import com.github.yonaprojects.yona.domain.vcs.YonaPostReceiveHook
 import io.micrometer.core.instrument.MeterRegistry
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.http.server.GitServlet
+import org.eclipse.jgit.lfs.errors.LfsRepositoryReadOnly
 import org.eclipse.jgit.lfs.server.LfsProtocolServlet
 import org.eclipse.jgit.lfs.server.LargeFileRepository
 import org.eclipse.jgit.lfs.server.fs.FileLfsRepository
@@ -66,7 +70,8 @@ class GitServletConfig(
     // 어느 쪽을 써야 할지 못 찾아 "NoSuchMethodException: <init>()"로 컨텍스트 로딩이 깨진다
     // (다른 파라미터들처럼 기본값 없이 필수 인자로 유지).
     @Value("\${yona.git.default-branch:main}")
-    private val gitDefaultBranch: String
+    private val gitDefaultBranch: String,
+    private val repositoryWriteGuard: RepositoryWriteGuard
 ) {
     private val logger = LoggerFactory.getLogger(GitServletConfig::class.java)
 
@@ -132,6 +137,7 @@ class GitServletConfig(
                 // restrict_push_to가 설정된 브랜치는 익명 push도 당연히 거부돼야 하기 때문이다.
                 val preReceiveHooks = mutableListOf<PreReceiveHook>(RejectPushToReservedRefsPreReceiveHook())
                 if (project != null) {
+                    preReceiveHooks.add(RepositoryWritePreReceiveHook(project, repositoryWriteGuard))
                     preReceiveHooks.add(
                         BranchProtectionPreReceiveHook(
                             project, pusher, protectedBranchRepository, projectUserRepository, gpgSignatureVerifier
@@ -173,6 +179,14 @@ class GitServletConfig(
                 val parts = cleanPath.split("/")
                 val owner = parts.getOrNull(0) ?: "default"
                 val project = parts.getOrNull(1) ?: "default"
+                if (action == "upload") {
+                    val repoName = project.removeSuffix(".git")
+                    val kind = if (repoName.endsWith(".wiki")) RepositoryKind.WIKI else RepositoryKind.CODE
+                    val resolvedProject = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, repoName.removeSuffix(".wiki")).orElse(null)
+                    if (resolvedProject == null || !repositoryWriteGuard.isWritable(resolvedProject, kind)) {
+                        throw LfsRepositoryReadOnly("$owner/$project")
+                    }
+                }
 
                 val projectLfsDir = File(lfsBaseDir, "$owner/$project")
                 if (!projectLfsDir.exists()) {

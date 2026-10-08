@@ -6,6 +6,7 @@ import com.github.yonaprojects.yona.domain.deploykey.DeployKeyRepository
 import com.github.yonaprojects.yona.domain.deploykey.DeployKeyService
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -20,6 +21,7 @@ class SshAuthServiceImpl(
     private val deployKeyService: DeployKeyService,
     private val projectRepository: ProjectRepository,
     private val repoAccessPolicy: RepoAccessPolicy,
+    private val repositoryWriteGuard: RepositoryWriteGuard,
     // GitServletConfig와 동일한 프로퍼티/기본값 — 두 경로(HTTPS/SSH) 모두 같은 물리 저장소를
     // 가리켜야 한다.
     @Value("\${yona.git.base-dir:/tmp/yona/git}")
@@ -115,6 +117,10 @@ class SshAuthServiceImpl(
         val project = resolveProject(owner, projectName)
             ?: return SshCommandAuthorization.denied("존재하지 않는 저장소입니다: $owner/$projectName")
 
+        if (isWrite && !repositoryWriteGuard.isWritable(project)) {
+            return SshCommandAuthorization.denied("Mirror repository is read-only")
+        }
+
         return when (principal) {
             is SshAuthPrincipal.DeployKeyPrincipal -> authorizeForDeployKey(principal.deployKey.let { it }, project, isWrite, service)
             is SshAuthPrincipal.SshKeyPrincipal -> authorizeForUser(principal, project, isWrite, service)
@@ -134,6 +140,11 @@ class SshAuthServiceImpl(
 
         val project = resolveProject(owner, projectName)
             ?: return SshCommandAuthorization.denied("존재하지 않는 저장소입니다: $owner/$projectName")
+
+        // hg4j's nested batch dispatch bypasses hooks. Hg MIRROR SSH is unsupported in T5.
+        if (!repositoryWriteGuard.isWritable(project)) {
+            return SshCommandAuthorization.denied("Mercurial mirror SSH access is not supported")
+        }
 
         return when (principal) {
             is SshAuthPrincipal.DeployKeyPrincipal -> authorizeHgForDeployKey(principal.deployKey, project)

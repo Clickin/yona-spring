@@ -51,7 +51,7 @@ class GitRepositorySpec : DescribeSpec({
     // 따른다(JGit이 SystemReader로 사용자 gitconfig를 읽기 때문에 "master"로 하드코딩하면 환경에 따라
     // 깨진다). 커밋 픽스처를 쌓을 기본 브랜치명을 실제로 생성해보고 확인해 동적으로 사용한다.
     val defaultBranchRef: String = run {
-        val probeRepo = GitRepository("probe-owner-xyz", "probe-project-xyz", newTempBaseDir(), userResolver)
+        val probeRepo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "probe-owner-xyz", "probe-project-xyz", newTempBaseDir(), userResolver)
         probeRepo.create()
         val branch = openRepo(probeRepo).use { it.fullBranch } ?: "refs/heads/master"
         probeRepo.delete()
@@ -149,7 +149,7 @@ class GitRepositorySpec : DescribeSpec({
 
     describe("create()/delete()/isEmpty()/getDirectory()") {
         it("create()를 호출하면 bare 저장소 디렉토리가 생성되고 초기에는 비어있다") {
-            val repo = GitRepository("o1", "p1", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o1", "p1", newTempBaseDir(), userResolver)
 
             repo.create()
 
@@ -159,7 +159,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("이미 gitDir이 존재하는 상태에서 다시 create()를 호출해도 mkdirs()를 건너뛰고 정상 동작한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o1b", "p1b", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o1b", "p1b", baseDir, userResolver)
 
             repo.create()
             repo.create()
@@ -173,7 +173,7 @@ class GitRepositorySpec : DescribeSpec({
         // 생성자 인자로 애플리케이션이 결정론적으로 강제할 수 있어야 한다(RepositoryService가
         // yona.git.default-branch 설정값을 여기로 넘겨줌).
         it("defaultBranch 생성자 인자를 지정하면 그 이름으로 초기 브랜치가 만들어져야 한다") {
-            val repo = GitRepository("o1c", "p1c", newTempBaseDir(), userResolver, defaultBranch = "main")
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o1c", "p1c", newTempBaseDir(), userResolver, defaultBranch = "main")
 
             repo.create()
 
@@ -183,7 +183,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("커밋이 하나라도 있으면 isEmpty()가 false다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o2", "p2", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o2", "p2", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "hello").commit("첫 커밋")
 
@@ -192,7 +192,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("delete()를 호출하면 저장소 디렉토리가 사라진다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o3", "p3", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o3", "p3", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "hello").commit("커밋")
 
@@ -202,7 +202,7 @@ class GitRepositorySpec : DescribeSpec({
         }
 
         it("delete()는 디렉토리가 없어도 예외 없이 아무 것도 하지 않는다") {
-            val repo = GitRepository("o4", "no-such-proj", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o4", "no-such-proj", newTempBaseDir(), userResolver)
 
             repo.delete()
 
@@ -211,7 +211,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("getDirectory()는 baseDir/owner/project.git 경로를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o5", "p5", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o5", "p5", baseDir, userResolver)
 
             repo.getDirectory() shouldBe File(File(baseDir), "o5/p5.git")
         }
@@ -223,7 +223,7 @@ class GitRepositorySpec : DescribeSpec({
         // 코드 브라우저가 조상 경로들을 중첩 표시할 때 이런 중간 폴더 단계는 건너뛰기 위해 쓰인다.
         it("a/b/c/file.txt만 있으면(각 단계가 자식 폴더 하나뿐) a와 a/b는 중간 폴더로 true다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o6", "p6", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o6", "p6", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a/b/c/file.txt", "content").commit("커밋")
 
@@ -233,7 +233,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("a/b/c는 유일한 항목이 파일(file.txt)이므로 중간 폴더가 아니다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o6b", "p6b", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o6b", "p6b", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a/b/c/file.txt", "content").commit("커밋")
 
@@ -242,7 +242,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("폴더 안에 파일과 폴더가 섞여 있으면 중간 폴더가 아니다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o6c", "p6c", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o6c", "p6c", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo))
                 .put("a/file1.txt", "content")
@@ -254,7 +254,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("폴더 안에 자식 폴더가 2개 이상이면 중간 폴더가 아니다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o6d", "p6d", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o6d", "p6d", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo))
                 .put("a/b1/file1.txt", "content")
@@ -266,7 +266,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("루트(\"\")는 항상 false다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o6e", "p6e", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o6e", "p6e", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a/b/file.txt", "content").commit("커밋")
 
@@ -275,7 +275,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 경로는 false다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o6f", "p6f", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o6f", "p6f", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a/b/file.txt", "content").commit("커밋")
 
@@ -284,7 +284,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("파일 경로(폴더가 아님)는 false다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o6g", "p6g", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o6g", "p6g", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a/b/file.txt", "content").commit("커밋")
 
@@ -292,7 +292,7 @@ class GitRepositorySpec : DescribeSpec({
         }
 
         it("커밋이 없는 빈 저장소에서는 false다") {
-            val repo = GitRepository("o6h", "p6h", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o6h", "p6h", newTempBaseDir(), userResolver)
             repo.create()
 
             repo.isIntermediateFolder("any/path") shouldBe false
@@ -302,7 +302,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("getMetaDataFromPath() / treeAsJson() / fileAsJson()") {
         it("빈 경로(\"\")로 조회하면 루트 폴더의 하위 항목 목록(type=folder)을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o7", "p7", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o7", "p7", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo))
                 .put("readme.txt", "readme")
@@ -323,7 +323,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("파일 경로로 조회하면 type=file과 실제 내용을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o8", "p8", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o8", "p8", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "Hello Git").commit("커밋", author = "bob")
 
@@ -342,7 +342,7 @@ class GitRepositorySpec : DescribeSpec({
             // "else if (treeWalk.isSubtree)"가 false인 경우(찾는 경로가 아닌 일반 파일)를 건너뛰는
             // 분기를 검증한다. "a.txt"가 "target.txt"보다 먼저 정렬되므로 먼저 방문된다.
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o9b", "p9b", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o9b", "p9b", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "not the target").put("target.txt", "found me").commit("커밋")
 
@@ -355,7 +355,7 @@ class GitRepositorySpec : DescribeSpec({
         it("git 커밋 작성자가 yona 사용자와 매칭되지 않으면(userResolver가 null) author 필드는 채워지고 user 관련 필드는 빈 문자열이다") {
             val baseDir = newTempBaseDir()
             val neverResolves: (String?, String?) -> User? = { _, _ -> null }
-            val repo = GitRepository("o9c", "p9c", baseDir, neverResolves)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o9c", "p9c", baseDir, neverResolves)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").put("dir/b.txt", "content2").commit("외부 기여자 커밋", author = "outsider")
 
@@ -371,7 +371,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("중첩된 디렉토리(2단계 이상) 안의 파일 경로도 조회할 수 있다 - 검색 도중 여러 번 enterSubtree된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o9", "p9", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o9", "p9", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("src/sub/deep.txt", "deep content").commit("커밋")
 
@@ -384,7 +384,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("중첩된 디렉토리 경로 자체를 조회하면 type=folder를 반환한다(검색 후 enterSubtree)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o10", "p10", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o10", "p10", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("src/sub/deep.txt", "deep content").commit("커밋")
 
@@ -397,7 +397,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 경로는 null을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o11", "p11", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o11", "p11", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -406,7 +406,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("branch 파라미터가 빈 문자열이면 HEAD와 동일하게 취급한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o12", "p12", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o12", "p12", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -418,7 +418,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 브랜치명을 지정하면 null을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o13", "p13", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o13", "p13", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -427,7 +427,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("특정 브랜치를 지정하면 그 브랜치 시점의 내용을 반환한다(master와 다른 내용)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o14", "p14", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o14", "p14", baseDir, userResolver)
             repo.create()
             val jgitRepo = openRepo(repo)
             val master = testRepo(jgitRepo)
@@ -445,7 +445,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("한 파일에 여러 커밋이 있으면 가장 최근 커밋 정보를 반환한다(git log maxCount=1)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o15", "p15", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o15", "p15", baseDir, userResolver)
             repo.create()
             val jgitRepo = openRepo(repo)
             val builder = testRepo(jgitRepo)
@@ -461,7 +461,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("바이너리 내용(0바이트 포함)은 isBinary=true이고 data는 빈 문자열이다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o16", "p16", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o16", "p16", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).putBytes("bin.dat", byteArrayOf(1, 2, 0, 3)).commit("바이너리 커밋")
 
@@ -473,7 +473,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("MAX_FILE_SIZE_CAN_BE_VIEWED를 초과하는 파일은 0바이트가 없어도 isBinary=true다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o17", "p17", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o17", "p17", baseDir, userResolver)
             repo.create()
             val bigContent = "a".repeat((PlayRepository.MAX_FILE_SIZE_CAN_BE_VIEWED + 10).toInt())
             testRepo(openRepo(repo)).put("big.txt", bigContent).commit("큰 파일 커밋")
@@ -488,7 +488,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("getRawFile()") {
         it("HEAD 리비전의 파일 raw 바이트를 정확히 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o18", "p18", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o18", "p18", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "raw content here").commit("커밋")
 
@@ -499,7 +499,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("과거 커밋을 지정하면 그 시점의 파일 내용을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o19", "p19", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o19", "p19", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             val commit1 = builder.put("a.txt", "old content").commit("v1")
@@ -512,7 +512,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 리비전을 조회하면 FileNotFoundException을 던진다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o20", "p20", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o20", "p20", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -526,7 +526,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 파일 경로를 조회하면 FileNotFoundException을 던진다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o21", "p21", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o21", "p21", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -542,7 +542,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("getPatch()") {
         it("commitId 하나로 호출하면 부모 커밋과의 diff를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o22", "p22", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o22", "p22", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("a.txt", "line1\nline2\n").commit("첫 커밋")
@@ -556,7 +556,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("부모가 없는 최초 커밋을 조회하면 빈 트리와의 diff(전체 추가)를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o23", "p23", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o23", "p23", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "hello\n").commit("최초 커밋")
 
@@ -567,7 +567,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 commitId는 빈 문자열을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o24", "p24", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o24", "p24", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -576,7 +576,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("두 리비전을 지정하면 그 사이의 diff를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o25", "p25", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o25", "p25", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             val commit1 = builder.put("a.txt", "original\n").commit("v1")
@@ -590,7 +590,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("revA가 존재하지 않으면 빈 문자열을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o26", "p26", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o26", "p26", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -599,7 +599,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("revB가 존재하지 않으면 빈 문자열을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o27", "p27", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o27", "p27", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -610,7 +610,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("getDiff() - commitId 단일/두 리비전/크로스 리포지토리") {
         it("commitId 하나로 호출하면 부모와의 FileDiff 목록을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o28", "p28", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o28", "p28", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("a.txt", "line1\n").commit("첫 커밋")
@@ -626,7 +626,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("부모가 없는 최초 커밋을 조회하면 전체가 ADD로 표시된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o29", "p29", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o29", "p29", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "hello\n").commit("최초 커밋")
 
@@ -638,7 +638,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 commitId는 빈 리스트를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o30", "p30", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o30", "p30", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -647,7 +647,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("두 리비전을 지정하면 그 사이의 FileDiff 목록을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o31", "p31", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o31", "p31", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             val commit1 = builder.put("a.txt", "v1\n").commit("v1")
@@ -660,7 +660,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("revA가 존재하지 않으면 빈 트리와의 diff(ADD)로 처리된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o32", "p32", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o32", "p32", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "content\n").commit("커밋")
 
@@ -672,7 +672,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("revB가 존재하지 않으면 빈 트리와의 diff(DELETE)로 처리된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o33", "p33", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o33", "p33", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "content\n").commit("커밋")
 
@@ -684,12 +684,12 @@ class GitRepositorySpec : DescribeSpec({
 
         it("서로 다른 두 GitRepository(fork) 사이의 diff를 계산할 수 있다") {
             val baseDirA = newTempBaseDir()
-            val repoA = GitRepository("o34a", "pA", baseDirA, userResolver)
+            val repoA = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o34a", "pA", baseDirA, userResolver)
             repoA.create()
             val commitA = testRepo(openRepo(repoA)).put("a.txt", "from A\n").commit("A의 커밋")
 
             val baseDirB = newTempBaseDir()
-            val repoB = GitRepository("o34b", "pB", baseDirB, userResolver)
+            val repoB = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o34b", "pB", baseDirB, userResolver)
             repoB.create()
             val commitB = testRepo(openRepo(repoB)).put("a.txt", "from B\n").commit("B의 커밋")
 
@@ -705,7 +705,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("getFileDiffs() - 파일별 diff 상세(getDiff를 통해 검증)") {
         it("새 파일 추가(ADD)는 pathB/사이즈/텍스트 내용이 채워진다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o35", "p35", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o35", "p35", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("new.txt", "added content\n").commit("추가")
 
@@ -721,7 +721,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("파일 수정(MODIFY)은 editList와 hunks가 계산된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o36", "p36", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o36", "p36", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("a.txt", (0..9).joinToString("\n") { "line$it" } + "\n").commit("v1")
@@ -741,7 +741,7 @@ class GitRepositorySpec : DescribeSpec({
             // treeA(이전 트리)는 존재하지만 이 특정 파일의 changeType은 ADD(그 목록에 없음)인 조합을
             // 검증한다 - 최초 커밋(treeA == null)에서의 ADD와는 다른 경로다.
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o36b", "p36b", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o36b", "p36b", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("existing.txt", "v1\n").commit("v1")
@@ -757,7 +757,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("파일 삭제(DELETE)는 pathA만 채워지고 pathB는 null이다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o37", "p37", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o37", "p37", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("a.txt", "content\n").commit("추가")
@@ -774,7 +774,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("내용이 거의 동일한 파일을 옮기면(60% 이상 유사) RENAME으로 감지된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o38", "p38", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o38", "p38", baseDir, userResolver)
             repo.create()
             val content = (0..9).joinToString("\n") { "line$it" } + "\n"
             val builder = testRepo(openRepo(repo))
@@ -792,7 +792,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("동일한 삭제 원본을 두 개의 새 파일이 공유하면 하나는 RENAME, 나머지는 COPY로 감지될 수 있다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o39", "p39", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o39", "p39", baseDir, userResolver)
             repo.create()
             val content = "identical shared content\n"
             val builder = testRepo(openRepo(repo))
@@ -813,7 +813,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("바이너리 파일 추가는 isBinaryB=true이고 b는 null이다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o40", "p40", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o40", "p40", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).putBytes("bin.dat", byteArrayOf(1, 2, 0, 3)).commit("바이너리 추가")
 
@@ -826,7 +826,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("바이너리 파일 수정은 isBinaryA/isBinaryB 모두 true이고 hunks 계산을 건너뛴다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o41", "p41", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o41", "p41", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.putBytes("bin.dat", byteArrayOf(1, 2, 0, 3)).commit("바이너리 추가")
@@ -845,7 +845,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("바이너리 파일 삭제는 isBinaryA=true이고 a는 null이다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o42", "p42", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o42", "p42", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.putBytes("bin.dat", byteArrayOf(1, 2, 0, 3)).commit("바이너리 추가")
@@ -860,7 +860,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("누적 변경 라인 수가 diffLineLimit(20000)을 초과하면 이후 파일에 OTHERS_SIZE_EXCEEDED가 기록된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o43", "p43", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o43", "p43", baseDir, userResolver)
             repo.create()
             val hugeContent = (1..20001).joinToString("\n") { "l" } + "\n"
             val commit1 = testRepo(openRepo(repo))
@@ -877,7 +877,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("누적 diff 문자 수가 diffSizeLimit(1,000,000)을 초과하면 이후 파일에 OTHERS_SIZE_EXCEEDED가 기록된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o44", "p44", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o44", "p44", baseDir, userResolver)
             repo.create()
             val hugeLine = "x".repeat(1_000_001)
             val commit1 = testRepo(openRepo(repo))
@@ -893,7 +893,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("변경 파일 수가 diffFileLimit(1000)을 초과하면 그 이후는 결과에서 잘린다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o45", "p45", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o45", "p45", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             for (i in 0 until 1002) {
@@ -909,7 +909,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("LargeObjectException 발생 시(old 내용이 스트리밍 임계값을 초과) A_SIZE_EXCEEDED가 기록된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o46", "p46", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o46", "p46", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("big.txt", "b".repeat(500)).commit("큰 내용으로 추가")
@@ -934,7 +934,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("LargeObjectException 발생 시(new 내용이 스트리밍 임계값을 초과) B_SIZE_EXCEEDED가 기록된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o47", "p47", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o47", "p47", baseDir, userResolver)
             repo.create()
 
             try {
@@ -958,7 +958,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("getHistory()") {
         it("여러 커밋을 만들면 최신순으로 정확한 메시지/작성자를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o48", "p48", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o48", "p48", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("a.txt", "v1").commit("첫 번째 커밋", author = "alice")
@@ -975,7 +975,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("pageNum/pageSize로 페이지네이션할 수 있다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o49", "p49", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o49", "p49", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             repeat(5) { i -> builder.put("a.txt", "v$i").commit("커밋$i") }
@@ -990,7 +990,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("path를 지정하면 그 경로를 건드린 커밋만 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o50", "p50", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o50", "p50", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("a.txt", "v1").commit("a 파일 커밋")
@@ -1004,7 +1004,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("path가 빈 문자열이면 필터링하지 않는다(전체 히스토리)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o51", "p51", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o51", "p51", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("a.txt", "v1").commit("a 커밋")
@@ -1015,7 +1015,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("untilRev를 지정하면 그 커밋부터 거슬러 올라간 히스토리를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o52", "p52", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o52", "p52", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             val commit1 = builder.put("a.txt", "v1").commit("첫 커밋")
@@ -1029,7 +1029,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("untilRev가 존재하지 않는 리비전이어도 예외 없이 HEAD 기준 히스토리로 처리된다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o53", "p53", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o53", "p53", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("커밋")
 
@@ -1043,7 +1043,7 @@ class GitRepositorySpec : DescribeSpec({
         // 실제 서버(코드 브라우저 커밋 히스토리 화면)에서 500으로 재현된 실사용 버그.
         it("untilRev로 annotated 태그 이름을 지정해도 500 없이 그 커밋부터 거슬러 올라간 히스토리를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o54", "p54", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o54", "p54", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "v1").commit("첫 커밋")
             testRepo(openRepo(repo)).put("a.txt", "v2").commit("두번째 커밋")
@@ -1057,7 +1057,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("untilRev로 lightweight 태그 이름을 지정해도 그 커밋부터 거슬러 올라간 히스토리를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o55", "p55", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o55", "p55", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "v1").commit("첫 커밋")
             testRepo(openRepo(repo)).put("a.txt", "v2").commit("두번째 커밋")
@@ -1073,7 +1073,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("getCommit()") {
         it("존재하는 커밋을 조회할 수 있다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o54", "p54", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o54", "p54", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "v1").commit("커밋 메시지")
 
@@ -1086,7 +1086,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 리비전은 null을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o55", "p55", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o55", "p55", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("커밋")
 
@@ -1096,7 +1096,7 @@ class GitRepositorySpec : DescribeSpec({
 
     describe("getRefNames()") {
         it("커밋이 없는 저장소는 빈 목록을 반환한다") {
-            val repo = GitRepository("o56", "p56", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o56", "p56", newTempBaseDir(), userResolver)
             repo.create()
 
             repo.getRefNames() shouldBe emptyList()
@@ -1104,7 +1104,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("여러 브랜치가 있으면 refs/heads/* 이름 목록을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o57", "p57", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o57", "p57", baseDir, userResolver)
             repo.create()
             val jgitRepo = openRepo(repo)
             val master = testRepo(jgitRepo)
@@ -1123,7 +1123,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("isFile()") {
         it("파일 경로는 true를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o58", "p58", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o58", "p58", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("dir/a.txt", "content").commit("커밋")
 
@@ -1132,7 +1132,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("디렉토리 경로는 false를 반환한다(isSubtree)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o59", "p59", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o59", "p59", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("dir/a.txt", "content").commit("커밋")
 
@@ -1141,7 +1141,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 리비전 문자열을 받는 오버로드는 false를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o60", "p60", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o60", "p60", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -1150,7 +1150,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 경로는 false를 반환한다(treeWalk null)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o61", "p61", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o61", "p61", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -1161,7 +1161,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("renameTo() / move()") {
         it("move()는 저장소 디렉토리를 새 owner/name 위치로 옮긴다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o62", "old-name", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o62", "old-name", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -1169,40 +1169,40 @@ class GitRepositorySpec : DescribeSpec({
 
             moved shouldBe true
             repo.getDirectory().exists() shouldBe false
-            val movedRepo = GitRepository("o62", "new-name", baseDir, userResolver)
+            val movedRepo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o62", "new-name", baseDir, userResolver)
             movedRepo.getDirectory().exists() shouldBe true
             movedRepo.isEmpty() shouldBe false
         }
 
         it("목적지 owner 디렉토리가 아직 없으면 move()가 mkdirs()로 새로 만든다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o62b", "old-name", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o62b", "old-name", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
             val moved = repo.move("o62b", "old-name", "brand-new-owner", "new-name")
 
             moved shouldBe true
-            val movedRepo = GitRepository("brand-new-owner", "new-name", baseDir, userResolver)
+            val movedRepo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "brand-new-owner", "new-name", baseDir, userResolver)
             movedRepo.getDirectory().exists() shouldBe true
         }
 
         it("renameTo()는 move()에 위임해 같은 owner 아래에서 이름만 바꾼다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o63", "before-rename", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o63", "before-rename", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
             val renamed = repo.renameTo("after-rename")
 
             renamed shouldBe true
-            val renamedRepo = GitRepository("o63", "after-rename", baseDir, userResolver)
+            val renamedRepo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o63", "after-rename", baseDir, userResolver)
             renamedRepo.getDirectory().exists() shouldBe true
         }
 
         it("src가 존재하지 않으면 아무 것도 하지 않고 true를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o64", "no-such-src", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o64", "no-such-src", baseDir, userResolver)
 
             val moved = repo.move("o64", "no-such-src", "o64", "dest")
 
@@ -1211,7 +1211,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("목적지 경로에 IO 오류가 발생하면 false를 반환한다(부모 경로가 파일로 막혀있는 경우)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o65", "src-proj", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o65", "src-proj", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -1229,7 +1229,7 @@ class GitRepositorySpec : DescribeSpec({
 
     describe("getDefaultBranch() / setDefaultBranch()") {
         it("갓 생성된 저장소는 기본적으로 이 환경의 git init.defaultBranch 설정을 따르는 브랜치를 가리킨다") {
-            val repo = GitRepository("o66", "p66", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o66", "p66", newTempBaseDir(), userResolver)
             repo.create()
 
             repo.getDefaultBranch() shouldBe defaultBranchRef
@@ -1237,7 +1237,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("HEAD 파일이 없으면(비정상 상태) 하드코딩된 fallback인 refs/heads/master를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o67", "p67", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o67", "p67", baseDir, userResolver)
             repo.create()
             File(repo.getDirectory(), "HEAD").delete()
 
@@ -1246,7 +1246,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("setDefaultBranch()에 refs/ 접두사 없는 이름을 주면 refs/heads/<name>으로 변환해 HEAD를 옮긴다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o68", "p68", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o68", "p68", baseDir, userResolver)
             repo.create()
             val jgitRepo = openRepo(repo)
             val master = testRepo(jgitRepo)
@@ -1262,7 +1262,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("setDefaultBranch()에 refs/로 시작하는 전체 경로를 주면 그대로 사용한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o69", "p69", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o69", "p69", baseDir, userResolver)
             repo.create()
             val jgitRepo = openRepo(repo)
             val master = testRepo(jgitRepo)
@@ -1279,7 +1279,7 @@ class GitRepositorySpec : DescribeSpec({
 
     describe("getBranches()") {
         it("커밋이 없으면 빈 목록을 반환한다") {
-            val repo = GitRepository("o70", "p70", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o70", "p70", newTempBaseDir(), userResolver)
             repo.create()
 
             repo.getBranches() shouldBe emptyList()
@@ -1287,7 +1287,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("여러 브랜치가 있으면 각 브랜치의 최신 커밋/작성자 정보를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o71", "p71", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o71", "p71", baseDir, userResolver)
             repo.create()
             val jgitRepo = openRepo(repo)
             val master = testRepo(jgitRepo)
@@ -1308,7 +1308,7 @@ class GitRepositorySpec : DescribeSpec({
 
     describe("getHeadBranch()") {
         it("커밋이 하나도 없는 저장소는 null을 반환한다(unborn HEAD, targetRef objectId 없음)") {
-            val repo = GitRepository("o72", "p72", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o72", "p72", newTempBaseDir(), userResolver)
             repo.create()
 
             repo.getHeadBranch() shouldBe null
@@ -1316,7 +1316,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("HEAD 파일 자체가 없으면 null을 반환한다(headRef null)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o73", "p73", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o73", "p73", baseDir, userResolver)
             repo.create()
             File(repo.getDirectory(), "HEAD").delete()
 
@@ -1325,7 +1325,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("정상적인 심볼릭 HEAD는 해당 브랜치 정보를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o74", "p74", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o74", "p74", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("커밋", author = "carol")
 
@@ -1338,7 +1338,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("detached HEAD(커밋을 직접 가리킴)는 심볼릭이 아닌 ref 자체 정보를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o75", "p75", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o75", "p75", baseDir, userResolver)
             repo.create()
             val jgitRepo = openRepo(repo)
             val commit1 = testRepo(jgitRepo).put("a.txt", "v1").commit("커밋")
@@ -1357,7 +1357,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("deleteBranch() / createBranch()") {
         it("createBranch()로 새 브랜치를 만들면 getBranches()에 나타난다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o76", "p76", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o76", "p76", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
 
@@ -1368,7 +1368,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("createBranch()는 refs/heads/ 접두사를 제거하고 브랜치 이름을 사용한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o77", "p77", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o77", "p77", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
 
@@ -1379,7 +1379,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("deleteBranch()로 브랜치를 삭제하면 getBranches()에서 사라진다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o78", "p78", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o78", "p78", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
             repo.createBranch("to-delete", defaultBranchRef)
@@ -1393,7 +1393,7 @@ class GitRepositorySpec : DescribeSpec({
     // yona-wiki P3-10 — getBranches()/deleteBranch()/createBranch()와 동일한 패턴의 git 태그 지원.
     describe("getTagNames() / getTags() / deleteTag() / createTag()") {
         it("태그가 없으면 getTagNames()/getTags() 모두 빈 목록을 반환한다") {
-            val repo = GitRepository("o90", "p90", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o90", "p90", newTempBaseDir(), userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
 
@@ -1403,7 +1403,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("createTag()에 message를 주지 않으면 lightweight 태그가 만들어지고 getTagNames()에 refs/tags/* 이름으로 나타난다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o91", "p91", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o91", "p91", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
 
@@ -1414,7 +1414,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("createTag()는 refs/tags/ 접두사를 제거하고 태그 이름을 사용한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o92", "p92", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o92", "p92", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
 
@@ -1425,7 +1425,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("lightweight 태그는 getTags()에서 annotated=false, tagger는 커밋 작성자로 채워지고 message는 null이다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o93", "p93", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o93", "p93", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋", author = "alice")
 
@@ -1443,7 +1443,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("createTag()에 message를 주면 annotated 태그가 만들어지고 getTags()에서 태거/메시지가 채워진다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o94", "p94", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o94", "p94", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋", author = "alice")
 
@@ -1466,7 +1466,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("createTag()에 taggerName/taggerEmail을 주지 않으면 기본 identity(\"yona\"/\"yona@yona.io\")로 annotated 태그를 만든다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o95", "p95", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o95", "p95", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
 
@@ -1482,7 +1482,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 시작점으로 createTag()를 호출하면 IllegalArgumentException을 던진다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o96", "p96", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o96", "p96", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
 
@@ -1493,7 +1493,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("deleteTag()로 태그를 삭제하면 getTagNames()/getTags()에서 사라진다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o97", "p97", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o97", "p97", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
             repo.createTag("to-delete", defaultBranchRef, message = null, taggerName = null, taggerEmail = null)
@@ -1506,7 +1506,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("deleteTag()는 refs/tags/ 접두사를 제거하고 태그 이름을 사용한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o98", "p98", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o98", "p98", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
             repo.createTag("to-delete-2", defaultBranchRef, message = null, taggerName = null, taggerEmail = null)
@@ -1518,7 +1518,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("브랜치와 태그가 둘 다 있어도 getTagNames()는 태그만, getRefNames()는 브랜치만 반환한다(네임스페이스 분리)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o99", "p99", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o99", "p99", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("master 커밋")
             repo.createBranch("feature-z", defaultBranchRef)
@@ -1540,7 +1540,7 @@ class GitRepositorySpec : DescribeSpec({
             // getId()는 파싱 없이도 ObjectId만으로 얻어지므로 예외 없이 동작한다 - 여기서는 버그를
             // 우회하기 위해서가 아니라 실제로 안전하게 동작하는 부분만 검증한다.
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o79", "p79", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o79", "p79", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             val commit1 = builder.put("a.txt", "v1").commit("부모 커밋")
@@ -1554,7 +1554,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("[버그 재현] getParentCommitOf()가 반환한 부모 Commit의 getMessage()는 NPE를 던진다(RevCommit 부모 body 미파싱)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o79b", "p79b", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o79b", "p79b", baseDir, userResolver)
             repo.create()
             val builder = testRepo(openRepo(repo))
             builder.put("a.txt", "v1").commit("부모 커밋")
@@ -1572,7 +1572,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("부모가 없는 최초 커밋은 null을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o80", "p80", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o80", "p80", baseDir, userResolver)
             repo.create()
             val commit1 = testRepo(openRepo(repo)).put("a.txt", "v1").commit("최초 커밋")
 
@@ -1581,7 +1581,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 commitId는 null을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o81", "p81", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o81", "p81", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("커밋")
 
@@ -1591,7 +1591,7 @@ class GitRepositorySpec : DescribeSpec({
 
     describe("isEmpty()") {
         it("HEAD를 resolve할 수 없으면(커밋 없음) true다") {
-            val repo = GitRepository("o82", "p82", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o82", "p82", newTempBaseDir(), userResolver)
             repo.create()
 
             repo.isEmpty() shouldBe true
@@ -1599,7 +1599,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("HEAD를 resolve할 수 있으면(커밋 있음) false다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o83", "p83", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o83", "p83", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "v1").commit("커밋")
 
@@ -1610,7 +1610,7 @@ class GitRepositorySpec : DescribeSpec({
     describe("getArchive()") {
         it("존재하지 않는 브랜치명을 지정하면 아무 것도 쓰지 않는다(출력 스트림이 비어있음)") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o84", "p84", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o84", "p84", baseDir, userResolver)
             repo.create()
 
             val out = ByteArrayOutputStream()
@@ -1621,7 +1621,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("일반 파일/중첩 디렉토리/실행 파일을 포함해 zip으로 묶고, 심볼릭 링크는 제외한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o85", "p85", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o85", "p85", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo))
                 .put("readme.txt", "root readme")
@@ -1652,14 +1652,14 @@ class GitRepositorySpec : DescribeSpec({
 
     describe("getBlobId()") {
         it("revision이 빈 문자열이면 저장소를 열지 않고 바로 null을 반환한다") {
-            val repo = GitRepository("o86", "no-such-repo-at-all", newTempBaseDir(), userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o86", "no-such-repo-at-all", newTempBaseDir(), userResolver)
 
             repo.getBlobId("", "a.txt") shouldBe null
         }
 
         it("존재하지 않는 revision은 null을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o87", "p87", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o87", "p87", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -1668,7 +1668,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하지 않는 경로는 null을 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o88", "p88", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o88", "p88", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 
@@ -1677,7 +1677,7 @@ class GitRepositorySpec : DescribeSpec({
 
         it("존재하는 revision/경로는 blob sha를 반환한다") {
             val baseDir = newTempBaseDir()
-            val repo = GitRepository("o89", "p89", baseDir, userResolver)
+            val repo = GitRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), "o89", "p89", baseDir, userResolver)
             repo.create()
             testRepo(openRepo(repo)).put("a.txt", "content").commit("커밋")
 

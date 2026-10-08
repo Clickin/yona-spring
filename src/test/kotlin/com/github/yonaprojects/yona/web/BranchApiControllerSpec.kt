@@ -10,6 +10,9 @@ import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.PlayRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import com.github.yonaprojects.yona.domain.user.UserState
 import io.kotest.core.spec.style.DescribeSpec
 import io.mockk.every
 import io.mockk.mockk
@@ -63,18 +66,34 @@ class BranchApiControllerSpec : DescribeSpec({
         projectUserRepository,
         userRepository,
         repositoryService,
-        accessControl
+        accessControl,
+        RepositoryWriteGuard(projectRepository)
     )
     val mockMvc = MockMvcBuilders.standaloneSetup(branchApiController).build()
 
     beforeTest {
         clearMocks(projectRepository, projectUserRepository, userRepository, repositoryService, playRepository)
+        every { projectRepository.findRepositoryModeById(any()) } returns RepositoryMode.HOSTED
     }
 
     describe("BranchApiController 웹 API 테스트") {
         val project = Project(id = 1L, name = "TestProject", owner = "owner", vcs = "git", projectScope = ProjectScope.PUBLIC)
         val user = User(id = 10L, loginId = "testuser", name = "테스트유저")
         val userAuth = UsernamePasswordAuthenticationToken("testuser", "password")
+
+        it("rejects default-branch changes and deletion on persisted MIRROR even for a site administrator") {
+            val admin = User(id = 10L, loginId = "testuser", name = "Admin", state = UserState.SITE_ADMIN)
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProject") } returns Optional.of(project)
+            every { projectRepository.findRepositoryModeById(1L) } returns RepositoryMode.MIRROR
+            every { userRepository.findByLoginId("testuser") } returns Optional.of(admin)
+            every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
+
+            mockMvc.perform(post("/owner/TestProject/code/feature-a/setAsDefault").principal(userAuth))
+                .andExpect(view().name("error/forbidden"))
+            mockMvc.perform(delete("/owner/TestProject/code/feature-a").principal(userAuth))
+                .andExpect(view().name("error/forbidden"))
+            verify(exactly = 0) { repositoryService.getRepository(any()) }
+        }
 
         describe("POST /{owner}/{projectName}/code/{branch}/setAsDefault") {
             it("성공 시 302 리다이렉트와 setDefaultBranch 메소드가 정상 호출되어야 한다") {

@@ -20,6 +20,7 @@ import com.github.yonaprojects.yona.domain.mention.MentionService
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.support.HistoryUtil
 import com.github.yonaprojects.yona.domain.vcs.BareCommit
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import jakarta.persistence.EntityManager
 import org.springframework.beans.factory.annotation.Value
 
@@ -46,7 +47,8 @@ class PostingServiceImpl(
     private val gitBaseDir: String,
     // IssueServiceImpl.nextIssueNumber()와 동일한 이유(JPQL 벌크 UPDATE가 1차 캐시를 갱신하지 않음)로
     // 채번 직후 project 엔티티를 새로고침하는 데 쓴다.
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val writeGuard: RepositoryWriteGuard
 ) : PostingService {
 
     // yona NotificationEvent.afterNewPost/afterResourceDeleted 대응.
@@ -106,6 +108,7 @@ class PostingServiceImpl(
             .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
         val author = userRepository.findById(authorId)
             .orElseThrow { IllegalArgumentException("사용자를 찾을 수 없습니다.") }
+        if (posting.readme) writeGuard.requireWritable(project)
 
         posting.project = project
         if (explicitNumber != null && explicitNumber > 0) {
@@ -160,6 +163,7 @@ class PostingServiceImpl(
     ): Posting {
         val posting = getPosting(projectId, number)
             ?: throw IllegalArgumentException("포스팅을 찾을 수 없습니다.")
+        if (readme) writeGuard.requireWritable(posting.project)
 
         val originalBody = posting.body
         val originalTitle = posting.title
@@ -202,7 +206,7 @@ class PostingServiceImpl(
         // 값이 true면 README.md를 실제로 커밋하고, 같은 프로젝트의 다른 readme 글은 해제한다.
         if (readme && updater != null) {
             try {
-                val bare = BareCommit(saved.project, updater, gitBaseDir)
+                val bare = BareCommit(saved.project, updater, gitBaseDir, writeGuard)
                 // 테스트 커버리지 도달 불가(COVERAGE_BACKLOG.md [i] 참고): updatePosting()의 title/body
                 // 파라미터가 non-null String이고 바로 위에서 posting.title/body에 대입하므로 saved.title/
                 // saved.body는 이 경로에서 결코 null일 수 없다.

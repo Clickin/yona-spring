@@ -79,7 +79,14 @@ class Project(
         joinColumns = [JoinColumn(name = "project_id")],
         inverseJoinColumns = [JoinColumn(name = "label_id")]
     )
-    var labels: MutableSet<Label> = mutableSetOf()
+    var labels: MutableSet<Label> = mutableSetOf(),
+
+    @get:JsonIgnore
+    @Enumerated(EnumType.STRING)
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.VARCHAR)
+    @Column(name = "repository_mode", nullable = false, updatable = false, length = 16)
+    @org.hibernate.annotations.ColumnDefault("'HOSTED'")
+    var repositoryMode: RepositoryMode = RepositoryMode.HOSTED
 ) {
     val isPrivate: Boolean
         get() = projectScope == ProjectScope.PRIVATE

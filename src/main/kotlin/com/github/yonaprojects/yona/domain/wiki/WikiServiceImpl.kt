@@ -6,6 +6,8 @@ import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.BareCommit
 import com.github.yonaprojects.yona.domain.vcs.Commit
 import com.github.yonaprojects.yona.domain.vcs.GitRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryKind
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import org.eclipse.jgit.lib.Constants
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -18,7 +20,8 @@ class WikiServiceImpl(
     @Value("\${yona.git.base-dir:/tmp/yona/git}")
     private val gitBaseDir: String,
     @Value("\${yona.git.default-branch:main}")
-    private val gitDefaultBranch: String
+    private val gitDefaultBranch: String,
+    private val writeGuard: RepositoryWriteGuard
 ) : WikiService {
 
     companion object {
@@ -35,6 +38,8 @@ class WikiServiceImpl(
 
     private fun wikiGitRepository(project: Project): GitRepository {
         return GitRepository(
+            writeGuard = writeGuard,
+            repositoryKind = RepositoryKind.WIKI,
             ownerName = project.owner ?: "",
             projectName = wikiRepoName(project),
             baseDir = gitBaseDir,
@@ -46,7 +51,7 @@ class WikiServiceImpl(
     }
 
     private fun bareCommit(project: Project, user: User): BareCommit {
-        val bare = BareCommit(project, user, gitBaseDir, repoNameOverride = wikiRepoName(project))
+        val bare = BareCommit(project, user, gitBaseDir, writeGuard, repoNameOverride = wikiRepoName(project))
         bare.setRefName(Constants.R_HEADS + gitDefaultBranch)
         return bare
     }

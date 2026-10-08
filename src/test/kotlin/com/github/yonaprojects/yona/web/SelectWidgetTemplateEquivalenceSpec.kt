@@ -109,7 +109,7 @@ class SelectWidgetTemplateEquivalenceSpec @Autowired constructor(
                 val gitDir = File(File(gitBaseDir), "${project.owner}/${project.name}.git")
                 if (!gitDir.exists()) {
                     repositoryService.getRepository(project).create()
-                    val bareCommit = BareCommit(project, owner, gitBaseDir)
+                    val bareCommit = BareCommit(project, owner, gitBaseDir, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true))
                     bareCommit.commitTextFile("README.md", "# selwidget-proj", "initial commit")
                 }
             }

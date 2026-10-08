@@ -13,6 +13,7 @@ import com.github.yonaprojects.yona.domain.role.Role
 import com.github.yonaprojects.yona.domain.role.RoleType
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.*
@@ -60,7 +61,9 @@ class SvnAuthorizationFilterSpec : DescribeSpec({
     // 리팩터링됨(GitAuthorizationFilter/SshAuthServiceImpl과 공유). 이 스펙이 검증하는 판정
     // 결과 자체는 동일하다.
     val repoAccessPolicy = RepoAccessPolicy(projectService, userRepository, accessControl)
-    val filter = SvnAuthorizationFilter(repoAccessPolicy)
+    val writeGuard = mockk<RepositoryWriteGuard>()
+    every { writeGuard.isWritable(any(), any()) } returns true
+    val filter = SvnAuthorizationFilter(repoAccessPolicy, writeGuard)
     val filterChain = mockk<FilterChain>(relaxed = true)
 
     beforeTest {

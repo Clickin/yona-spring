@@ -6,6 +6,7 @@ import com.github.yonaprojects.yona.domain.project.*
 import com.github.yonaprojects.yona.domain.role.RoleType
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
 import org.eclipse.jgit.api.errors.InvalidRemoteException
@@ -36,7 +37,8 @@ class ImportViewController(
     private val organizationUserRepository: OrganizationUserRepository,
     private val organizationRepository: OrganizationRepository,
     private val gitService: GitService,
-    private val messageSource: MessageSource
+    private val messageSource: MessageSource,
+    private val writeGuard: RepositoryWriteGuard = RepositoryWriteGuard(projectRepository)
 ) {
 
     private fun getLoginUser(authentication: Authentication?): User? {
@@ -94,6 +96,7 @@ class ImportViewController(
 
         val targetOwner = form.owner.trim()
         val targetName = form.name.trim()
+        writeGuard.requireDestinationWritable(targetOwner, targetName)
 
         var clonedDir: File? = null
         try {
@@ -143,6 +146,7 @@ class ImportViewController(
         }
 
         // 복제 실패 시 생성 중인 디렉터리 삭제
+        writeGuard.requireDestinationWritable(targetOwner, targetName)
         clonedDir?.let {
             if (it.exists()) {
                 it.deleteRecursively()

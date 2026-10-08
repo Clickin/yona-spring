@@ -46,6 +46,22 @@ class RejectPushToReservedRefsPreReceiveHook : PreReceiveHook {
     }
 }
 
+/** Recheck persisted mode immediately before refs change, independently of branch/admin policy. */
+class RepositoryWritePreReceiveHook(
+    private val project: Project,
+    private val repositoryWriteGuard: RepositoryWriteGuard,
+    private val kind: RepositoryKind = RepositoryKind.CODE
+) : PreReceiveHook {
+    override fun onPreReceive(rp: ReceivePack, commands: Collection<ReceiveCommand>) {
+        if (repositoryWriteGuard.isWritable(project, kind)) return
+        for (command in commands) {
+            if (command.result == ReceiveCommand.Result.NOT_ATTEMPTED) {
+                command.setResult(ReceiveCommand.Result.REJECTED_OTHER_REASON, "Mirror repository is read-only")
+            }
+        }
+    }
+}
+
 /**
  * 브랜치 보호(branch protection) — legacy에는 대응 로직이 전혀 없는 신규 인프라. `ProtectedBranch`
  * (`domain/branchprotection/`)의 branch_pattern이 매칭되는 규칙을 찾아 직접 push를 정책대로

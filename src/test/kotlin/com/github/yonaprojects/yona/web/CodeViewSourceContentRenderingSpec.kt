@@ -60,7 +60,7 @@ class CodeViewSourceContentRenderingSpec @Autowired constructor(
                 val javaContent = "public class Sample {\n    // $marker\n    void run() {}\n}\n"
                 if (!File(gitDir, "HEAD").exists()) {
                     repositoryService.getRepository(project).create()
-                    BareCommit(project, owner, gitBaseDir).commitTextFile("Sample.java", javaContent, "add Sample.java")
+                    BareCommit(project, owner, gitBaseDir, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("Sample.java", javaContent, "add Sample.java")
                 }
 
                 val body = mockMvc.perform(get("/${project.owner}/${project.name}/code/main/Sample.java"))

@@ -6,6 +6,8 @@ import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.sshkey.SshCommandAuthorization
 import com.github.yonaprojects.yona.domain.vcs.BranchProtectionPreReceiveHook
 import com.github.yonaprojects.yona.domain.vcs.RejectPushToReservedRefsPreReceiveHook
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWritePreReceiveHook
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 import org.eclipse.jgit.transport.PreReceiveHook
 import org.eclipse.jgit.transport.PreReceiveHookChain
@@ -33,7 +35,8 @@ class UnsupportedGitServiceException(service: String?) : Exception("지원하지
 class GitSshProtocolHandler(
     private val protectedBranchRepository: ProtectedBranchRepository,
     private val projectUserRepository: ProjectUserRepository,
-    private val gpgSignatureVerifier: GpgSignatureVerifier
+    private val gpgSignatureVerifier: GpgSignatureVerifier,
+    private val repositoryWriteGuard: RepositoryWriteGuard
 ) {
     /** authorization.allowed/repoDir/service는 호출부가 이미 검증했다고 가정한다(denied 케이스는
      * 호출부에서 처리) — 이 메서드는 오직 "허용된 요청을 실제로 처리"하는 데만 집중한다. */
@@ -53,6 +56,7 @@ class GitSshProtocolHandler(
                     // 의미).
                     val preReceiveHooks = mutableListOf<PreReceiveHook>(RejectPushToReservedRefsPreReceiveHook())
                     if (authorization.project != null) {
+                        preReceiveHooks.add(RepositoryWritePreReceiveHook(authorization.project, repositoryWriteGuard))
                         preReceiveHooks.add(
                             BranchProtectionPreReceiveHook(
                                 authorization.project, authorization.pusher, protectedBranchRepository,

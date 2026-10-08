@@ -9,6 +9,7 @@ import com.github.yonaprojects.yona.domain.sshkey.SshCommandAuthorization
 import com.github.yonaprojects.yona.domain.vcs.HgBranchProtectionPrePushkeyHook
 import com.github.yonaprojects.yona.domain.vcs.HgYonaPostPushkeyHook
 import com.github.yonaprojects.yona.domain.vcs.PushedBranchRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import io.github.search5.hg4j.api.HgHook
 import io.github.search5.hg4j.lib.HgRepository
 import io.github.search5.hg4j.transport.HgSshWireServer
@@ -27,7 +28,7 @@ import java.io.OutputStream
  * **멤버십 쓰기 권한**: git의 `git-upload-pack`/`git-receive-pack`처럼 명령줄만 보고 read/write를
  * 미리 구분할 수 없는 게 Hg SSH 와이어 프로토콜의 구조적 특성(한 세션 안에서 pull/push 모두
  * 가능)이라, `authorizeHgCommand()`가 이미 계산해둔 쓰기 권한(멤버십/읽기전용 Deploy Key)은
- * pre-changegroup 훅에서 강제한다.
+ * pre-changegroup 및 모든 namespace의 pre-pushkey 훅에서 강제한다.
  *
  * **브랜치 보호/push 알림**: git의 `BranchProtectionPreReceiveHook`/
  * `YonaPostReceiveHook`(GitPushHooks.kt)에 정확히 대응하는 `HgBranchProtectionPrePushkeyHook`/
@@ -46,22 +47,21 @@ class HgSshProtocolHandler(
     private val pullRequestRepository: PullRequestRepository,
     private val pushedBranchRepository: PushedBranchRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
+    private val repositoryWriteGuard: RepositoryWriteGuard
 ) {
     fun handle(authorization: SshCommandAuthorization, input: InputStream, output: OutputStream) {
+        // Recheck admission too: hg4j 1.0.0 does not run pushkey hooks inside a batch.
+        val admittedProject = authorization.project
+        if (admittedProject == null || !repositoryWriteGuard.isWritable(admittedProject)) {
+            throw IOException("Mercurial mirror SSH access is not supported")
+        }
         val repoDir = requireNotNull(authorization.repoDir) { "authorization.repoDir must not be null when allowed" }
 
         val repository = HgRepository(repoDir)
         try {
             val server = HgSshWireServer(repository)
-            server.registerPreChangegroupHook(
-                HgHook {
-                    if (!authorization.isWrite) {
-                        throw IOException(authorization.reason ?: "이 저장소에 push 권한이 없습니다.")
-                    }
-                    true
-                }
-            )
+            registerWriteGuards(server, authorization)
 
             val project = authorization.project
             if (project != null) {
@@ -89,5 +89,20 @@ class HgSshProtocolHandler(
         } finally {
             repository.close()
         }
+    }
+
+    internal fun registerWriteGuards(server: HgSshWireServer, authorization: SshCommandAuthorization) {
+        val writeGuard = HgHook {
+            if (!authorization.isWrite) {
+                throw IOException(authorization.reason ?: "이 저장소에 push 권한이 없습니다.")
+            }
+            val project = authorization.project
+            if (project == null || !repositoryWriteGuard.isWritable(project)) {
+                throw IOException("Mirror repository is read-only")
+            }
+            true
+        }
+        server.registerPreChangegroupHook(writeGuard)
+        server.registerPrePushkeyHook(writeGuard)
     }
 }

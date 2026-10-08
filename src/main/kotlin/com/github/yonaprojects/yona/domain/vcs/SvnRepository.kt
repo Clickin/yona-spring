@@ -16,11 +16,13 @@ import java.time.Instant
 import java.util.*
 
 class SvnRepository(
+    private val writeGuard: RepositoryWriteGuard,
     private val ownerName: String,
     private val projectName: String,
     private val baseDir: String,
     private val userResolver: (String) -> User?
 ) : PlayRepository {
+    private fun requireWritable() = writeGuard.requireWritable(ownerName, projectName)
 
     private val objectMapper = ObjectMapper()
 
@@ -30,6 +32,7 @@ class SvnRepository(
     }
 
     override fun create() {
+        requireWritable()
         val dir = getDirectory()
         if (!dir.exists()) {
             dir.mkdirs()
@@ -185,6 +188,7 @@ class SvnRepository(
     }
 
     override fun delete() {
+        requireWritable()
         val dir = getDirectory()
         if (dir.exists()) {
             dir.deleteRecursively()
@@ -288,24 +292,24 @@ class SvnRepository(
         return "HEAD"
     }
 
-    override fun setDefaultBranch(target: String) {}
+    override fun setDefaultBranch(target: String) { requireWritable() }
 
     override fun getBranches(): List<GitBranch> = emptyList()
 
     override fun getHeadBranch(): GitBranch? = null
 
-    override fun deleteBranch(branchName: String) {}
+    override fun deleteBranch(branchName: String) { requireWritable() }
 
-    override fun createBranch(branchName: String, startPoint: String) {}
+    override fun createBranch(branchName: String, startPoint: String) { requireWritable() }
 
     // git 태그는 SVN에 대응 개념이 없다(브랜치와 마찬가지로 no-op/빈 목록).
     override fun getTagNames(): List<String> = emptyList()
 
     override fun getTags(): List<GitTag> = emptyList()
 
-    override fun deleteTag(tagName: String) {}
+    override fun deleteTag(tagName: String) { requireWritable() }
 
-    override fun createTag(tagName: String, startPoint: String, message: String?, taggerName: String?, taggerEmail: String?) {}
+    override fun createTag(tagName: String, startPoint: String, message: String?, taggerName: String?, taggerEmail: String?) { requireWritable() }
 
     // PR 코드리뷰(isOutdated)는 Git 전용 기능이라 SVN에서는 지원하지 않는다.
     override fun getBlobId(revision: String, path: String): String? = null
@@ -341,6 +345,9 @@ class SvnRepository(
     }
 
     override fun move(srcProjectOwner: String, srcProjectName: String, destProjectOwner: String, destProjectName: String): Boolean {
+        requireWritable()
+        writeGuard.requireWritable(srcProjectOwner, srcProjectName)
+        writeGuard.requireDestinationWritable(destProjectOwner, destProjectName)
         val rootDir = File(baseDir)
         val src = File(rootDir, "$srcProjectOwner/$srcProjectName")
         val dest = File(rootDir, "$destProjectOwner/$destProjectName")

@@ -22,7 +22,7 @@ class WikiServiceImplSpec : DescribeSpec({
     fun newService(gitBaseDir: String): WikiServiceImpl {
         val userRepository = mockk<UserRepository>()
         every { userRepository.findByEmail(any()) } returns Optional.empty()
-        return WikiServiceImpl(userRepository, gitBaseDir, "main")
+        return WikiServiceImpl(userRepository, gitBaseDir, "main", io.mockk.mockk(relaxed = true))
     }
 
     fun newProject(owner: String = "tester", name: String = "myproj") = Project(id = 1L, owner = owner, name = name)

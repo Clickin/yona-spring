@@ -1980,7 +1980,7 @@ class ProjectViewControllerSpec : DescribeSpec({
             // getReadmeFileName()은 repo.javaClass.simpleName에 "Svn"이 포함되는지로 SVN 여부를
             // 판별하므로, mockk<PlayRepository>() 대신 실제 SvnRepository 인스턴스를 spyk로 감싸
             // isFile/getRawFile만 오버라이드한다(생성자 부수효과는 없어 안전).
-            val svnRepo = spyk(SvnRepository(ownerName = "owner", projectName = "SvnReadmeProj", baseDir = "/tmp/yona-test-svn-base", userResolver = { null }))
+            val svnRepo = spyk(SvnRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), ownerName = "owner", projectName = "SvnReadmeProj", baseDir = "/tmp/yona-test-svn-base", userResolver = { null }))
             every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "SvnReadmeProj") } returns Optional.of(proj)
             every { userRepository.findByLoginId("svnreadmeuser") } returns Optional.of(svnUser)
             every { projectUserRepository.findByProjectId(201L) } returns emptyList()
@@ -2574,7 +2574,7 @@ class ProjectViewControllerSpec : DescribeSpec({
             val proj = Project(id = 1021L, name = "SvnLowerReadmeProj", owner = "owner", projectScope = ProjectScope.PUBLIC, vcs = "SUBVERSION")
             val user2 = User(id = 1021L, loginId = "svnlowerreadmeuser", name = "SVN소문자README유저")
             val auth2 = UsernamePasswordAuthenticationToken("svnlowerreadmeuser", "password")
-            val svnRepo = spyk(SvnRepository(ownerName = "owner", projectName = "SvnLowerReadmeProj", baseDir = "/tmp/yona-test-svn-base2", userResolver = { null }))
+            val svnRepo = spyk(SvnRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), ownerName = "owner", projectName = "SvnLowerReadmeProj", baseDir = "/tmp/yona-test-svn-base2", userResolver = { null }))
             every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "SvnLowerReadmeProj") } returns Optional.of(proj)
             every { userRepository.findByLoginId("svnlowerreadmeuser") } returns Optional.of(user2)
             every { projectUserRepository.findByProjectId(1021L) } returns emptyList()
@@ -3214,7 +3214,7 @@ class ProjectViewControllerSpec : DescribeSpec({
             val proj = Project(id = 2160L, name = "SvnNoReadmeProj", owner = "owner", projectScope = ProjectScope.PUBLIC, vcs = "SUBVERSION")
             val user2 = User(id = 2160L, loginId = "svnnoreadmeuser", name = "SVN README없는유저")
             val auth2 = UsernamePasswordAuthenticationToken("svnnoreadmeuser", "password")
-            val svnRepo = spyk(SvnRepository(ownerName = "owner", projectName = "SvnNoReadmeProj", baseDir = "/tmp/yona-test-svn-base3", userResolver = { null }))
+            val svnRepo = spyk(SvnRepository(io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true), ownerName = "owner", projectName = "SvnNoReadmeProj", baseDir = "/tmp/yona-test-svn-base3", userResolver = { null }))
             every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "SvnNoReadmeProj") } returns Optional.of(proj)
             every { userRepository.findByLoginId("svnnoreadmeuser") } returns Optional.of(user2)
             every { projectUserRepository.findByProjectId(2160L) } returns emptyList()

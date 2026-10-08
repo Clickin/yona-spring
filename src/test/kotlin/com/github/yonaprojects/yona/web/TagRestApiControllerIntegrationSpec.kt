@@ -80,7 +80,7 @@ class TagRestApiControllerIntegrationSpec @Autowired constructor(
             projectUserRepository.save(ProjectUser(user = owner, project = project, role = managerRole))
 
             repositoryService.getRepository(project).create()
-            BareCommit(project, owner, gitBaseDir).commitTextFile("README.md", "# $projName", "초기 커밋")
+            BareCommit(project, owner, gitBaseDir, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# $projName", "초기 커밋")
         }
 
         fun ownerAuth(): org.springframework.test.web.servlet.request.RequestPostProcessor {

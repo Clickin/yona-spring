@@ -59,8 +59,8 @@ class CodeSwallowedStyleRenderingSpec @Autowired constructor(
             // 여부를 판단한다.
             if (!File(gitDir, "HEAD").exists()) {
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDir).commitTextFile("README.md", "# css-proj", "첫 커밋")
-                BareCommit(project, owner, gitBaseDir).commitTextFile("README.md", "# css-proj v2", "두번째 커밋")
+                BareCommit(project, owner, gitBaseDir, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# css-proj", "첫 커밋")
+                BareCommit(project, owner, gitBaseDir, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# css-proj v2", "두번째 커밋")
             }
 
             it("code/history.html: 페이지 전용 .code-browse-wrap 스타일이 실제 응답 본문에 렌더링돼야 한다") {

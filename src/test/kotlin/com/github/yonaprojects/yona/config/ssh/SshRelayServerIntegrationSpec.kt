@@ -276,7 +276,7 @@ if __name__ == "__main__":
                     Project(name = "relay-public-repo", owner = owner.loginId, projectScope = ProjectScope.PUBLIC, vcs = "GIT")
                 )
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# relay", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# relay", "초기 커밋")
 
                 val reader = userRepository.save(User(loginId = "relay-reader", name = "릴레이리더", email = "relay-reader@example.com"))
                 val sshKey = sshKeyService.create(reader, "릴레이 리더 키", randomPublicKeyLine("relay-reader"))
@@ -305,7 +305,7 @@ if __name__ == "__main__":
                 val owner = userRepository.save(User(loginId = "relay-bp-owner", name = "릴레이브랜치보호오너", email = "relay-bp-owner@example.com"))
                 val project = projectRepository.save(Project(name = "relay-bp-repo", owner = owner.loginId, vcs = "GIT"))
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# bp", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# bp", "초기 커밋")
                 protectedBranchRepository.save(
                     ProtectedBranch(project = project, branchPattern = "main", requirePullRequest = true, adminsCanBypass = false)
                 )
@@ -346,7 +346,7 @@ if __name__ == "__main__":
                     Project(name = "relay-private-repo", owner = owner.loginId, projectScope = ProjectScope.PRIVATE, vcs = "GIT")
                 )
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# priv", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# priv", "초기 커밋")
 
                 val outsider = userRepository.save(User(loginId = "relay-outsider", name = "릴레이외부인", email = "relay-outsider@example.com"))
                 val sshKey = sshKeyService.create(outsider, "릴레이 외부인 키", randomPublicKeyLine("relay-outsider"))
@@ -372,7 +372,7 @@ if __name__ == "__main__":
                     Project(name = "relay-guest-repo", owner = owner.loginId, projectScope = ProjectScope.PUBLIC, vcs = "GIT")
                 )
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# guest", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# guest", "초기 커밋")
 
                 val guest = userRepository.save(
                     User(loginId = "relay-guest", name = "릴레이게스트", email = "relay-guest@example.com", isGuest = true)
@@ -398,7 +398,7 @@ if __name__ == "__main__":
                 val owner = userRepository.save(User(loginId = "relay-ro-owner", name = "릴레이읽기전용오너", email = "relay-ro-owner@example.com"))
                 val project = projectRepository.save(Project(name = "relay-ro-repo", owner = owner.loginId, vcs = "GIT"))
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# ro", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# ro", "초기 커밋")
 
                 val issued = deployKeyService.create(project, "릴레이 읽기전용 Deploy Key", randomPublicKeyLine("relay-ro"), readOnly = true)
                 val encoded = sshAuthService.encodePrincipal(SshAuthPrincipal.DeployKeyPrincipal(issued.deployKey))
@@ -587,7 +587,7 @@ if __name__ == "__main__":
                     Project(name = "relay-after-bad-repo", owner = owner.loginId, projectScope = ProjectScope.PUBLIC, vcs = "GIT")
                 )
                 repositoryService.getRepository(project).create()
-                BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "# after-bad", "초기 커밋")
+                BareCommit(project, owner, gitBaseDirHolder.absolutePath, io.mockk.mockk<com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard>(relaxed = true)).commitTextFile("README.md", "# after-bad", "초기 커밋")
 
                 if (!pythonAvailable()) return@it
 

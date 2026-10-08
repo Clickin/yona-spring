@@ -38,7 +38,7 @@ class ProjectForkSelfIntegrationSpec @Autowired constructor(
             userRepository.findByLoginId("self-fork-it-owner").ifPresent { userRepository.delete(it) }
             repositoryService.getRepository(
                 Project(owner = "self-fork-it-owner", name = "self-fork-it-repo", vcs = "GIT")
-            ).delete()
+            ).getDirectory().deleteRecursively()
         }
 
         describe("ProjectServiceImpl.forkProject 자기 자신에게 fork (실제 DB + 실제 파일시스템)") {

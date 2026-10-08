@@ -6,16 +6,20 @@ import com.github.yonaprojects.yona.domain.gpgkey.GpgSignatureVerifier
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
 import com.github.yonaprojects.yona.domain.pullrequest.PullRequestRepository
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.PushedBranchRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.*
 import org.eclipse.jgit.lib.Repository
+import org.eclipse.jgit.lfs.errors.LfsRepositoryReadOnly
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 import org.springframework.context.ApplicationEventPublisher
 import java.util.Optional
@@ -31,6 +35,7 @@ import java.io.File
 import jakarta.servlet.ServletConfig
 import jakarta.servlet.ServletContext
 import java.util.Enumeration
+import java.lang.reflect.InvocationTargetException
 
 class GitServletConfigSpec : DescribeSpec({
     val projectRepository = mockk<ProjectRepository>()
@@ -65,7 +70,8 @@ class GitServletConfigSpec : DescribeSpec({
         protectedBranchRepository,
         projectUserRepository,
         gpgSignatureVerifier,
-        "main"
+        "main",
+        RepositoryWriteGuard(projectRepository)
     )
 
     beforeTest {
@@ -173,7 +179,7 @@ class GitServletConfigSpec : DescribeSpec({
                 freshBaseDir.absolutePath, tempLfsBaseDir.absolutePath, "http://localhost:8080/git-lfs",
                 projectRepository, pullRequestRepository, userRepository, pushedBranchRepository,
                 eventPublisher, gitProjectVisitRecorder, SimpleMeterRegistry(),
-                protectedBranchRepository, projectUserRepository, gpgSignatureVerifier, "main"
+                protectedBranchRepository, projectUserRepository, gpgSignatureVerifier, "main", RepositoryWriteGuard(projectRepository)
             )
 
             freshBaseDir.exists() shouldBe false
@@ -243,9 +249,39 @@ class GitServletConfigSpec : DescribeSpec({
             // "/"로 시작(하지만 "/git/"는 아님) 케이스
             method.invoke(lfsServlet, lfsRequest, "/owner2/project2", "download") shouldNotBe null
             // "/"로 시작 안 하는 케이스(else, 그대로 사용) + info/lfs 접미어 없음
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner3", "project3") } returns Optional.of(Project(owner = "owner3", name = "project3"))
             method.invoke(lfsServlet, lfsRequest, "owner3/project3", "upload") shouldNotBe null
             // 파트가 부족해 owner/project 모두 기본값("default")으로 폴백
             method.invoke(lfsServlet, lfsRequest, "", "download") shouldNotBe null
+        }
+
+        it("LFS upload batch rejects fresh MIRROR mode before creating storage but permits wiki and HOSTED") {
+            val dispatcher = config.gitServletRegistrationBean().servlet!!
+            val field = dispatcher.javaClass.getDeclaredField("\$lfsServlet").apply { isAccessible = true }
+            val lfsServlet = field.get(dispatcher)
+            val requestClass = Class.forName("org.eclipse.jgit.lfs.server.LfsProtocolServlet\$LfsRequest")
+            val request = requestClass.getDeclaredConstructor().apply { isAccessible = true }.newInstance()
+            val method = lfsServlet.javaClass.getDeclaredMethod("getLargeFileRepository", requestClass, String::class.java, String::class.java)
+                .apply { isAccessible = true }
+            val staleProject = Project(owner = "mirror-lfs", name = "repo").apply { id = 919L }
+            every { projectRepository.findByOwnerAndNameOrPreviousPlace("mirror-lfs", "repo") } returns Optional.of(staleProject)
+            var mode = RepositoryMode.MIRROR
+            every { projectRepository.findRepositoryModeById(919L) } answers { mode }
+            val codePath = "/git/mirror-lfs/repo.git/info/lfs/objects/batch"
+            try {
+                val failure = shouldThrow<InvocationTargetException> {
+                    method.invoke(lfsServlet, request, codePath, "upload")
+                }
+                (failure.cause is LfsRepositoryReadOnly) shouldBe true
+                File(tempLfsBaseDir, "mirror-lfs/repo.git").exists() shouldBe false
+                method.invoke(lfsServlet, request, "/git/mirror-lfs/repo.wiki.git/info/lfs/objects/batch", "upload") shouldNotBe null
+                method.invoke(lfsServlet, request, codePath, "download") shouldNotBe null
+                mode = RepositoryMode.HOSTED
+                method.invoke(lfsServlet, request, codePath, "upload") shouldNotBe null
+                staleProject.repositoryMode shouldBe RepositoryMode.HOSTED
+            } finally {
+                File(tempLfsBaseDir, "mirror-lfs").deleteRecursively()
+            }
         }
 
         it("저장소 리졸버 람다 - FileRepositoryBuilder로 Repository를 생성해야 한다") {

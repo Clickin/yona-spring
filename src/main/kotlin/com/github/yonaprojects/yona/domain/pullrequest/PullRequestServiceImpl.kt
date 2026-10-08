@@ -8,6 +8,7 @@ import com.github.yonaprojects.yona.domain.role.RoleType
 import com.github.yonaprojects.yona.domain.vcs.FileDiff
 import com.github.yonaprojects.yona.domain.vcs.GitCommit
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
 import com.github.yonaprojects.yona.domain.vcs.GitRepository
 import com.github.yonaprojects.yona.domain.vcs.HgRepository
 import com.github.yonaprojects.yona.domain.vcs.HgCommit
@@ -75,7 +76,8 @@ class PullRequestServiceImpl(
     @Value("\${yona.site-name:Yona}")
     private val siteName: String,
     // PullRequestEventRepository.recordWithDraftMerge()에 그대로 전달한다.
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
+    private val writeGuard: RepositoryWriteGuard
 ) : PullRequestService {
 
     // PullRequest.fromBranch/toBranch에는 항상 짧은 브랜치 이름이 저장된다. 그런데 JGit의
@@ -92,6 +94,7 @@ class PullRequestServiceImpl(
     override fun attemptMerge(pullRequestId: Long): PullRequestMergeResult {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
+        writeGuard.requireWritable(pullRequest.toProject)
 
         val playRepo = repositoryService.getRepository(pullRequest.toProject)
         // Mercurial 프로젝트는 JGit이 아니라 hg4j 기반 계산으로 분기한다(클래스 하단 "Mercurial(hg4j)
@@ -149,6 +152,7 @@ class PullRequestServiceImpl(
     // fromProject/toProject/fromBranch/toBranch만으로 동작한다.
     @Transactional(readOnly = true)
     override fun previewMerge(fromProject: Project, toProject: Project, fromBranch: String, toBranch: String): MergePreviewResult {
+        writeGuard.requireWritable(toProject)
         val playRepo = repositoryService.getRepository(toProject)
         if (playRepo is HgRepository) {
             return hgPreviewMerge(fromProject, toProject, fromBranch, toBranch)
@@ -352,6 +356,7 @@ class PullRequestServiceImpl(
     override fun merge(pullRequestId: Long, updater: User): PullRequestMergeResult {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
+        writeGuard.requireWritable(pullRequest.toProject)
 
         // 이 가드가 없으면 이미 MERGED된 PR을 다시 merge할 때마다 새 머지 커밋을 만들어
         // refs/heads/{toBranch}에 중복으로 이어붙인다. 머지는 OPEN 상태에서만 의미가 있으므로 그 외
@@ -596,6 +601,7 @@ class PullRequestServiceImpl(
         // 부수효과 경계를 유지한다.
         additionalTargetRef: String? = null
     ): ObjectId {
+        writeGuard.requireWritable(pullRequest.toProject)
         val reusableTreeId = getMergedTreeIfReusable(repo, leftParent, rightParent, pullRequest)
         val mergeCommit = CommitBuilder().apply {
             setTreeId(reusableTreeId ?: merger.resultTreeId)
@@ -652,6 +658,7 @@ class PullRequestServiceImpl(
     private fun updateMerge(pullRequestId: Long): PullRequestMergeResult {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
+        writeGuard.requireWritable(pullRequest.toProject)
 
         val playRepo = repositoryService.getRepository(pullRequest.toProject)
         // Mercurial은 진짜 changelog가 append-only라 Git처럼 "재검사 때마다
@@ -834,6 +841,7 @@ class PullRequestServiceImpl(
             .orElseThrow { IllegalArgumentException("Source project not found: $fromProjectId") }
         val toProject = projectRepository.findById(toProjectId)
             .orElseThrow { IllegalArgumentException("Target project not found: $toProjectId") }
+        writeGuard.requireWritable(toProject)
 
         // PullRequest는 전용 카운터 컬럼 없이 매번 findFirstByToProjectOrderByNumberDesc()로
         // 최댓값을 조회해 +1한다. pull_request 테이블의 (to_project_id, number) UNIQUE 제약이
@@ -1255,6 +1263,7 @@ class PullRequestServiceImpl(
             throw InvalidBranchOperationException("병합된 PR만 원본 브랜치를 삭제할 수 있습니다.")
         }
 
+        writeGuard.requireWritable(pullRequest.fromProject)
         val playRepo = repositoryService.getRepository(pullRequest.fromProject)
         val branch = playRepo.getBranches().firstOrNull { isSameBranch(it.name, pullRequest.fromBranch) }
             ?: throw InvalidBranchOperationException("원본 브랜치를 찾을 수 없습니다: ${pullRequest.fromBranch}")
@@ -1272,6 +1281,7 @@ class PullRequestServiceImpl(
 
         val lastCommitId = pullRequest.lastCommitId
             ?: throw InvalidBranchOperationException("복원할 브랜치의 커밋 정보가 없습니다.")
+        writeGuard.requireWritable(pullRequest.fromProject)
 
         val playRepo = repositoryService.getRepository(pullRequest.fromProject)
         val alreadyExists = playRepo.getBranches().any { isSameBranch(it.name, pullRequest.fromBranch) }
