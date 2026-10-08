@@ -56,3 +56,15 @@ project ID/generation/경로, 실제 디렉터리를 대조해야 하며 자동 
 있으므로, 이전 버전으로 되돌릴 때는 writer를 중지하고 업그레이드 전 DB와 저장소 백업을 함께
 복원한다. mirror 테이블만 삭제하거나 모드를 HOSTED로 바꾸지 않는다.
 
+### 영속 상태와 체크포인트
+
+프로젝트당 `RepositoryMirror` 행 하나가 실행의 근거다. 초기 원본 HEAD를 `R`로 저장한 뒤
+바꾸지 않는다. source UUID와 local UUID는 각각 기록하며 둘이 같을 필요는 없다.
+`lastIndexedRevision <= lastVerifiedRevision <= localYoungestRevision`을 유지하고, `-1`은
+아직 확인하지 않았다는 뜻이다. r0도 속성을 검증하지만 데이터 참조는 r1부터 만든다.
+
+상태는 `INITIAL_IMPORT`, `INCREMENTAL`, `FAILED`, `NEEDS_ATTENTION`이다. 일시정지는
+`enabled=false`로 표현하여 복귀할 단계를 보존하고, 실행 여부는 임대로 표시한다.
+재시도는 R·generation·검증/색인 커서를 초기화하지 않으며 유효한 임대를 빼앗지 않는다.
+원본 URL/UUID를 다른 저장소로 바꾸는 기능은 없고, 다른 원본에는 새 미러를 만든다.
+
