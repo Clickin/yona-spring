@@ -12,12 +12,18 @@ import io.kotest.matchers.shouldNotBe
 import jakarta.servlet.Filter
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import java.io.File
+import java.nio.file.Files
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Instant
@@ -34,14 +40,30 @@ class GitAuthorizationFilterIntegrationSpec @Autowired constructor(
     override fun extensions() = listOf(SpringExtension)
 
     private lateinit var mockMvc: MockMvc
+    private var reachedApplication = false
+
+    companion object {
+        private val lfsBaseDir = Files.createTempDirectory("repository-access-it-").toFile()
+
+        @JvmStatic
+        @DynamicPropertySource
+        fun storageProperties(registry: DynamicPropertyRegistry) {
+            registry.add("yona.lfs.base-dir") { lfsBaseDir.absolutePath }
+        }
+    }
 
     init {
         beforeSpec {
             val securityFilter = wac.getBean("springSecurityFilterChain", Filter::class.java)
             mockMvc = MockMvcBuilders.webAppContextSetup(wac)
-                .addFilters<DefaultMockMvcBuilder>(securityFilter)
+                .addFilters<DefaultMockMvcBuilder>(securityFilter, Filter { request, response, chain ->
+                    reachedApplication = true
+                    chain.doFilter(request, response)
+                })
                 .build()
         }
+
+        afterSpec { lfsBaseDir.deleteRecursively() }
 
         describe("Git HTTP 인증/인가 통합 테스트") {
             beforeEach {
@@ -49,6 +71,83 @@ class GitAuthorizationFilterIntegrationSpec @Autowired constructor(
                 projectRepository.deleteAll()
                 userRepository.deleteAll()
                 roleRepository.deleteAll()
+            }
+
+            it("repository access validation case 01") {
+                val member = userRepository.save(User(
+                    loginId = "member", email = "member@example.com",
+                    password = hashPassword("pass123", "saltsalt"), passwordSalt = "saltsalt"
+                ))
+                val role = roleRepository.save(Role(id = 1L, name = "manager", active = true))
+                val project = projectRepository.save(Project(
+                    owner = "owner", name = "repo", previousOwnerLoginId = "old-owner", previousName = "old-repo",
+                    vcs = "GIT", projectScope = ProjectScope.PUBLIC
+                ))
+                projectUserRepository.save(ProjectUser(user = member, project = project, role = role))
+                val auth = "Basic " + Base64.getEncoder().encodeToString("member:pass123".toByteArray())
+                val oid = "a".repeat(64)
+                val objectFile = File(lfsBaseDir, "owner/repo.git/objects/aa/aa/$oid")
+                objectFile.parentFile.mkdirs()
+                objectFile.writeText("existing object")
+
+                listOf("SVN", "SUBVERSION", "HG", "MERCURIAL").forEach { vcs ->
+                    project.vcs = vcs
+                    projectRepository.saveAndFlush(project)
+                    listOf(null, auth).forEach { credentials ->
+                        val requests = listOf(
+                            get("/git/owner/repo.git/info/refs").param("service", "git-upload-pack"),
+                            get("/git/old-owner/old-repo/info/refs").param("service", "git-receive-pack"),
+                            post("/git/owner/repo.git/git-upload-pack"),
+                            post("/git/owner/repo.git/git-receive-pack"),
+                            post("/git/owner/repo.git/info/lfs/objects/batch")
+                                .contentType("application/vnd.git-lfs+json").content("""{"operation":"upload","objects":[]}"""),
+                            get("/git-lfs/owner/repo.git/objects/$oid"),
+                            put("/git-lfs/owner/repo.git/objects/$oid").with(csrf()).content("replacement"),
+                            put("/git-lfs/owner/repo/objects/$oid").with(csrf()).content("new object")
+                        )
+                        requests.forEach { request ->
+                            if (credentials != null) request.header(HttpHeaders.AUTHORIZATION, credentials)
+                            reachedApplication = false
+                            mockMvc.perform(request).andReturn().response.status shouldBe 404
+                            reachedApplication shouldBe false
+                        }
+                    }
+                    objectFile.readText() shouldBe "existing object"
+                    File(lfsBaseDir, "owner/repo").exists() shouldBe false
+                }
+
+                project.vcs = "GIT"
+                projectRepository.saveAndFlush(project)
+                reachedApplication = false
+                val response = mockMvc.perform(get("/git-lfs/owner/repo.git/objects/$oid")).andReturn().response
+                response.status shouldBe 200
+                response.contentAsString shouldBe "existing object"
+                reachedApplication shouldBe true
+                mockMvc.perform(
+                    put("/git-lfs/owner/repo.git/objects/$oid").with(csrf())
+                        .header(HttpHeaders.AUTHORIZATION, auth).content("updated object")
+                ).andReturn().response.status shouldBe 201
+                objectFile.readText() shouldBe "updated object"
+            }
+
+            it("repository access validation case 02") {
+                projectRepository.save(Project(owner = "owner", name = "repo", vcs = "GIT", projectScope = ProjectScope.PUBLIC))
+                val project = projectRepository.save(Project(
+                    owner = "new-owner", name = "new-repo", previousOwnerLoginId = "old-owner", previousName = "old-repo",
+                    vcs = "GIT", projectScope = ProjectScope.PUBLIC
+                ))
+                listOf("/git/owner/repo", "/git/old-owner/old-repo.git").forEach { path ->
+                    reachedApplication = false
+                    mockMvc.perform(get("$path/info/refs").param("service", "git-upload-pack"))
+                    reachedApplication shouldBe true
+                }
+                listOf("GIT", "SVN", "SUBVERSION", "HG", "MERCURIAL").forEach { vcs ->
+                    project.vcs = vcs
+                    projectRepository.saveAndFlush(project)
+                    reachedApplication = false
+                    mockMvc.perform(get("/git/old-owner/old-repo.wiki.git/info/refs").param("service", "git-upload-pack"))
+                    reachedApplication shouldBe true
+                }
             }
 
             it("존재하지 않는 프로젝트 접근 시 404 Not Found를 응답해야 한다") {

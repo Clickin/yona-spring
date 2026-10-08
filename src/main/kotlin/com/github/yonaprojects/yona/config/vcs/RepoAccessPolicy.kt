@@ -25,6 +25,12 @@ class RepoAccessPolicy(
     fun findProject(owner: String, projectName: String): Project? =
         projectService.findByOwnerAndName(owner, projectName)
 
+    // RepositoryService와 동일하게 null/알 수 없는 값은 Git으로 해석한다.
+    fun isGitProject(project: Project): Boolean = when (project.vcs?.uppercase()) {
+        "SVN", "SUBVERSION", "HG", "MERCURIAL" -> false
+        else -> true
+    }
+
     // yona AccessControl READ 규칙 대응: PROTECTED도 PUBLIC과 동일하게 인증 없이 clone
     // 가능했던 것을 PRIVATE와 같이 인증을 요구하도록 수정.
     fun requiresAuth(project: Project, isWriteRequest: Boolean): Boolean {

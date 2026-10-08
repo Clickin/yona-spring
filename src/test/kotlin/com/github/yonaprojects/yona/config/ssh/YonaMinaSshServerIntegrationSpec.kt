@@ -24,6 +24,7 @@ import com.github.yonaprojects.yona.domain.vcs.RepositoryService
 import io.kotest.assertions.withClue
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -31,6 +32,8 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
 
+import java.security.MessageDigest
+import java.util.Base64
 /**
  * yona-wiki P3-03 Step5/Step6 — 윈도우 SSH 폴백(Apache MINA SSHD, 이 애플리케이션이 직접 띄우는
  * 별도 포트의 임베디드 서버 — 시스템 sshd/포트 22와 무관, 호스트 시스템을 전혀 건드리지 않음)이
@@ -194,6 +197,56 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
                 roleRepository.deleteAll()
                 gitBaseDirHolder.deleteRecursively()
                 hostKeyHolder.deleteRecursively()
+            }
+
+            listOf("SVN", "SUBVERSION", "HG", "MERCURIAL").forEachIndexed { index, vcs ->
+                it("repository access validation case ${index + 1}") {
+                    val owner = userRepository.save(User(loginId = "access-owner", email = "access-owner@example.com"))
+                    val project = projectRepository.save(Project(
+                        owner = owner.loginId, name = "access-$index", vcs = "GIT", projectScope = ProjectScope.PRIVATE
+                    ))
+                    val role = roleRepository.save(Role(id = 1L, name = "manager", active = true))
+                    projectUserRepository.save(ProjectUser(user = owner, project = project, role = role))
+                    repositoryService.getRepository(project).create()
+                    BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "content", "Initial commit")
+                    val (userKey, userPublicKey) = generateKeyPair("access-user")
+                    sshKeyService.create(owner, "member", userPublicKey)
+                    val (deployKey, deployPublicKey) = generateKeyPair("access-deploy")
+                    deployKeyService.create(project, "deploy", deployPublicKey, readOnly = false)
+                    val workspace = Files.createTempDirectory("repository-access-ssh-").toFile()
+                    val directory = File(gitBaseDirHolder, "${project.owner}/${project.name}.git")
+                    val url = "ssh://git@127.0.0.1:${yonaMinaSshServer.boundPort}/${project.owner}/${project.name}.git"
+                    fun files(): Map<String, String> = directory.walkTopDown().filter { it.isFile }.associate {
+                        it.relativeTo(directory).path to Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(it.readBytes()))
+                    }
+                    try {
+                        listOf(userKey, deployKey).forEachIndexed { keyIndex, key ->
+                            val (exit, output) = runGit(
+                                "git", "clone", url, File(workspace, "first-$keyIndex").absolutePath, privateKeyFile = key
+                            )
+                            withClue(output) { exit shouldBe 0 }
+                        }
+                        project.vcs = vcs
+                        projectRepository.saveAndFlush(project)
+                        val before = files()
+                        listOf(userKey, deployKey).forEachIndexed { keyIndex, key ->
+                            val (readExit, _) = runGit(
+                                "git", "clone", url, File(workspace, "second-$keyIndex").absolutePath, privateKeyFile = key
+                            )
+                            readExit shouldNotBe 0
+                            val (writeExit, _) = runGit(
+                                "git", "push", url, "HEAD:refs/heads/access",
+                                dir = File(workspace, "first-$keyIndex"), privateKeyFile = key
+                            )
+                            writeExit shouldNotBe 0
+                            files() shouldBe before
+                        }
+                    } finally {
+                        workspace.deleteRecursively()
+                        userKey.parentFile.deleteRecursively()
+                        deployKey.parentFile.deleteRecursively()
+                    }
+                }
             }
 
             it("임베디드 SSH 서버가 실제로 포트를 바인딩해야 한다") {

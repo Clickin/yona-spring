@@ -40,10 +40,11 @@ class GitAuthorizationFilter(
         // 그 프로젝트의 코드 저장소와 완전히 동일해야 한다(위키 쓰기 = 프로젝트 쓰기 권한).
         // ".wiki" 접미어를 떼어 실제 프로젝트를 찾는다 — 안 그러면 "<project>.wiki"라는 이름의
         // 프로젝트가 없어 매번 404가 나 clone/push 자체가 불가능해진다.
+        val isWiki = rawProjectName.endsWith(".wiki")
         val projectName = rawProjectName.removeSuffix(".wiki")
 
         val project = repoAccessPolicy.findProject(owner, projectName)
-        if (project == null) {
+        if (project == null || (!isWiki && !repoAccessPolicy.isGitProject(project))) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND, "Project Not Found")
             return
         }
