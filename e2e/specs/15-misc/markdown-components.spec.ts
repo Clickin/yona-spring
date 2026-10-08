@@ -84,8 +84,14 @@ test('editor keeps native textarea ownership and takes one preview snapshot per 
   const checklist = page.getByRole('button', {name: 'Add checklist', exact: true});
   const assertDraftPosition = async () => {
     await expect(clear).toBeVisible();
-    const a = (await checklist.boundingBox())!;
-    const b = (await clear.boundingBox())!;
+    // Read both boxes in one frame; existing button transitions can move them between awaits.
+    const {a, b} = await checklist.evaluate(button => {
+      const host = (button.getRootNode() as ShadowRoot).host;
+      return {
+        a: button.getBoundingClientRect().toJSON(),
+        b: host.querySelector('.editor-clear-temporary button')!.getBoundingClientRect().toJSON(),
+      };
+    });
     // Legacy checklist margins offset its button vertically; both must occupy the same row.
     expect(b.y).toBeLessThan(a.y + a.height);
     expect(b.y + b.height).toBeGreaterThan(a.y);
@@ -136,6 +142,112 @@ test('editor keeps native textarea ownership and takes one preview snapshot per 
   await page.evaluate(() => document.querySelector('form')!.reset());
   await expect(textarea).toBeVisible();
   await expect(textarea).toHaveValue('**initial**');
+});
+
+test('real detach and same-node reparent preserve native values and refresh Vue public methods', async ({page}) => {
+  await page.evaluate(async () => {
+    const first = document.createElement('form');
+    const second = document.createElement('form');
+    second.id = 'reconnected-form';
+    const editor = document.createElement('yona-markdown-editor') as MarkdownElement & {value: string};
+    const textarea = document.createElement('textarea');
+    textarea.name = 'body';
+    textarea.defaultValue = 'native default';
+    editor.append(textarea);
+    if (editor.value !== 'native default') throw new Error('Detached getter lost the native textarea value');
+    first.append(editor);
+    document.body.replaceChildren(first, second);
+    await editor.ready;
+    editor.value = 'draft';
+    second.append(editor);
+    await editor.ready;
+    if (textarea.form !== second) throw new Error('Reparent lost native form ownership');
+    editor.shadowRoot!.querySelectorAll<HTMLAnchorElement>('.markdown-editor-controls a')[1]!.click();
+    await Promise.resolve();
+    second.reset();
+    await Promise.resolve();
+    if (editor.shadowRoot!.querySelector('yona-markdown-renderer')) throw new Error('New form reset did not exit preview');
+    editor.value = 'detached draft';
+    const beforeReady = editor.ready;
+    editor.remove();
+    const unmounted = Promise.withResolvers<void>();
+    setTimeout(unmounted.resolve, 0);
+    await unmounted.promise;
+    second.append(editor);
+    await editor.ready;
+    if (editor.ready === beforeReady) throw new Error('Ready still belongs to the first Vue mount');
+    if (editor.querySelector('textarea') !== textarea || textarea.defaultValue !== 'native default') {
+      throw new Error('Reconnect replaced the original textarea');
+    }
+    if (editor.value !== 'detached draft') throw new Error('Reconnect lost draft');
+    if (editor.shadowRoot!.querySelectorAll('link[rel=stylesheet]').length !== 4) throw new Error('Duplicate stylesheets');
+  });
+  const textarea = page.locator('textarea');
+  await page.getByRole('button', {name: 'Preview', exact: true}).click();
+  await expect(page.locator('yona-markdown-renderer p')).toHaveText('detached draft');
+  await page.evaluate(() => Reflect.set(document.querySelector('yona-markdown-editor')!, 'value', 'new mount'));
+  await expect(textarea).toBeVisible();
+  await expect(textarea).toHaveValue('new mount');
+  await textarea.press('End');
+  await textarea.press('Tab');
+  await expect(textarea).toHaveValue('new mount\t');
+  await page.evaluate(() => document.querySelector<HTMLFormElement>('form#reconnected-form')!.reset());
+  await expect(textarea).toHaveValue('native default');
+});
+
+test('pre-upgrade properties and renderer snapshots survive a real Vue remount', async ({page}) => {
+  await page.evaluate(() => {
+    const frame = document.createElement('iframe');
+    frame.srcdoc = '<!doctype html><html><body></body></html>';
+    document.body.replaceChildren(frame);
+  });
+  const frame = page.frames().find(candidate => candidate.parentFrame())!;
+  await frame.waitForLoadState();
+  const result = await frame.evaluate(async () => {
+    const editor = document.createElement('yona-markdown-editor') as MarkdownElement & {value: string};
+    const textarea = document.createElement('textarea');
+    textarea.defaultValue = 'default';
+    editor.append(textarea);
+    editor.value = 'pre-upgrade draft';
+    const source = document.createElement('textarea');
+    source.value = '# Immutable\n\n**source property**';
+    const renderer = document.createElement('yona-markdown-renderer') as MarkdownElement & {sourceElement: HTMLElement};
+    renderer.sourceElement = source;
+    renderer.setAttribute('mode', 'document');
+    renderer.setAttribute('owner', 'owner');
+    renderer.setAttribute('project', 'project');
+    document.body.replaceChildren(editor, renderer);
+    const entry = '/javascripts/markdown/yona-markdown-editor.js';
+    // The test must assign properties before registration in this fresh browsing context.
+    await import(entry);
+    await Promise.all([editor.ready, renderer.ready]);
+    const firstReady = renderer.ready;
+    source.value = '# Changed';
+    renderer.remove();
+    const unmounted = Promise.withResolvers<void>();
+    setTimeout(unmounted.resolve, 0);
+    await unmounted.promise;
+    document.body.append(renderer);
+    await renderer.ready;
+    const cached = renderer.cloneNode(true) as MarkdownElement;
+    renderer.replaceWith(cached);
+    await cached.ready;
+    return {
+      value: editor.value,
+      sameTextarea: editor.querySelector('textarea') === textarea,
+      defaultValue: textarea.defaultValue,
+      remountedReady: renderer.ready !== firstReady,
+      sourceElement: renderer.sourceElement === source,
+      heading: cached.shadowRoot!.querySelector('h1')?.textContent,
+      strong: cached.shadowRoot!.querySelector('strong')?.textContent,
+      links: cached.shadowRoot!.querySelectorAll('link[rel=stylesheet]').length,
+      ready: cached.hasAttribute('data-markdown-ready'),
+    };
+  });
+  expect(result).toEqual({
+    value: 'pre-upgrade draft', sameTextarea: true, defaultValue: 'default', remountedReady: true,
+    sourceElement: true, heading: 'Immutable#', strong: 'source property', links: 4, ready: true,
+  });
 });
 
 test.describe('editor geometry', () => {
