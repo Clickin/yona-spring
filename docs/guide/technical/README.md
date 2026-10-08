@@ -165,6 +165,40 @@ JGit의 trust manager·hostname verifier 변경은 무시한다. 3xx 응답은 `
 그 행만 지우고 계속한다. 살아 있는 ref 위치의 커밋이 없으면 `TARGET_INCOMPLETE`(attention)다. 첫 가져오기 동안에는 알림이 없고 `initialImportDone`은
 `store.complete`가 첫 완료 실행 뒤 켠다. 작성자 키는 커밋 author 이메일이다(빈 값이면 없음).
 
+### Mercurial 미러
+
+`HgMirrorEngine`(`MirrorVcs.MERCURIAL`)은 SVN과 같은 선형 커서를 쓴다. Mercurial의 로컬 revision
+번호는 pull로만 늘어나므로 번호 0부터 연속이며, `lastVerifiedRevision`·`lastIndexedRevision`·R은 로컬
+revision 번호다. source UUID와 local UUID에는 모두 루트 changeset(revision 0)의 node를 기록한다.
+참조·웹훅의 commit ID는 40자리 changeset node다. 작성자 키는 author 문자열의 e-mail(`Name <email>`)이고
+e-mail이 없으면 키도 없다.
+
+- 접속: hg4j의 HTTP 클라이언트는 redirect를 따르고 JVM 기본 TLS를 쓰며 연결별 설정 지점이 없고,
+  `PullCommand.call()`은 전역 `HgRemoteConnectionFactory`를 쓴다. 그래서 읽기 전용 wire 명령
+  (`heads`, `lookup`, `known`, `getbundle`, `listkeys`)을 `HgHttpsMirrorSource`가 연결마다 직접
+  보내고, 받은 bundle만 hg4j `PullCommand.applyBundle`로 반영한다. 모든 요청은 `checkHost` 뒤
+  정규화한 origin으로 `policy.proxy()`를 거쳐 나가고, TLS는 그 요청의 `SSLContext`에 `trustManager(host)`를
+  넣어 검증한다. redirect는 따르지 않고 `SOURCE_REDIRECT`로 실패한다. 연결 10초·읽기 30초, 응답은 100MB
+  상한이며 bundle 외 응답은 4MB다. JVM 전역 기본값이나 hg4j 전역 등록은 바꾸지 않는다.
+  인증 정보는 요청마다 `credential(ref)`로 읽어 Basic 헤더를 만든 직후 비밀번호 배열을 지운다.
+- 실행: 원본 head와 루트를 읽고, 로컬 저장소가 없으면(디렉터리가 비어 있을 때만) hg4j로 만든다. 비어 있지
+  않은데 저장소가 아니면 `TARGET_INCOMPLETE`다. 기록된 루트와 원본 루트가 다르거나 로컬 루트와 다르면
+  bundle을 받기 전에 `SOURCE_IDENTITY_CHANGED`/`TARGET_IDENTITY_CHANGED`로 멈춘다(다른 루트의 history가
+  두 번째 루트로 섞이는 것을 막는다). 로컬 head를 원본이 모르면 history가 다시 쓰인 것이므로
+  `REVISION_HISTORY_CHANGED`로 멈추며 로컬 history는 지우지 않는다. 그 뒤 원본 head와 로컬 head의 차이만
+  `getbundle`로 받아 반영하고, 반영 뒤 모든 원본 head가 로컬에 있는지 확인한다.
+- 커서: 반영 뒤 `observe`에 루트 node와 로컬 tip revision을 넘기고, revision마다 `verified` → `index`
+  순서로 처리한다. `index`의 검증은 SVN과 같고(순서 `lastIndexedRevision + 1`), 체크포인트는
+  `lastIndexedRevision`이다. 한 pull이 여러 revision을 가져와도 색인과 알림은 revision 단위다.
+  pull 직후 중단되어도 다음 실행이 로컬 tip까지 이어서 검증·색인한다.
+- 빈 원본: changeset이 없으면 `observe`·`index` 없이 끝나고(저장소만 만들고 R과 커서는 -1/없음),
+  R이 없는 실행은 `initialImportDone`을 켠다. 이후 처음 생긴 changeset은 `initialImportDone`이 켜져
+  있으므로 알림을 보낸다. 반대로 changeset이 있던 원본이 다시 비면 history가 바뀐 것으로 본다.
+- 북마크: 실행마다 원본의 `bookmarks`를 따라 로컬 북마크를 만들고 옮기고 지운다(Git ref처럼 강제 이동과
+  삭제를 따른다). 로컬에 없는 node를 가리키거나 저장할 수 없는 이름은 건너뛴다.
+- 한계: bundle은 메모리에 받으므로 한 번에 받을 수 있는 양은 100MB다. 더 큰 첫 가져오기는
+  `SOURCE_RESPONSE_TOO_LARGE`로 실패한다.
+
 ### 이슈 참조와 알림
 
 검증한 revision의 이슈 참조, `>R`인 경우의 DB NEW_COMMIT 알림, 색인 커서 갱신은 같은
