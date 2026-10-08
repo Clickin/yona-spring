@@ -1,9 +1,10 @@
-import {createApp, h, shallowRef, watchEffect, type App} from 'vue';
+import {createApp, shallowReactive, type App} from 'vue';
+import AttachmentsList from './AttachmentsList.ce.vue';
 import {
-  hasTextAndImage, isVideo, legacyUploadName, linkText, markdownTable, readableSize, uploadKey, uploadMarker,
+  hasTextAndImage, legacyUploadName, linkText, markdownTable, uploadKey, uploadMarker,
 } from './attachment-text';
 
-type Item = {key: string; id?: string; name: string; url?: string; mimeType?: string; size: number; progress: number};
+export type AttachmentItem = {key: string; id?: string; name: string; url?: string; mimeType?: string; size: number; progress: number};
 type Uploaded = {id: string | number; name: string; url: string; mimeType: string; size: number};
 export type AttachmentOptions = {
   textarea?: HTMLTextAreaElement | null; uploadURL?: string; listURL?: string; resourceType?: string; resourceId?: string;
@@ -31,14 +32,13 @@ function notify(key: string, ...args: unknown[]): void {
  * Form inputs and attachment markers stay in light DOM for forms and Turbo snapshots.
  */
 export class YonaAttachments extends HTMLElement {
-  private readonly fileItems = shallowRef<Item[]>([]);
-  private readonly dragActive = shallowRef(false);
+  private readonly state = shallowReactive<{items: AttachmentItem[]; dragging: boolean}>({items: [], dragging: false});
   private app?: App;
 
-  get items(): Item[] { return this.fileItems.value; }
-  set items(items: Item[]) { this.fileItems.value = items; }
-  get dragging(): boolean { return this.dragActive.value; }
-  set dragging(dragging: boolean) { this.dragActive.value = dragging; }
+  get items(): AttachmentItem[] { return this.state.items; }
+  set items(items: AttachmentItem[]) { this.state.items = items; }
+  get dragging(): boolean { return this.state.dragging; }
+  set dragging(dragging: boolean) { this.state.dragging = dragging; }
   private shell?: HTMLElement;
   private list?: HTMLUListElement;
   private temporary?: HTMLInputElement;
@@ -53,12 +53,12 @@ export class YonaAttachments extends HTMLElement {
 
   connectedCallback() {
     if (!this.shell) this.mountShell();
-    if (this.list && !this.app) {
-      this.app = createApp({
-        setup: () => {
-          watchEffect(() => this.updateShell());
-          return () => this.render();
-        },
+    if (this.shell && this.list && !this.app) {
+      this.app = createApp(AttachmentsList, {
+        state: this.state,
+        shell: this.shell,
+        onInsert: (item: AttachmentItem) => this.insertText(linkText(item)),
+        onDelete: (item: AttachmentItem) => { void this.deleteAttachment(item); },
       });
       this.app.mount(this.list);
     }
@@ -93,9 +93,12 @@ export class YonaAttachments extends HTMLElement {
     }
     const shell = source.cloneNode(true) as HTMLElement;
     shell.classList.toggle('comment-upload', !!this.closest('.write-comment-box'));
-    const style = document.createElement('style');
-    style.textContent = styles;
-    this.shadowRoot!.append(style, shell);
+    for (const css of AttachmentsList.styles ?? []) {
+      const style = document.createElement('style');
+      style.textContent = css;
+      this.shadowRoot!.append(style);
+    }
+    this.shadowRoot!.append(shell);
     this.shell = shell;
     this.list = shell.querySelector<HTMLUListElement>('.attached-files') ?? undefined;
     // Shadow inputs do not participate in the surrounding form. Reuse a cached input if present.
@@ -234,7 +237,7 @@ export class YonaAttachments extends HTMLElement {
     notify('common.attach.error.upload', status, statusText);
   }
 
-  private async deleteAttachment(item: Item): Promise<void> {
+  private async deleteAttachment(item: AttachmentItem): Promise<void> {
     if (!item.url) return;
     try {
       const response = await fetch(item.url, {
@@ -272,9 +275,9 @@ export class YonaAttachments extends HTMLElement {
     }
   }
 
-  private patch(key: string, changes: Partial<Item>): Item | undefined {
+  private patch(key: string, changes: Partial<AttachmentItem>): AttachmentItem | undefined {
     const items = [...this.items];
-    let updated: Item | undefined;
+    let updated: AttachmentItem | undefined;
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
       if (item.key !== key) continue;
@@ -342,92 +345,6 @@ export class YonaAttachments extends HTMLElement {
     const editor = textarea.closest<HTMLElement & {value: string}>('yona-markdown-editor');
     if (editor) editor.value = textarea.value;
   }
-
-  private onItemClick(item: Item, event: Event): void {
-    if (!item.id) return;
-    if ((event.target as Element).closest('.btn-delete')) void this.deleteAttachment(item);
-    else this.insertText(linkText(item));
-  }
-
-  private updateShell(): void {
-    const visible = this.items.length > 0 ? 'block' : 'none';
-    if (this.list) this.list.style.display = visible;
-    const help = this.shell?.querySelector<HTMLElement>(':scope > p.help');
-    if (help) help.style.display = visible;
-    const dropper = this.shell?.querySelector<HTMLElement>(':scope > .upload-drop-here');
-    if (dropper) dropper.style.display = this.dragging ? 'block' : 'none';
-  }
-
-  private render() {
-    const insertLabel = this.shell?.dataset.insertLabel ?? '';
-    const deleteLabel = this.shell?.dataset.deleteLabel ?? '';
-    return this.items.map(item => h('li', {
-      key: item.key, class: ['attached-file', item.id ? 'complete' : 'temporary'],
-      id: item.id ? undefined : item.key,
-      'data-id': item.id, 'data-name': item.name, 'data-href': item.url, 'data-mime': item.mimeType,
-      onClick: (event: Event) => this.onItemClick(item, event),
-    }, [
-      h('i', {class: 'yobicon-supportrequest', 'aria-hidden': 'true'}),
-      h('i', {class: ['mimetype', isVideo(item.mimeType) ? 'yobicon-video2' : ''], 'aria-hidden': 'true'}),
-      h('strong', {class: 'name'}, item.name),
-      h('span', {class: 'size'}, readableSize(item.size)),
-      h('div', {
-        class: 'progress upload-progress', role: 'progressbar', 'aria-label': item.name,
-        'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': item.progress,
-      }, [h('div', {class: 'bar orange', style: {width: `${item.progress}%`}})]),
-      h('button', {
-        type: 'button', class: 'btn-transparent btn-delete', disabled: !item.id,
-        'aria-label': `${deleteLabel}: ${item.name}`,
-      }, '×'),
-      h('button', {type: 'button', class: 'nbtn small white btn-insert', disabled: !item.id}, insertLabel),
-    ]));
-  }
 }
-
-const styles = `
-  :host { display: block; color: inherit; font: inherit; }
-  button, input { font: inherit; }
-  button { cursor: pointer; }
-  button:focus-visible, .fake-file-wrap:focus-within { outline: 2px solid #3a7ee5; outline-offset: 2px; }
-  .upload-wrap { position: relative; padding: 10px; background: #f5f5f5; border-radius: 5px; }
-  .comment-upload { background: #efefef; margin-bottom: 10px; border-radius: 0 0 5px 5px; }
-  .attach-wrap { text-align: center; }
-  .attach-wrap .btn-wrap { display: inline-block; margin: 0 5px; vertical-align: top; }
-  .attach-wrap .plain { display: inline-block; line-height: 30px; }
-  .nbtn { display: inline-block; border: 0; border-radius: 2px; color: #222; background: #fff;
-    font-size: 11px; font-weight: bold; line-height: 18px; text-align: center; white-space: nowrap;
-    box-shadow: inset 0 -1px 1px #0005; margin-right: 5px; }
-  .nbtn.medium { padding: 6px 20px; }
-  .nbtn:hover { background: #e6e6e6; color: #f36c22; }
-  .fake-file-wrap { position: relative; overflow: hidden; cursor: pointer; }
-  .fake-file-wrap .file { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-  .attached-files { list-style: none; margin: 15px 0 0; padding: 15px 0; border-top: 1px solid #e0e0e0; }
-  .attached-file { display: inline-flex; align-items: center; gap: 3px; max-width: calc(100% - 30px);
-    height: 30px; line-height: 30px; border: 1px solid #ccc; background: #fafafa;
-    padding: 0 10px; margin: 5px 4px; cursor: pointer; }
-  .attached-file:hover { border-color: #f36c22; }
-  .attached-file i { display: none; color: #3a7ee5; }
-  .attached-file.temporary i { display: inline-block; }
-  .attached-file .name { min-width: 0; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .attached-file .size { font-size: 11px; white-space: nowrap; }
-  .upload-progress { width: 100px; height: 7px; overflow: hidden; background: #f0f0f0; border: 1px solid #e0e0e0; }
-  .upload-progress .bar { height: 100%; background: #f36c22; }
-  .btn-delete { display: none; flex-shrink: 0; width: 30px; height: 30px; border: 0; padding: 0;
-    background: transparent; font-size: 1.5em; font-weight: bold; }
-  .btn-delete:hover { color: #f36c22; }
-  .btn-insert { display: none; padding: 1px 10px; height: 24px; line-height: 20px; box-shadow: none; }
-  .attached-file.complete .progress { display: none; }
-  .attached-file.complete .btn-delete, .attached-file.complete .btn-insert { display: inline-block; }
-  .right-txt { text-align: right; }
-  p.help { margin: 0 0 10px; }
-  .upload-drop-here { position: absolute; inset: 2px; border: 3px dashed #ffb23d;
-    background: #fffc; z-index: 1; pointer-events: none; }
-  .msg-wrap { display: flex; align-items: center; justify-content: center; height: 100%; }
-  .msg { color: #999; font-size: 26px; text-align: center; }
-  i { font-family: yobicon; font-style: normal; font-weight: normal; }
-  .yobicon-upload::before { content: "\\e4bd"; }
-  .yobicon-supportrequest::before { content: "\\e203"; }
-  .yobicon-video2::before { content: "\\e19e"; }
-`;
 
 if (!customElements.get('yona-attachments')) customElements.define('yona-attachments', YonaAttachments);

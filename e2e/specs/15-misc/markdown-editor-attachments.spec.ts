@@ -222,6 +222,8 @@ test('attachment shadow UI preserves native form data and completed files across
   });
   await expect(item).toHaveCount(1);
   await expect(item).toBeVisible();
+  await expect(item).toHaveCSS('display', 'inline-flex');
+  await expect(item.locator('.upload-progress')).toBeHidden();
   await expect(widget.locator('input[name="temporaryUploadFiles"]')).toHaveCount(1);
   expect(await widget.evaluate(host => new FormData(host.closest('form')!).get('temporaryUploadFiles'))).toContain(id!);
   await item.locator('.btn-insert').focus();
