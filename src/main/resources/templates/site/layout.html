@@ -369,17 +369,6 @@
     <!-- Markdown Editor fragment -->
     <div th:fragment="markdownEditor(name, value, editorMode)" data-toggle="markdown-editor" class="mt10"
          th:data-mention-url="${project != null} ? (@{/api/{owner}/{name}/mentionList(owner=${project.owner}, name=${project.name})}) : null">
-        <!-- .editor-notice-label "안"이 아니라 형제로 둔다 - temporarySaveHandler가 초안을 저장할
-             때마다 noticePanel.html(...)로 .editor-notice-label의 내용을 통째로 갈아치우므로,
-             안에 두면 버튼이 주기적으로 사라진다. 기본은 숨김(CSS는 yona.css의
-             .editor-clear-temporary 규칙 재사용) - markdown(project) 스크립트가 localStorage에
-             이 경로의 임시저장이 있을 때만 보여준다. -->
-        <div class="editor-clear-temporary">
-            <div class="editor-clear-temporary-button">
-                <button type="button" class="ybtn ybtn-small ybtn-warning" th:text="#{button.clear.temporary}">복구된 본문 삭제</button>
-            </div>
-        </div>
-
         <yona-markdown-editor th:with="editorId=${#ids.seq('editor-' + name)}"
             th:attr="name=${name},editor-mode=${editorMode},owner=${project?.owner},project=${project?.name},
                      data-edit-label=#{common.editor.edit},data-preview-label=#{common.editor.preview},
@@ -398,6 +387,14 @@
                 <li>
                     <div class="task-list-button">
                         <button type="button" class="add-task-list-button ybtn ybtn-small ybtn-danger-no-outline"><i class="yobicon-list task-list-icon" aria-hidden="true"></i> <span th:text="#{button.add.checklist}">Add checklist</span></button>
+                    </div>
+                </li>
+                <li>
+                    <!-- Separate from the notice: autosave replaces the notice's contents. -->
+                    <div class="editor-clear-temporary">
+                        <div class="editor-clear-temporary-button">
+                            <button type="button" class="ybtn ybtn-small ybtn-warning" th:text="#{button.clear.temporary}">복구된 본문 삭제</button>
+                        </div>
                     </div>
                 </li>
                 <li><div class="editor-notice-label"></div></li>

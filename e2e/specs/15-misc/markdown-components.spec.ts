@@ -67,7 +67,12 @@ test('editor keeps native textarea ownership and takes one preview snapshot per 
     textarea.name = 'body';
     textarea.defaultValue = '**initial**';
     editor.append(textarea);
-    form.append(editor);
+    const clear = document.createElement('div');
+    clear.className = 'editor-clear-temporary';
+    clear.style.display = 'block';
+    clear.innerHTML = '<div class="editor-clear-temporary-button"><button type="button" class="ybtn ybtn-small ybtn-warning">Clear Temporary</button></div>';
+    form.dataset.toggle = 'markdown-editor';
+    form.append(clear, editor);
     document.body.replaceChildren(form);
     await (editor as MarkdownElement).ready;
     if (!editor.shadowRoot?.querySelector('slot[name="input"]')) throw new Error('Missing native textarea slot');
@@ -75,10 +80,23 @@ test('editor keeps native textarea ownership and takes one preview snapshot per 
   });
   const textarea = page.locator('textarea[name=body]');
   await expect(textarea).toBeVisible();
+  const clear = page.getByRole('button', {name: 'Clear Temporary', exact: true});
+  const checklist = page.getByRole('button', {name: 'Add checklist', exact: true});
+  const assertDraftPosition = async () => {
+    await expect(clear).toBeVisible();
+    const a = (await checklist.boundingBox())!;
+    const b = (await clear.boundingBox())!;
+    // Legacy checklist margins offset its button vertically; both must occupy the same row.
+    expect(b.y).toBeLessThan(a.y + a.height);
+    expect(b.y + b.height).toBeGreaterThan(a.y);
+    expect(Math.abs(b.x - (a.x + a.width) - 10)).toBeLessThanOrEqual(1);
+  };
+  await assertDraftPosition();
   await textarea.fill('**snapshot**');
   await expect(page.locator('yona-markdown-renderer')).toHaveCount(0);
   await page.getByRole('button', {name: 'Preview', exact: true}).click();
   await expect(page.locator('yona-markdown-renderer strong')).toHaveText('snapshot');
+  await assertDraftPosition();
   expect(await page.evaluate(() => new FormData(document.querySelector('form')!).get('body'))).toBe('**snapshot**');
   await page.getByRole('button', {name: 'Edit', exact: true}).click();
   await expect(page.locator('yona-markdown-renderer')).toHaveCount(0);
@@ -111,6 +129,7 @@ test('editor keeps native textarea ownership and takes one preview snapshot per 
   await expect(textarea).toHaveValue('line');
   await expect(page.locator('textarea')).toHaveCount(1);
   await expect(page.getByRole('button', {name: 'Preview', exact: true})).toHaveCount(1);
+  await assertDraftPosition();
   await textarea.fill('cached');
   await page.getByRole('button', {name: 'Preview', exact: true}).click();
   await expect(page.locator('yona-markdown-renderer p')).toHaveText('cached');

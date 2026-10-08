@@ -16,6 +16,7 @@ export class YonaMarkdownEditor extends HTMLElement {
   private previewHeight = 0;
   private helpMarkup?: HTMLElement;
   private notice?: HTMLElement;
+  private clearDraft?: HTMLElement;
   private lifetime?: AbortController;
   private query?: AbortController;
   private app?: App;
@@ -50,6 +51,7 @@ export class YonaMarkdownEditor extends HTMLElement {
     const wrapper = this.closest('[data-toggle="markdown-editor"]');
     this.helpMarkup = this.querySelector<HTMLElement>('.markdown-help') ?? wrapper?.querySelector<HTMLElement>('.markdown-help') ?? undefined;
     this.notice = this.querySelector<HTMLElement>('.editor-notice-label') ?? wrapper?.querySelector<HTMLElement>('.editor-notice-label') ?? undefined;
+    this.clearDraft = this.querySelector<HTMLElement>('.editor-clear-temporary') ?? wrapper?.querySelector<HTMLElement>('.editor-clear-temporary') ?? undefined;
     this.textarea = textarea;
     if (!textarea.id) textarea.id = `yona-markdown-input-${++nextEditorId}`;
     textarea.hidden = false;
@@ -65,8 +67,9 @@ export class YonaMarkdownEditor extends HTMLElement {
     this.expander.append(textarea);
     if (this.helpMarkup) this.helpMarkup.slot = 'help';
     if (this.notice) this.notice.slot = 'notice';
+    if (this.clearDraft) this.clearDraft.slot = 'clear-draft';
     // Keep native form controls, Stimulus help and the autosave notice in the document tree.
-    this.replaceChildren(this.expander, ...[this.helpMarkup, this.notice].filter((node): node is HTMLElement => !!node));
+    this.replaceChildren(this.expander, ...[this.helpMarkup, this.clearDraft, this.notice].filter((node): node is HTMLElement => !!node));
   }
 
   private bindEvents(textarea: HTMLTextAreaElement, expander: TextExpanderElement, form: HTMLFormElement | null | undefined) {
@@ -236,6 +239,7 @@ export class YonaMarkdownEditor extends HTMLElement {
           type: 'button', class: 'add-task-list-button ybtn ybtn-small ybtn-danger-no-outline',
           onClick: () => this.addChecklist(),
         }, [h('i', {class: 'yobicon-list task-list-icon', 'aria-hidden': 'true'}), ` ${this.dataset.checklistLabel ?? 'Add checklist'}`]))),
+        this.clearDraft ? h('li', h('slot', {name: 'clear-draft'})) : null,
         this.notice ? h('li', h('slot', {name: 'notice'})) : null,
       ]),
       h('div', {class: 'tab-content', style: {position: 'relative', overflow: 'visible'}}, [
