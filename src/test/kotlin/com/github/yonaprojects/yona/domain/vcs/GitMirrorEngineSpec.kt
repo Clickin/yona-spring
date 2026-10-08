@@ -135,7 +135,9 @@ class GitMirrorEngineSpec @Autowired constructor(
         fun events() = transaction.execute { issues.findAll().filter { it.project.id == project.id }.flatMap { references.findByIssueOrderByCreatedAsc(it) } }!!
         fun referenced() = events().map { it.newValue }
         fun notices() = notifications.findByReceiver(receiver, org.springframework.data.domain.Pageable.unpaged()).content
-        fun rows() = refRows.findAllByMirrorId(mirror.id!!).associate { it.refName to it.commitId }
+        fun allRows() = refRows.findAllByMirrorId(mirror.id!!).associate { it.refName to it.commitId }
+        fun rows() = allRows().filterKeys { !it.startsWith("mirror-retired/") }
+        fun retired() = allRows().filterKeys { it.startsWith("mirror-retired/") }.values.toSet()
         fun ids(vararg commits: RevCommit) = commits.map { it.name }
 
         beforeEach {
@@ -305,7 +307,7 @@ class GitMirrorEngineSpec @Autowired constructor(
                 rows()["refs/heads/merged"] shouldBe merge.name
             }
 
-            it("follows a force-push by indexing only commits new to the mirror, and a deleted branch by dropping its row") {
+            it("follows a force-push and a deleted branch, keeping their old positions so history is never indexed twice") {
                 val engine = localSeam(engineOf(5))
                 val c1 = source.commit("c1 #1")
                 val c2 = source.commit("c2 #1")
@@ -325,11 +327,20 @@ class GitMirrorEngineSpec @Autowired constructor(
                 sync(engine)
                 referenced().size shouldBe 4
                 rows()["refs/heads/main"] shouldBe c1.name
+                retired() shouldBe setOf(c3.name, n1.name)
                 notices().size shouldBe 1
 
                 source.git.branchDelete().setBranchNames("doomed").setForce(true).call()
                 sync(engine)
                 rows().keys shouldBe setOf("refs/heads/main")
+                retired() shouldBe setOf(c2.name, c3.name, n1.name)
+                referenced().size shouldBe 4
+                notices().size shouldBe 1
+
+                // Refs reaching rewritten or deleted history later add no second reference.
+                source.ref("refs/heads/revived", c3)
+                source.ref("refs/heads/revived-rewrite", n1)
+                sync(engine)
                 referenced().size shouldBe 4
                 notices().size shouldBe 1
                 val local = Git.open(local)

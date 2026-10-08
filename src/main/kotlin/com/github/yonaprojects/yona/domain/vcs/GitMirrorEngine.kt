@@ -228,15 +228,37 @@ class GitMirrorEngine(
                 walk.markUninteresting(commit)
             }
             val tips = LinkedHashMap<String, RevCommit>()
+            val skippedNames = HashSet<String>()
             for (ref in current) {
                 if (ref.name.length > MAX_REF_NAME) {
                     logger.warn("Mirror {} skips a ref name longer than {} characters", context.id, MAX_REF_NAME)
+                    skippedNames.add(ref.name)
                     continue
                 }
                 val tip = peeledCommit(walk, repository, ref) ?: continue
                 tips[ref.name] = tip
                 if (known[ref.name] != tip.name) walk.markStart(tip)
             }
+            // A ref that moved off its old position (forced update) or disappeared would otherwise take the
+            // coverage of that position with it, and a later ref reaching the same commits would index them
+            // again. Keep such positions as retired rows first; they only ever mark indexed history.
+            val retired = LinkedHashMap<String, String>()
+            RevWalk(repository).use { ancestry ->
+                for ((name, position) in known) {
+                    if (name.startsWith(PENDING_PREFIX) || name.startsWith(RETIRED_PREFIX)) continue
+                    val tip = tips[name]
+                    val kept = tip != null && (tip.name == position ||
+                        ancestry.isMergedInto(ancestry.parseCommit(ObjectId.fromString(position)), ancestry.parseCommit(tip)))
+                    if (!kept && name !in skippedNames) retired[RETIRED_PREFIX + position] = position
+                }
+            }
+            retired.keys.removeAll(known.keys)
+            if (retired.isNotEmpty()) {
+                context.checkActive()
+                indexer.index(context.id, context.owner, context.fence, emptyList(), emptyList(), retired)
+                known.putAll(retired)
+            }
+
             // One walk finds everything new to the mirror; refs then take their share of it in order.
             var visited = 0
             for (commit in walk) {
@@ -293,7 +315,7 @@ class GitMirrorEngine(
             }
             flushPositions()
 
-            val removed = known.keys.filter { it !in currentNames }
+            val removed = known.keys.filter { it !in currentNames && !it.startsWith(RETIRED_PREFIX) }
             if (removed.isNotEmpty()) {
                 context.checkActive()
                 indexer.index(context.id, context.owner, context.fence, emptyList(), emptyList(), emptyMap(), removed)
@@ -358,6 +380,7 @@ class GitMirrorEngine(
         private const val CANCEL_CHECK_INTERVAL = 1000
         // Not under refs/, so it can never collide with a source ref and is always removed at the end of a run.
         private const val PENDING_PREFIX = "mirror-pending/"
+        private const val RETIRED_PREFIX = "mirror-retired/"
         private const val READ_TIMEOUT_SECONDS = 30
     }
 }
