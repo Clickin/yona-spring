@@ -13,7 +13,55 @@ import org.tmatesoft.svn.core.replicator.ISVNReplicationHandler
 import org.tmatesoft.svn.core.replicator.SVNRepositoryReplicator
 import java.nio.file.Files
 
-class SvnMirrorSynchronizer {
+@Service
+class SvnMirrorSynchronizer(
+    private val store: RepositoryMirrorStore,
+    private val sourcePolicy: SvnMirrorSourcePolicy,
+    private val storage: RepositoryMirrorStorage,
+    private val locks: RepositoryMirrorLock,
+    private val indexer: SvnMirrorIndexer,
+    private val properties: RepositoryMirrorProperties
+) {
+    fun syncOneMirror(id: Long, owner: String, fence: Long, cancelled: () -> Boolean) {
+        properties.requireActivation()
+        val initial = store.snapshot(id)
+        locks.withLock(requireNotNull(initial.project.id)) {
+            val checkActive = {
+                if (cancelled()) throw MirrorLeaseLost()
+                store.fenced(id, owner, fence) { }
+            }
+            checkActive()
+            val source = sourcePolicy.open(initial.sourceUrl, initial.credentialRef)
+            var target: SVNRepository? = null
+            try {
+                source.setCanceller { if (cancelled()) throw cancelledException() }
+                if (source.getRepositoryRoot(true) != source.location) throw MirrorFailure("SOURCE_MUST_BE_REPOSITORY_ROOT")
+                val sourceUuid = source.getRepositoryUUID(true)
+                val head = source.latestRevision
+                val directory = storage.directory(initial)
+                FSRepositoryFactory.setup()
+                if (!directory.resolve("format").exists()) {
+                    if (initial.localRepositoryUuid != null || directory.list()?.isNotEmpty() != false) throw MirrorFailure("TARGET_INCOMPLETE", attention = true)
+                    checkActive()
+                    // enableRevisionProperties=true; force=false never overwrites an existing repository.
+                    SVNRepositoryFactory.createLocalRepository(directory, true, false)
+                }
+                target = SVNRepositoryFactory.create(SVNURL.fromFile(directory))
+                target.setCanceller { if (cancelled()) throw cancelledException() }
+                if (target.getRepositoryRoot(true) != target.location) throw MirrorFailure("TARGET_NOT_ROOT", attention = true)
+                val mirror = store.observe(id, owner, fence, sourceUuid, head, target.getRepositoryUUID(true), target.latestRevision)
+                val goal = if (mirror.status == RepositoryMirrorStatus.INITIAL_IMPORT) requireNotNull(mirror.initialImportTargetRevision) else head
+                synchronize(source, target, mirror, goal, properties.batchSize, checkActive, cancelled,
+                    verified = { revision, youngest -> store.verified(id, owner, fence, revision, youngest) },
+                    indexed = { revision, props -> indexer.index(id, owner, fence, revision, props) })
+                store.complete(id, owner, fence, properties.syncSeconds)
+            } finally {
+                target?.closeSession()
+                source.closeSession()
+            }
+        }
+    }
+
     companion object {
         private fun cancelledException() = SVNCancelException(SVNErrorMessage.create(SVNErrorCode.CANCELLED, "Mirror execution cancelled"))
 
