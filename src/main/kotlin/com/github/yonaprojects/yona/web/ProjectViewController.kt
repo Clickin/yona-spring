@@ -1,6 +1,7 @@
 package com.github.yonaprojects.yona.web
 
 import com.github.yonaprojects.yona.domain.project.Project
+import com.github.yonaprojects.yona.domain.board.supportsReadmeEditing
 import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
@@ -157,6 +158,9 @@ class ProjectViewController(
         model.addAttribute("histories", histories)
         model.addAttribute("readmeFileName", readmeFileName)
         model.addAttribute("readmeHtml", readmeHtml)
+        model.addAttribute("canEditReadme", project.isCodeEnabled &&
+            supportsReadmeEditing(project) &&
+            accessControl.isProjectResourceCreatable(loginUser, project, com.github.yonaprojects.yona.domain.enumeration.ResourceType.COMMIT))
         model.addAttribute("isWatching", isWatching)
         model.addAttribute("watcherCount", watcherCount)
         model.addAttribute("sidebarMilestone", sidebarMilestone)

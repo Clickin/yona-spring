@@ -24,6 +24,8 @@
   이슈 템플릿
 - 내장 코드 저장소 — **Git / SVN / Mercurial** 3종 선택 가능, 온라인 수정·커밋, HTTP(S)뿐 아니라
   SSH로도 접근 가능, 프로젝트 멤버 전용 접근 제어, Git LFS 지원
+  - README 온라인 생성·편집은 Git에서만 지원합니다. SVN/Mercurial README는 저장소 클라이언트로
+    수정해 주세요. 기존 README 읽기와 일반 게시글 작성·수정은 계속 사용할 수 있습니다.
 - 블록 기반 코드 리뷰 — 코드 블록 단위 리뷰 스레드, 리뷰 점수
 - 그룹(조직) 기능 — 그룹 단위 이슈/게시글 통합 관리, 그룹 프로젝트·멤버
 - 한글 기반 — 프로젝트 이름 및 그룹 이름에 한글 사용 가능
@@ -343,6 +345,8 @@ Yona is a web-based project hosting software.
   sub-tasks, body change history, issue templates
 - Embedded code repository — choose **Git, SVN, or Mercurial**, online edit/commit, access over
   SSH as well as HTTP(S), access restricted to project members, Git LFS support
+  - Online README creation/editing is supported only for Git. Update SVN/Mercurial README files
+    with your repository client; existing README reading and ordinary board posts remain available.
 - Block-based code review — review threads per code block, review scores
 - Group (organization) features — unified management of issues/posts across a group, group
   projects and members

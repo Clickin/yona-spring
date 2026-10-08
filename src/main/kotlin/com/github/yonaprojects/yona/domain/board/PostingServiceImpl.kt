@@ -106,6 +106,7 @@ class PostingServiceImpl(
             .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
         val author = userRepository.findById(authorId)
             .orElseThrow { IllegalArgumentException("사용자를 찾을 수 없습니다.") }
+        requireReadmeSupport(project, posting.readme)
 
         posting.project = project
         if (explicitNumber != null && explicitNumber > 0) {
@@ -160,6 +161,7 @@ class PostingServiceImpl(
     ): Posting {
         val posting = getPosting(projectId, number)
             ?: throw IllegalArgumentException("포스팅을 찾을 수 없습니다.")
+        requireReadmeSupport(posting.project, readme || posting.readme)
 
         val originalBody = posting.body
         val originalTitle = posting.title

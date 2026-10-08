@@ -101,6 +101,30 @@ class BoardControllerSpec : DescribeSpec({
         val managerAuth = UsernamePasswordAuthenticationToken("manageruser", "password")
         val pageRequest = PageRequest.of(0, 25)
 
+        listOf("SUBVERSION", "MERCURIAL").forEach { vcs ->
+            it("$vcs rejects direct README create update and content PATCH") {
+                val unsupported = Project(id = 1L, owner = "testuser", name = "unsupported", vcs = vcs, projectScope = ProjectScope.PUBLIC)
+                val existing = Posting(id = 50L, number = 1L, title = "Original", body = "Original body", readme = true, project = unsupported, authorId = user.id)
+                every { projectRepository.findById(1L) } returns Optional.of(unsupported)
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+                every { postingService.getPosting(1L, 1L) } returns existing
+                listOf(
+                    post("/api/projects/1/posts").content("""{"title":"README","body":"rejected","readme":true}"""),
+                    put("/api/projects/1/posts/1").content("""{"title":"Changed","body":"rejected","readme":false}"""),
+                    put("/api/projects/1/posts/1").content("""{"title":"Changed","body":"rejected"}"""),
+                    patch("/api/projects/1/posts/1/content").content("""{"original":"Original body","content":"rejected"}""")
+                ).forEach { request ->
+                    mockMvc.perform(request.principal(userAuth).contentType(MediaType.APPLICATION_JSON))
+                        .andExpect(status().isBadRequest)
+                }
+                verify(exactly = 0) { postingService.createPosting(any(), any(), any(), any()) }
+                verify(exactly = 0) { postingService.updatePosting(any(), any(), any(), any(), any(), any(), any(), any()) }
+                verify(exactly = 0) { postingRepository.save(any()) }
+                existing.body shouldBe "Original body"
+                existing.readme shouldBe true
+            }
+        }
+
         describe("GET /api/projects/{projectId}/posts") {
             it("비공개 프로젝트일 때 프로젝트 멤버라면 200 OK와 게시판 목록을 반환해야 한다") {
                 every { projectRepository.findById(1L) } returns Optional.of(project)

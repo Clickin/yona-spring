@@ -5,6 +5,8 @@ import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.board.Posting
 import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.board.PostingService
+import com.github.yonaprojects.yona.domain.board.supportsReadmeEditing
+import jakarta.servlet.http.HttpServletResponse
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
@@ -200,6 +202,14 @@ class BoardViewController(
         return "board/view"
     }
 
+    private fun unsupportedReadme(project: Project, model: Model, response: HttpServletResponse): String {
+        response.status = HttpServletResponse.SC_BAD_REQUEST
+        model.addAttribute("project", project)
+        model.addAttribute("messageKey", "post.readme.unsupported")
+        model.addAttribute("menuType", "board")
+        return "error/badrequest"
+    }
+
     @GetMapping(value = ["/{owner}/{projectName}/post/new", "/{owner}/{projectName}/postform"])
     fun createPostForm(
         @PathVariable owner: String,
@@ -209,7 +219,8 @@ class BoardViewController(
         @RequestParam(required = false) branch: String?,
         @RequestParam(required = false) path: String?,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        response: HttpServletResponse
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: return "error/404"
@@ -223,6 +234,7 @@ class BoardViewController(
             model.addAttribute("project", project)
             return "error/forbidden"
         }
+        if (readme == true && !supportsReadmeEditing(project)) return unsupportedReadme(project, model, response)
 
         val isAllowedToNotice = loginUser != null && (projectUserRepository.existsByProjectIdAndUserId(project.id!!, loginUser.id!!) || accessControl.isAllowedIfGroupMember(project, loginUser))
 
@@ -251,7 +263,7 @@ class BoardViewController(
         // 그동안 이 checkbox를 hidden input으로 값만 전달하고 있었을 뿐 사용자에게 보여주지
         // 않았음 — 실제 체크박스로 복구.
         val canReadmefy = readme == true &&
-            project.vcs?.uppercase() == "GIT" &&
+            supportsReadmeEditing(project) &&
             accessControl.isProjectResourceCreatable(loginUser, project, ResourceType.COMMIT)
 
         model.addAttribute("project", project)
@@ -271,7 +283,8 @@ class BoardViewController(
         @PathVariable projectName: String,
         @PathVariable number: Long,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        response: HttpServletResponse
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: return "error/404"
@@ -287,13 +300,14 @@ class BoardViewController(
             model.addAttribute("targetType", "board_post")
             return "error/notfound"
         }
+        if (posting.readme && !supportsReadmeEditing(project)) return unsupportedReadme(project, model, response)
 
         val isAllowedToNotice = loginUser != null && (projectUserRepository.existsByProjectIdAndUserId(project.id!!, loginUser.id!!) || accessControl.isAllowedIfGroupMember(project, loginUser))
 
         // yona board/edit.scala.html 대응 — readme 체크박스는 커밋 생성 권한이 있고 Git 프로젝트일
         // 때만 보이며(생성 화면과 달리 쿼리파라미터 조건은 없음), 현재 posting.readme 값을 그대로
         // 반영해 토글 가능해야 한다.
-        val canReadmefy = project.vcs?.uppercase() == "GIT" &&
+        val canReadmefy = supportsReadmeEditing(project) &&
             accessControl.isProjectResourceCreatable(loginUser, project, ResourceType.COMMIT)
 
         val attachments = attachmentRepository.findByContainerTypeAndContainerId(ResourceType.BOARD_POST, posting.id.toString())
@@ -325,7 +339,8 @@ class BoardViewController(
         @PathVariable number: Long,
         @ModelAttribute request: PostingForm,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        response: HttpServletResponse
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: return "error/404"
@@ -351,6 +366,7 @@ class BoardViewController(
             model.addAttribute("project", project)
             return "error/forbidden"
         }
+        if ((request.readme == true || posting.readme) && !supportsReadmeEditing(project)) return unsupportedReadme(project, model, response)
 
         // yona BoardApp.editPost()의 "if (post.readme) { ... }"는 제출된(새) readme 값을 쓴다(기존
         // posting.readme가 아니다) — README.md 실제 git 커밋 + 다른 readme 글 해제는
@@ -383,7 +399,8 @@ class BoardViewController(
         @PathVariable projectName: String,
         @ModelAttribute request: PostingForm,
         authentication: Authentication?,
-        model: Model
+        model: Model,
+        response: HttpServletResponse
     ): String {
         val project = projectRepository.findByOwnerAndNameOrPreviousPlace(owner, projectName).orElse(null)
             ?: return "error/404"
@@ -401,6 +418,7 @@ class BoardViewController(
             model.addAttribute("project", project)
             return "error/forbidden"
         }
+        if (request.readme == true && !supportsReadmeEditing(project)) return unsupportedReadme(project, model, response)
 
         // yona BoardApp.newPost()의 "if (post.readme) { Posting readmePosting = ...; if (readmePosting
         // != null) return editPost(...); }" 대응 — README 게시글은 프로젝트당 하나만 존재해야 하는데,
@@ -410,7 +428,7 @@ class BoardViewController(
         if (request.readme == true) {
             val existingReadme = postingRepository.findByProjectAndReadme(project, true).firstOrNull()
             if (existingReadme != null) {
-                return editPost(owner, projectName, existingReadme.number!!, request, authentication, model)
+                return editPost(owner, projectName, existingReadme.number!!, request, authentication, model, response)
             }
         }
 

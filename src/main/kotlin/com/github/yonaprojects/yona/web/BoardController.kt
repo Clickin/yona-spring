@@ -4,6 +4,7 @@ import com.github.yonaprojects.yona.config.security.AccessControl
 import com.github.yonaprojects.yona.domain.board.Posting
 import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.board.PostingService
+import com.github.yonaprojects.yona.domain.board.requireReadmeSupport
 import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.issue.IssueLabelRepository
@@ -112,6 +113,7 @@ class BoardController(
         if (!checkWritePermission(project, user)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
+        requireReadmeSupport(project, request.readme == true)
 
         val posting = Posting(
             title = request.title,
@@ -142,6 +144,7 @@ class BoardController(
         if (!accessControl.isAllowed(user, project, posting, Operation.UPDATE)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
+        requireReadmeSupport(project, request.readme == true || posting.readme)
 
         val updated = postingService.updatePosting(
             projectId = projectId,
@@ -179,6 +182,7 @@ class BoardController(
         if (!accessControl.isAllowed(user, project, posting, Operation.UPDATE)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build()
         }
+        requireReadmeSupport(project, posting.readme)
 
         if (isModifiedByOthers(posting.body ?: "", request.original)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
