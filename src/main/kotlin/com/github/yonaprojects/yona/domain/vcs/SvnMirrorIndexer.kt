@@ -57,7 +57,9 @@ class SvnMirrorIndexer(
                 val issue = issueRepository.findByProjectAndNumber(project, number) ?: continue
                 issueEventRepository.save(IssueEvent(
                     issue = issue,
-                    senderLoginId = author,
+                    // The source author is not a Yona login. Storing it here would attribute the
+                    // reference to whichever account has (or later registers) the same login ID.
+                    senderLoginId = null,
                     senderEmail = null,
                     newValue = commitId,
                     created = date,

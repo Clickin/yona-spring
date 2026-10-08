@@ -22,7 +22,7 @@ class RepositoryMirrorProperties {
 
     fun requireActivation() {
         if (!enabled) throw MirrorFailure("FEATURE_DISABLED")
-        // ponytail: one designated writer and a loopback CONNECT proxy; no automatic failover.
+        // One designated writer and a loopback CONNECT proxy; no automatic failover.
         if (!egressRestricted || nodeId.isBlank() || nodeId != writerNodeId ||
             proxyHost !in setOf("127.0.0.1", "::1") || proxyPort !in 1..65535 ||
             allowedOrigins.isEmpty() || workers !in 1..8 || batchSize !in 1..1000 ||

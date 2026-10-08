@@ -141,7 +141,7 @@ class SshAuthServiceImpl(
         val project = resolveProject(owner, projectName)
             ?: return SshCommandAuthorization.denied("존재하지 않는 저장소입니다: $owner/$projectName")
 
-        // hg4j's nested batch dispatch bypasses hooks. Hg MIRROR SSH is unsupported in T5.
+        // hg4j's nested batch dispatch bypasses hooks. Hg MIRROR SSH is unsupported.
         if (!repositoryWriteGuard.isWritable(project)) {
             return SshCommandAuthorization.denied("Mercurial mirror SSH access is not supported")
         }

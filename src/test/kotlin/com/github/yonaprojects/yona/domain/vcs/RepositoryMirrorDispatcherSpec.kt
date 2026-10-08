@@ -27,6 +27,35 @@ class RepositoryMirrorDispatcherSpec : DescribeSpec({
                 verify { store wasNot Called; sync wasNot Called }
             } finally { dispatcher.close() }
         }
+        it("skips a misconfigured activation without throwing on every tick") {
+            val store = mockk<RepositoryMirrorStore>()
+            val sync = mockk<SvnMirrorSynchronizer>()
+            val dispatcher = RepositoryMirrorDispatcher(store, sync, properties().apply { proxyHost = "" })
+            try {
+                dispatcher.dispatch()
+                dispatcher.dispatch()
+                verify { store wasNot Called; sync wasNot Called }
+            } finally { dispatcher.close() }
+        }
+        it("does not reclaim a mirror whose local writer is still running after its lease expired") {
+            val store = mockk<RepositoryMirrorStore>(relaxed = true)
+            val sync = mockk<SvnMirrorSynchronizer>()
+            every { store.due(2) } returns listOf(1)
+            every { store.claim(1, any(), any()) } returns 1
+            every { store.heartbeat(any(), any(), any(), any()) } returns true
+            val started = CountDownLatch(1)
+            val finish = CountDownLatch(1)
+            every { sync.syncOneMirror(1, any(), 1, any()) } answers { started.countDown(); finish.await(20, TimeUnit.SECONDS); Unit }
+            val dispatcher = RepositoryMirrorDispatcher(store, sync, properties().apply { workers = 2 })
+            try {
+                dispatcher.dispatch()
+                started.await(10, TimeUnit.SECONDS) shouldBe true
+                // The row looks due again (expired lease), but this node still runs its writer.
+                dispatcher.dispatch()
+                verify(exactly = 1) { store.claim(1, any(), any()) }
+                verify(exactly = 1) { sync.syncOneMirror(any(), any(), any(), any()) }
+            } finally { finish.countDown(); dispatcher.close() }
+        }
         it("releases only its submitted fence on executor rejection and recovers the slot") {
             val store = mockk<RepositoryMirrorStore>(relaxed = true)
             val sync = mockk<SvnMirrorSynchronizer>()

@@ -59,6 +59,16 @@ class RepositoryServiceSpec : DescribeSpec({
             resolver("login2") shouldBe null
         }
 
+        it("does not resolve a mirror's source svn:author to a Yona account") {
+            val proj = Project(id = 1L, owner = "owner", name = "svnmirror", vcs = "SUBVERSION",
+                repositoryMode = com.github.yonaprojects.yona.domain.project.RepositoryMode.MIRROR)
+            every { userRepository.findByLoginId("login1") } returns Optional.of(User(loginId = "login1"))
+
+            val resolver = readPrivateField<(String) -> User?>(service.getRepository(proj), "userResolver")
+            resolver("login1") shouldBe null
+            verify(exactly = 0) { userRepository.findByLoginId(any()) }
+        }
+
         it("should return SvnRepository for SVN project with null owner") {
             val proj = Project(id = 1L, name = "svnproj", vcs = "SVN")
             proj.owner = null

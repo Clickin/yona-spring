@@ -174,11 +174,15 @@ class SvnMirrorIndexerSpec @Autowired constructor(
             }
 
             it("records distinct project-local references with original metadata and suppresses initial notifications") {
+                // A Yona account that happens to share the source author's name must not become the sender.
+                transaction.executeWithoutResult {
+                    if (users.findByLoginId(author).isEmpty) users.save(User(loginId = author, name = "Local namesake", email = "namesake@example.test"))
+                }
                 val userCount = users.count()
                 index(0)
                 index(1)
                 val event = events().single()
-                event.senderLoginId shouldBe author
+                event.senderLoginId shouldBe null
                 event.senderEmail shouldBe null
                 event.created shouldBe date
                 event.newValue shouldBe "1"

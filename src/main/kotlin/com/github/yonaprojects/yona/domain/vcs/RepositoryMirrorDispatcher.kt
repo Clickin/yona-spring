@@ -27,6 +27,7 @@ class RepositoryMirrorDispatcher(
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val closing = AtomicBoolean(false)
+    private val activationWarned = AtomicBoolean(false)
     private val owner = UUID.randomUUID().toString()
     private val slots = Semaphore(properties.workers.coerceIn(1, 8))
     private val active = ConcurrentHashMap<Long, AtomicBoolean>()
@@ -36,8 +37,19 @@ class RepositoryMirrorDispatcher(
     @Scheduled(fixedDelayString = "\${yona.repository-mirror.dispatch-millis:1000}")
     fun dispatch() {
         if (closing.get() || !properties.enabled || properties.nodeId != properties.writerNodeId) return
-        properties.requireActivation()
+        try {
+            properties.requireActivation()
+            activationWarned.set(false)
+        } catch (failure: MirrorFailure) {
+            // Runs every second: report a misconfiguration once instead of throwing on every tick.
+            if (activationWarned.compareAndSet(false, true)) {
+                logger.warn("Mirror dispatch is disabled until activation settings are valid ({})", failure.code)
+            }
+            return
+        }
         for (id in store.due(properties.workers.coerceIn(1, 8))) {
+            // A local writer whose lease expired is still running here; it is not an unknown writer.
+            if (active.containsKey(id)) continue
             if (closing.get() || !slots.tryAcquire()) return
             var fence: Long? = null
             try {
@@ -47,7 +59,14 @@ class RepositoryMirrorDispatcher(
                     continue
                 }
                 val claimedFence = fence
-                executor.execute { execute(id, claimedFence) }
+                val cancelled = AtomicBoolean(closing.get())
+                active[id] = cancelled
+                try {
+                    executor.execute { execute(id, claimedFence, cancelled) }
+                } catch (rejected: RejectedExecutionException) {
+                    active.remove(id, cancelled)
+                    throw rejected
+                }
             } catch (_: RejectedExecutionException) {
                 try { fence?.let { store.release(id, owner, it) } }
                 catch (_: Exception) { logger.warn("Mirror {} rejected lease will recover on expiry", id) }
@@ -60,9 +79,7 @@ class RepositoryMirrorDispatcher(
         }
     }
 
-    private fun execute(id: Long, fence: Long) {
-        val cancelled = AtomicBoolean(closing.get())
-        active[id] = cancelled
+    private fun execute(id: Long, fence: Long, cancelled: AtomicBoolean) {
         var heartbeat: java.util.concurrent.ScheduledFuture<*>? = null
         try {
             heartbeat = heartbeats.scheduleAtFixedRate({
@@ -82,7 +99,7 @@ class RepositoryMirrorDispatcher(
             }
         } finally {
             heartbeat?.cancel(false)
-            active.remove(id)
+            active.remove(id, cancelled)
             try { store.release(id, owner, fence) }
             catch (_: Exception) { logger.warn("Mirror {} lease will recover on expiry", id) }
             slots.release()

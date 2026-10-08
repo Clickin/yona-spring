@@ -5,6 +5,7 @@ import tools.jackson.databind.node.ObjectNode
 import com.github.yonaprojects.yona.domain.gpgkey.GpgSignatureVerifier
 import com.github.yonaprojects.yona.domain.project.Project
 import com.github.yonaprojects.yona.domain.project.ProjectRepository
+import com.github.yonaprojects.yona.domain.project.RepositoryMode
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -41,7 +42,9 @@ class RepositoryService(
                 projectName = project.name,
                 baseDir = svnBaseDir
             ) { loginId ->
-                userRepository.findByLoginId(loginId).orElse(null)
+                // A mirror's svn:author comes from the source server, not from a Yona login.
+                if (project.repositoryMode == RepositoryMode.MIRROR) null
+                else userRepository.findByLoginId(loginId).orElse(null)
             }
         } else if (vcsType == "MERCURIAL" || vcsType == "HG") {
             HgRepository(

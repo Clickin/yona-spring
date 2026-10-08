@@ -155,7 +155,7 @@ class HgAuthorizationFilter(
     }
 }
 
-// hg4j 1.0.0 bypasses pushkey hooks in v1 batch and v2. T5 supports SVN mirrors only;
+// hg4j 1.0.0 bypasses pushkey hooks in v1 batch and v2. Only SVN mirrors are supported;
 // reject the entire MIRROR batch (including read batches), without changing HOSTED authorization.
 internal fun isHgMirrorMutationRequest(request: HttpServletRequest): Boolean {
     val uri = request.requestURI

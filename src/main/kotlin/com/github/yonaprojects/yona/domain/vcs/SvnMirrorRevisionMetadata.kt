@@ -7,7 +7,7 @@ import java.time.format.DateTimeParseException
 
 /** Validate source metadata before publishing a verified revision; never truncate the original author. */
 internal fun svnMirrorRevisionDate(properties: SVNProperties): Instant {
-    // 255 UTF-16 units fit IssueEvent.senderLoginId across all six supported databases.
+    // Keep the source author bounded (255 UTF-16 units) for webhook payloads and display.
     if ((properties.getStringValue(SVNRevisionProperty.AUTHOR)?.length ?: 0) > 255) {
         throw MirrorFailure("AUTHOR_TOO_LONG", attention = true)
     }
