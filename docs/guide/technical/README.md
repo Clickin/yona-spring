@@ -137,6 +137,31 @@ r1 이후 날짜는 유효한 SVN 날짜여야 하고 author는 최대 255 UTF-1
 이미 검증한 과거 속성 수정은 지속해서 탐지·재색인하지 않으며, 발견한 불일치는 운영자 확인으로
 보낸다. 임의 cursor rewind는 지원하지 않는다.
 
+### Git 미러
+
+`GitMirrorEngine`은 `<git>/owner/name.git`에 bare 저장소를 만들고(디렉터리가 비어 있을 때만) JGit으로
+`+refs/heads/*:refs/heads/*`, `+refs/tags/*:refs/tags/*`를 가져온다. Forgejo pull mirror처럼 강제 갱신과
+삭제된 ref를 그대로 따르고, `refs/pull/*` 등 다른 이름 공간은 무시한다. 비어 있지 않은데 저장소가
+아닌 디렉터리, 또는 색인 위치가 있는데 사라진 저장소는 `TARGET_INCOMPLETE`(attention)이며 자동으로
+다시 만들지 않는다. 길이가 255자를 넘는 ref는 건너뛴다.
+
+원본 접속은 `TransportHttp`마다 `GitMirrorHttpConnectionFactory`를 설정하여 SVN과 같은 보장을 준다.
+JVM 전역 상태(`HttpTransport.setConnectionFactory`, `HttpsURLConnection` 기본값)는 바꾸지 않는다.
+모든 연결은 정규화한 원본 origin과 저장소 경로만 허용하고, 연결 전에 `checkHost`를 호출하며,
+JGit이 요청한 프록시와 무관하게 `policy.proxy()`를 쓴다. TLS는 `policy.trustManager(host)`로만 검증하고
+JGit의 trust manager·hostname verifier 변경은 무시한다. 3xx 응답은 `SOURCE_REDIRECT`, 타임아웃은 연결 10초,
+읽기 30초이며 JGit이 늘릴 수 없다. 자격 증명은 `credentialRef`가 있을 때만 읽고 가져오기가 끝나면 지운다.
+
+진행 위치는 ref별 행(`repository_mirror_ref`)이고 선형 커서는 -1로 둔다. 새 커밋은 가져온 ref의 끝에서
+닿고 저장된 어느 위치에서도 닿지 않으며 이번 실행에서 앞선 ref가 가져가지 않은 커밋이다(annotated tag는
+커밋으로 벗긴다). 부모가 자식보다 먼저 오도록 색인하고, 커밋이 `batchSize`보다 많은 ref는 조각 단위로
+색인한다. 각 조각의 checkpoint가 ref 행을 그 조각의 마지막 커밋으로 옮기고 마지막 조각이 끝(tip)으로
+옮긴다. 병합으로 마지막 커밋의 조상이 아닌 앞선 커밋이 조각에 들어가면 그 커밋은 `mirror-pending/<id>`
+임시 행으로 함께 기록하고 ref의 마지막 조각이나 실행 끝에 지운다. 새 커밋이 없는 ref(이미 색인한
+커밋으로의 fast-forward나 강제 갱신)도 행은 옮기고, 사라진 ref의 행은 실행 끝에서 지운다. 이미 만든
+이슈 참조는 기록을 다시 써도 지우지 않는다. 첫 가져오기 동안에는 알림이 없고 `initialImportDone`은
+`store.complete`가 첫 완료 실행 뒤 켠다. 작성자 키는 커밋 author 이메일이다(빈 값이면 없음).
+
 ### 이슈 참조와 알림
 
 검증한 revision의 이슈 참조, `>R`인 경우의 DB NEW_COMMIT 알림, 색인 커서 갱신은 같은
