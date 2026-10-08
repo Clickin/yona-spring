@@ -155,3 +155,21 @@ claim/heartbeat/checkpoint/완료는 DB 시각, owner, 증가하는 fence로 확
 인증/TLS/원본 정책 오류는 즉시 FAILED, 정합성이나 물리 배타성 문제는 NEEDS_ATTENTION이다.
 오류에는 원격 예외 원문이나 secret을 기록하지 않는다.
 
+### 관리자 조작과 검증
+
+`/site/repository-mirrors`는 site-admin 세션 전용이다. 프로젝트 관리자나 API token만으로는
+접근하지 못하며 POST는 CSRF 보호를 받는다. 새 미러는 현재 관리자 소유의 비공개 SVN
+프로젝트로 만든다. 기존 Git 프로젝트 전환이나 저장소 덮어쓰기는 지원하지 않는다.
+원본 경로·비밀 값은 숨기고, 고정 R·커서·마지막 관측 youngest·임대·안전한 오류를 표시한다.
+
+pause/retry는 DB 조작이며 HTTP 요청에서 동기 복제하지 않는다. pause는 다음 안전한
+경계의 중단 요청이지 강제 종료가 아니다. 초기 목표까지 검증/색인되지 않은 저장소의 browse는
+503 준비 중 응답을 주며 프로젝트 홈에도 안내한다. 기능을 꺼도 관리자 상태 조회와 기존
+MIRROR 쓰기 거부는 유지된다.
+
+검증은 Java 21에서 mirror/guard/notification 회귀와 `RepositoryModeMigrationSpec`을 실행하고,
+`-Dyona.it.db=h2|mariadb|postgres|mysql|mssql|cubrid`를 DB별로 선택하여 순차 수행한다.
+create-drop 결과만으로 upgrade를 확인하지 않는다. 물리 잠금 spec에는 별도 JVM의 보유·충돌·
+process 종료 후 해제 검사가 있다. 실제 HTTPS SVN·제한 프록시·관리자 브라우저에서는 인증
+실패/재시도, commit 후 속성 실패/복구, 복제 중 고정 R, 이후 알림과 링크, pause,
+권한/CSRF/redirect 거부, 위키 쓰기, 기능 off 재기동 및 내용/속성 일치를 별도로 확인한다.

@@ -26,11 +26,13 @@ class RepositoryService(
     // init.defaultBranch 설정에 기대지 않고 애플리케이션 설정으로 결정론적으로 고정한다.
     @Value("\${yona.git.default-branch:main}")
     private val gitDefaultBranch: String,
-    private val writeGuard: RepositoryWriteGuard = RepositoryWriteGuard(projectRepository)
+    private val writeGuard: RepositoryWriteGuard = RepositoryWriteGuard(projectRepository),
+    private val mirrorReadiness: RepositoryMirrorReadiness? = null
 ) {
     private val objectMapper = ObjectMapper()
 
     fun getRepository(project: Project): PlayRepository {
+        mirrorReadiness?.requireReady(project)
         val vcsType = project.vcs?.uppercase() ?: "GIT"
         return if (vcsType == "SUBVERSION" || vcsType == "SVN") {
             SvnRepository(

@@ -540,6 +540,9 @@
       <li th:class="${activeMenu == 'projects' ? 'active' : ''}">
         <a href="/sites/projectList" th:text="#{site.sidebar.projectList}">프로젝트 관리</a>
       </li>
+      <li th:class="${activeMenu == 'repositoryMirrors' ? 'active' : ''}">
+        <a th:href="@{/site/repository-mirrors}" th:text="#{mirror.title}">SVN read-only mirrors</a>
+      </li>
       <li th:class="${activeMenu == 'mail' ? 'active' : ''}">
         <a href="/sites/mail" th:text="#{site.sidebar.mailSend}">메일 발송</a>
       </li>

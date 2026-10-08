@@ -3,6 +3,7 @@ package com.github.yonaprojects.yona.config.svn
 import com.github.yonaprojects.yona.config.git.DeployKeyAuthenticationToken
 import com.github.yonaprojects.yona.config.vcs.RepoAccessPolicy
 import com.github.yonaprojects.yona.domain.vcs.RepositoryWriteGuard
+import com.github.yonaprojects.yona.domain.vcs.RepositoryMirrorReadiness
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -19,7 +20,8 @@ class SvnAuthorizationFilter(
     // RepoAccessPolicy와 로직을 공유한다. project.vcs 검증과 SVN 고유의 쓰기요청 판정
     // (HTTP 메서드 allowlist)만 RepoAccessPolicy에 없는 SVN 전용 로직이라 이 필터에 남겨둔다.
     private val repoAccessPolicy: RepoAccessPolicy,
-    private val repositoryWriteGuard: RepositoryWriteGuard
+    private val repositoryWriteGuard: RepositoryWriteGuard,
+    private val mirrorReadiness: RepositoryMirrorReadiness? = null
 ) : OncePerRequestFilter() {
 
     private val svnUriPattern = Pattern.compile("^/svn/([^/]+)/([^/]+?)(?:/.*)?$")
@@ -85,6 +87,10 @@ class SvnAuthorizationFilter(
                     response.sendError(HttpServletResponse.SC_FORBIDDEN, "Forbidden")
                     return
                 }
+                if (mirrorReadiness?.isReady(project) == false) {
+                    response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "Repository mirror is preparing")
+                    return
+                }
                 filterChain.doFilter(request, response)
                 return
             }
@@ -106,6 +112,10 @@ class SvnAuthorizationFilter(
             }
         }
 
+        if (mirrorReadiness?.isReady(project) == false) {
+            response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "Repository mirror is preparing")
+            return
+        }
         filterChain.doFilter(request, response)
     }
 
