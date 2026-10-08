@@ -113,6 +113,60 @@ class GitSmartHttpProtocolIntegrationSpec @Autowired constructor(
                 }
             }
 
+            it("serves a Git mirror to a real git clone and fetch while refusing push") {
+                val password = "pass123"
+                val salt = "saltsalt"
+                val owner = userRepository.save(User(
+                    loginId = "git-mirror-owner", name = "Git mirror owner", email = "git-mirror-owner@yona.io",
+                    password = hashPassword(password, salt), passwordSalt = salt
+                ))
+                val project = projectRepository.save(Project(
+                    name = "git-mirror-proj", owner = owner.loginId, projectScope = ProjectScope.PUBLIC, vcs = "GIT",
+                    repositoryMode = com.github.yonaprojects.yona.domain.project.RepositoryMode.MIRROR
+                ))
+                val managerRole = roleRepository.findById(1L).orElseGet { roleRepository.save(Role(id = 1L, name = "manager", active = true)) }
+                projectUserRepository.save(ProjectUser(user = owner, project = project, role = managerRole))
+                // The mirror engine writes the bare repository directly; simulate that with a local commit.
+                val gitDir = File(gitBaseDirHolder, "${project.owner}/${project.name}.git")
+                org.eclipse.jgit.api.Git.init().setBare(true).setInitialBranch("main").setDirectory(gitDir).call().close()
+                val seed = Files.createTempDirectory("git-mirror-seed-").toFile()
+                fun git(dir: File, vararg args: String): Pair<Int, String> {
+                    val process = ProcessBuilder("git", "-c", "credential.helper=", "-c", "user.name=upstream", "-c", "user.email=upstream@example.test", *args)
+                        .directory(dir).redirectErrorStream(true).also { it.environment()["GIT_TERMINAL_PROMPT"] = "0" }.start()
+                    val output = process.inputStream.bufferedReader().readText()
+                    return process.waitFor() to output
+                }
+                fun gitOk(dir: File, vararg args: String) { val (exit, output) = git(dir, *args); withClue(output) { exit shouldBe 0 } }
+                val clone = Files.createTempDirectory("git-mirror-clone-").toFile()
+                try {
+                    gitOk(seed, "init", "-b", "main")
+                    File(seed, "README.md").writeText("# mirrored")
+                    gitOk(seed, "add", "README.md")
+                    gitOk(seed, "commit", "-m", "mirrored #1")
+                    gitOk(seed, "push", gitDir.absolutePath, "main")
+
+                    val url = "http://127.0.0.1:$port/git/${project.owner}/${project.name}.git"
+                    gitOk(clone.parentFile, "clone", url, clone.absolutePath)
+                    File(clone, "README.md").readText() shouldBe "# mirrored"
+                    File(seed, "README.md").writeText("# mirrored 2")
+                    gitOk(seed, "commit", "-am", "second")
+                    gitOk(seed, "push", gitDir.absolutePath, "main")
+                    gitOk(clone, "pull")
+                    File(clone, "README.md").readText() shouldBe "# mirrored 2"
+
+                    File(clone, "local.txt").writeText("local")
+                    gitOk(clone, "add", "local.txt")
+                    gitOk(clone, "commit", "-m", "local change")
+                    val auth = "Authorization: Basic " + Base64.getEncoder().encodeToString("${owner.loginId}:$password".toByteArray())
+                    val (pushExit, _) = git(clone, "-c", "http.extraHeader=$auth", "push", url, "main")
+                    (pushExit != 0) shouldBe true
+                    git(seed, "--git-dir", gitDir.absolutePath, "log", "-1", "--format=%s").second.trim() shouldBe "second"
+                } finally {
+                    seed.deleteRecursively()
+                    clone.deleteRecursively()
+                }
+            }
+
             // yona-wiki P3-02 12라운드(2026-09-01) 회귀 방지 — 실서버+실 CLI로 PR merge 충돌 경로를
             // 실측하려다 발견한 버그. GitServletConfig.gitServletRegistrationBean()의
             // setRepositoryResolver { _, name -> File(gitBaseDir, name) ... }가 JGit이 URL에서
