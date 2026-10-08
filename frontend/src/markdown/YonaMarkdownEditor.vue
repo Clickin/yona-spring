@@ -269,14 +269,13 @@ defineExpose(exposed);
           </button>
         </div>
       </li>
-      <!-- v-pre keeps these native Shadow DOM slots instead of Vue slot outlets. -->
-      <li v-if="clearDraft"><slot v-pre name="clear-draft"></slot></li>
-      <li v-if="notice"><slot v-pre name="notice"></slot></li>
+      <li v-if="clearDraft"><slot name="clear-draft"></slot></li>
+      <li v-if="notice"><slot name="notice"></slot></li>
     </ul>
     <div class="tab-content">
-      <slot v-pre name="help"></slot>
+      <slot name="help"></slot>
       <div :id="`${textarea.id}-edit`" ref="editPane" class="tab-pane" :class="{active: !preview}" :hidden="preview">
-        <div class="textarea-box"><slot v-pre name="input"></slot></div>
+        <div class="textarea-box"><slot name="input"></slot></div>
       </div>
       <div :id="`${textarea.id}-preview`" class="tab-pane markdown-preview" :class="{active: preview}"
            :hidden="!preview" :style="preview ? {height: `${previewHeight}px`} : undefined">

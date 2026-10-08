@@ -60,7 +60,7 @@ Renderer output is genuinely inside its shadow root. Heading fragments scroll ex
 
 ### Internal functions
 
-- `YonaMarkdownEditor.vue`: `<script setup lang="ts">` owns original control initialization, `.value` operations, completion requests/abort, indentation, native events, preview/checklist state and lifecycle. DOM nodes are ordinary per-instance references, not deep reactive state. Static `<slot v-pre>` elements remain native Shadow DOM slots; renderer `sourceElement` uses a property binding.
+- `YonaMarkdownEditor.vue`: `<script setup lang="ts">` owns original control initialization, `.value` operations, completion requests/abort, indentation, native events, preview/checklist state and lifecycle. DOM nodes are ordinary per-instance references, not deep reactive state. Vue's `defineCustomElement` renders standard `<slot>` outlets as native Shadow DOM slots; renderer `sourceElement` uses a property binding.
 - `yona-markdown-editor.ts`: standard `defineCustomElement` registration and the writable `.value` adapter only. Assignments before registration/connection are consumed by the SFC without replacing the original textarea or its default value.
 - `yona-markdown-help.ts`: one local Stimulus controller owns help toggling through declarative actions; the Vue editor retains its server-rendered root in a slot.
 - `YonaMarkdownRenderer.vue`: owns immutable snapshots, parsing/sanitization, output, structure/enhancement initialization, fragment handling, `.ready` and lifecycle cleanup. Its `v-html` receives only the sanitized snapshot. `yona-markdown-renderer.ts` only registers `defineCustomElement` and retains the public highlighting export.
