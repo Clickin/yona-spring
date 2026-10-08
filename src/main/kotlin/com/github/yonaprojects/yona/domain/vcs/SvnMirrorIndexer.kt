@@ -25,7 +25,8 @@ class SvnMirrorIndexer(
     private val issueEventRepository: IssueEventRepository,
     private val notificationEventRecorder: NotificationEventRecorder,
     private val watchService: WatchService,
-    private val webhookService: WebhookService
+    private val webhookService: WebhookService,
+    private val authorMappings: RepositoryMirrorAuthorRepository
 ) {
     private val logger = LoggerFactory.getLogger(SvnMirrorIndexer::class.java)
 
@@ -53,14 +54,14 @@ class SvnMirrorIndexer(
             val message = properties.getStringValue(SVNRevisionProperty.LOG) ?: ""
             val commitId = revision.toString()
             val project = mirror.project
+            // Only an administrator-confirmed mapping names a Yona account; a matching login ID does not.
+            val sender = author?.let { authorMappings.findUser(id, it) }
             for (number in IssueReferenceParser.findReferredIssueNumbers(message)) {
                 val issue = issueRepository.findByProjectAndNumber(project, number) ?: continue
                 issueEventRepository.save(IssueEvent(
                     issue = issue,
-                    // The source author is not a Yona login. Storing it here would attribute the
-                    // reference to whichever account has (or later registers) the same login ID.
-                    senderLoginId = null,
-                    senderEmail = null,
+                    senderLoginId = sender?.loginId,
+                    senderEmail = sender?.email,
                     newValue = commitId,
                     created = date,
                     eventType = EventType.ISSUE_REFERRED_FROM_COMMIT

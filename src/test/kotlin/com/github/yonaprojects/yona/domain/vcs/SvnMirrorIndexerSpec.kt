@@ -56,6 +56,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
     private val inbox: IndexController,
     private val notificationUrls: NotificationUrlResolver,
     private val mailRenderer: NotificationMailRenderer,
+    private val authorMappings: RepositoryMirrorAuthorRepository,
     transactionManager: PlatformTransactionManager
 ) : AbstractIntegrationTest() {
     init {
@@ -65,7 +66,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
         }
         val watchers = mockk<WatchService>()
         val webhooks = mockk<WebhookService>(relaxed = true)
-        val indexer = SvnMirrorIndexer(store, issues, references, recorder, watchers, webhooks)
+        val indexer = SvnMirrorIndexer(store, issues, references, recorder, watchers, webhooks, authorMappings)
         val date = Instant.parse("2007-05-06T07:08:09Z")
         val author = "외부-svn-author"
         val worker = "indexer-spec"
@@ -125,6 +126,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                     notifications.delete(event)
                 }
                 references.deleteAll(events())
+                authorMappings.deleteAll(authorMappings.findAllByMirrorIdOrderBySourceAuthorAsc(mirror.id!!))
                 mirrors.deleteById(mirror.id!!)
                 issues.deleteById(issue.id!!)
                 projects.deleteById(project.id!!)
@@ -240,6 +242,18 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                 transaction.execute { mail.findByNotificationEvent(notification) != null } shouldBe true
             }
 
+            it("credits a reference only to the administrator-mapped account") {
+                val mapped = transaction.execute {
+                    val user = users.save(User(loginId = "svn-mapped-${UUID.randomUUID().toString().take(8)}", name = "Mapped", email = "mapped-${UUID.randomUUID()}@example.test"))
+                    authorMappings.save(RepositoryMirrorAuthor(mirror = mirrors.findById(mirror.id!!).get(), sourceAuthor = author, user = user))
+                    user
+                }!!
+                index(1)
+                index(2, properties(name = "unmapped-author"))
+                events().map { it.newValue to it.senderLoginId } shouldBe listOf("1" to mapped.loginId, "2" to null)
+                events().first().senderEmail shouldBe mapped.email
+            }
+
             it("allows a missing author without fabricating an account") {
                 index(1, properties(name = null))
                 events().single().senderLoginId shouldBe null
@@ -298,7 +312,7 @@ class SvnMirrorIndexerSpec @Autowired constructor(
                 val failedMail = mockk<NotificationMailRepository>()
                 every { failedMail.save(any()) } throws IllegalStateException("injected mail marker failure")
                 val failedRecorder = NotificationEventRecorder(notifications, failedMail, SimpleMeterRegistry())
-                val failedIndexer = SvnMirrorIndexer(store, issues, references, failedRecorder, watchers, webhooks)
+                val failedIndexer = SvnMirrorIndexer(store, issues, references, failedRecorder, watchers, webhooks, authorMappings)
                 shouldThrow<IllegalStateException> {
                     failedIndexer.index(mirror.id!!, worker, fence, 2, properties())
                 }

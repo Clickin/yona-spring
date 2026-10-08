@@ -28,7 +28,8 @@ class RepositoryService(
     @Value("\${yona.git.default-branch:main}")
     private val gitDefaultBranch: String,
     private val writeGuard: RepositoryWriteGuard = RepositoryWriteGuard(projectRepository),
-    private val mirrorReadiness: RepositoryMirrorReadiness? = null
+    private val mirrorReadiness: RepositoryMirrorReadiness? = null,
+    private val mirrorAuthors: RepositoryMirrorAuthorRepository? = null
 ) {
     private val objectMapper = ObjectMapper()
 
@@ -43,8 +44,11 @@ class RepositoryService(
                 baseDir = svnBaseDir
             ) { loginId ->
                 // A mirror's svn:author comes from the source server, not from a Yona login.
-                if (project.repositoryMode == RepositoryMode.MIRROR) null
-                else userRepository.findByLoginId(loginId).orElse(null)
+                if (project.repositoryMode == RepositoryMode.MIRROR) {
+                    project.id?.let { mirrorAuthors?.findUserByProjectId(it, loginId) }
+                } else {
+                    userRepository.findByLoginId(loginId).orElse(null)
+                }
             }
         } else if (vcsType == "MERCURIAL" || vcsType == "HG") {
             HgRepository(

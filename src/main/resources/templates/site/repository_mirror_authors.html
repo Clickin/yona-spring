@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{site/layout :: head(#{mirror.authors})}"></head>
+<body class="theme-default">
+<div id="main" class="main">
+  <div th:replace="~{site/layout :: gnb}"></div>
+  <div th:replace="~{site/layout :: breadcrumb}"></div>
+  <div class="page-wrap-outer"><div class="site-setting-wrap"><div class="row-fluid">
+    <div th:replace="~{site/layout :: sidebar('repositoryMirrors')}"></div>
+    <main class="span10">
+      <p><a th:href="@{/site/repository-mirrors}" th:text="#{mirror.back}">Back to mirrors</a></p>
+      <h2 th:text="${view.projectOwner + '/' + view.projectName + ' — '} + #{mirror.authors}">Author mappings</h2>
+      <p role="status" th:if="${mirrorNotice != null}" th:text="#{${mirrorNotice}}"></p>
+      <p th:text="#{mirror.authors.help}"></p>
+      <form th:action="@{/site/repository-mirrors/{id}/authors(id=${view.mirrorId})}" method="post">
+        <fieldset>
+          <legend th:text="#{mirror.authors.add}"></legend>
+          <label for="mirror-author-source" th:text="#{mirror.authors.source}"></label>
+          <input id="mirror-author-source" name="sourceAuthor" required maxlength="255" list="mirror-author-candidates" autocomplete="off">
+          <datalist id="mirror-author-candidates">
+            <option th:each="author : ${view.unmappedAuthors}" th:value="${author}"></option>
+          </datalist>
+          <label for="mirror-author-user" th:text="#{mirror.authors.user}"></label>
+          <input id="mirror-author-user" name="loginId" required maxlength="255" autocomplete="off">
+          <button type="submit" class="ybtn ybtn-primary" th:text="#{mirror.authors.add}"></button>
+        </fieldset>
+      </form>
+      <p th:if="${view.mappings.empty}" th:text="#{mirror.authors.empty}"></p>
+      <table class="table" th:unless="${view.mappings.empty}">
+        <thead><tr><th th:text="#{mirror.authors.source}"></th><th th:text="#{mirror.authors.user}"></th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="mapping : ${view.mappings}">
+            <td th:text="${mapping.sourceAuthor}"></td>
+            <td><a th:href="@{/user/{loginId}(loginId=${mapping.loginId})}" th:text="${mapping.loginId}"></a></td>
+            <td>
+              <form th:action="@{/site/repository-mirrors/{id}/authors/{mappingId}/delete(id=${view.mirrorId},mappingId=${mapping.id})}" method="post">
+                <button type="submit" class="ybtn" th:text="#{mirror.authors.remove}"></button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <section th:unless="${view.unmappedAuthors.empty}">
+        <h3 th:text="#{mirror.authors.unmapped}"></h3>
+        <ul><li th:each="author : ${view.unmappedAuthors}" th:text="${author}"></li></ul>
+      </section>
+    </main>
+  </div></div></div>
+  <footer th:replace="~{site/layout :: footer}"></footer>
+</div>
+<th:block th:replace="~{site/layout :: scripts}"></th:block>
+</body>
+</html>

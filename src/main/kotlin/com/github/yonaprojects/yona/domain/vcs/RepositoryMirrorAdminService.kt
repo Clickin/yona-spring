@@ -183,5 +183,6 @@ internal fun mirrorErrorMessage(code: String?): String = when (code) {
     "DIRECTORY_OWNERSHIP", "CREATE_UNCERTAIN" -> "mirror.error.directory"
     "PROJECT_NAME", "PROJECT_EXISTS", "MANAGER_ROLE_REQUIRED" -> "mirror.error.project"
     "SOURCE_CONNECTION" -> "mirror.error.connection"
+    "AUTHOR_INVALID", "AUTHOR_USER", "AUTHOR_MAPPING_EXISTS", "AUTHOR_MAPPING_NOT_FOUND" -> "mirror.error.author"
     else -> "mirror.actionFailed"
 }

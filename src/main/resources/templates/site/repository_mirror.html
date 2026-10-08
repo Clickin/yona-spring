@@ -51,6 +51,7 @@
           <dt th:text="#{mirror.retryCount}"></dt><dd th:text="${mirror.retryCount}"></dd>
           <dt th:text="#{mirror.lease}"></dt><dd><span th:text="${mirror.leaseActive} ? #{mirror.running} : #{mirror.idle}"></span> <span th:text="${mirror.leaseUntil}"></span></dd>
         </dl>
+        <p><a th:href="@{/site/repository-mirrors/{id}/authors(id=${mirror.id})}" th:text="#{mirror.authors}">Author mappings</a></p>
         <div th:if="${mirrorEnabled}">
           <form th:action="@{/site/repository-mirrors/{id}/pause(id=${mirror.id})}" method="post">
             <button class="ybtn" type="submit" th:disabled="${!mirror.enabled}" th:text="#{mirror.pause}"></button>
