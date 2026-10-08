@@ -54,6 +54,38 @@ class PostingServiceSpec @Autowired constructor(
                 userRepository.deleteAll()
             }
 
+            listOf("SUBVERSION", "MERCURIAL").forEach { vcs ->
+                it("$vcs README writes fail before numbering, mutation or notification") {
+                    val author = userRepository.save(User(loginId = "writer", name = "Writer", email = "writer@example.invalid"))
+                    val project = projectRepository.save(Project(name = "unsupported", owner = "writer", vcs = vcs))
+                    val watcher = userRepository.save(User(loginId = "watcher", name = "Watcher", email = "watcher@example.invalid"))
+                    watchRepository.save(Watch(user = watcher, resourceType = ResourceType.PROJECT, resourceId = project.id.toString()))
+                    val attempted = Posting(title = "README", body = "rejected", readme = true, project = project)
+                    shouldThrow<UnsupportedReadmeException> {
+                        postingService.createPosting(project.id!!, attempted, author.id!!)
+                    }
+                    attempted.id shouldBe null
+                    attempted.number shouldBe null
+                    postingRepository.count() shouldBe 0L
+                    projectRepository.findLastPostingNumber(project.id!!) shouldBe 0L
+                    notificationEventRepository.count() shouldBe 0L
+                    notificationMailRepository.count() shouldBe 0L
+                    titleHeadRepository.count() shouldBe 0L
+
+                    val existing = postingRepository.save(Posting(title = "Original", body = "Original body", number = 1, readme = true, project = project))
+                    listOf(false, true).forEach { submitted ->
+                        shouldThrow<UnsupportedReadmeException> {
+                            postingService.updatePosting(project.id!!, 1, "Changed", "Changed body", false, submitted, author.id!!, true)
+                        }
+                        existing.title shouldBe "Original"
+                        existing.body shouldBe "Original body"
+                        existing.readme shouldBe true
+                    }
+                    notificationEventRepository.count() shouldBe 0L
+                    notificationMailRepository.count() shouldBe 0L
+                }
+            }
+
             it("게시글을 새로 작성하면 신규 게시글(NEW_POSTING) 알림 이벤트가 발행되어야 한다") {
                 val author = userRepository.save(User(loginId = "writer", name = "작성자", email = "writer@yona.io"))
                 val project = projectRepository.save(Project(name = "board-project", owner = "writer", projectScope = ProjectScope.PUBLIC))

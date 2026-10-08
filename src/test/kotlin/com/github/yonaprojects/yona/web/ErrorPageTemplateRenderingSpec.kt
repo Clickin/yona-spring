@@ -17,6 +17,7 @@ import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
@@ -81,6 +82,27 @@ class ErrorPageTemplateRenderingSpec @Autowired constructor(
         describe("에러 페이지 컨텍스트 인지형 렌더링 (P-템플릿 그룹3 #45/#47/#49/#50/#53)") {
             // 이름이 고유한(errpage- 접두) 픽스처만 만들고 클래스에 붙은 @Transactional이 각
             // 테스트 종료 시 롤백하므로, 다른 스펙의 데이터를 건드리는 전역 deleteAll()은 쓰지 않는다.
+
+            it("unsupported README requests render the real localized 400 page without losing global model attributes") {
+                val user = userRepository.save(User(loginId = "errpage-readme", name = "README writer", email = "errpage-readme@example.invalid"))
+                val project = projectRepository.save(Project(name = "errpage-readme", owner = user.loginId, vcs = "SUBVERSION", projectScope = ProjectScope.PUBLIC))
+                val auth = UsernamePasswordAuthenticationToken(user.loginId, "unused")
+                val base = "/${project.owner}/${project.name}"
+                listOf(
+                    get("$base/postform").param("readme", "true"),
+                    post("$base/posts").param("title", "README").param("body", "Rejected").param("readme", "true")
+                ).forEach { request ->
+                    val body = mockMvc.perform(request.principal(auth).locale(Locale.ENGLISH))
+                        .andExpect(status().isBadRequest)
+                        .andReturn().response.contentAsString
+                    body shouldContain "Online README editing is only supported for Git repositories."
+                    body shouldContain project.name
+                    body shouldNotContain "name=\"readme\""
+                }
+                val home = mockMvc.perform(get(base).principal(auth).locale(Locale.ENGLISH))
+                    .andExpect(status().isOk).andReturn().response.contentAsString
+                home shouldNotContain "postform?readme=true"
+            }
 
             it("이슈를 찾지 못하면 error/notfound가 프로젝트 헤더/메뉴와 함께 실제로 렌더링돼야 한다 (#45)") {
                 // BootstrapSetupInterceptor는 DB에 유저가 0명이면 무조건 /bootstrap-setup으로

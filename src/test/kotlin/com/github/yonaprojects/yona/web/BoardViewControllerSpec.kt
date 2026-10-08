@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver
 import tools.jackson.databind.ObjectMapper
 import java.util.Optional
@@ -125,6 +126,35 @@ class BoardViewControllerSpec : DescribeSpec({
 
         val userAuth = UsernamePasswordAuthenticationToken("testuser", "password")
         val pageRequest = PageRequest.of(0, 20)
+
+        listOf("SUBVERSION", "MERCURIAL").forEach { vcs ->
+            it("$vcs rejects README forms and writes before attachments or persistence") {
+                val unsupported = Project(id = 1L, owner = "owner", name = "TestProj", vcs = vcs, projectScope = ProjectScope.PUBLIC)
+                val existing = Posting(id = 5L, number = 1L, title = "Original", readme = true, project = unsupported, authorLoginId = user.loginId)
+                every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(unsupported)
+                every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
+                every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
+                every { postingService.getPosting(1L, 1L) } returns existing
+                val requests = listOf(
+                    get("/owner/TestProj/postform").param("readme", "true"),
+                    get("/owner/TestProj/post/1/editform"),
+                    post("/owner/TestProj/posts").param("title", "README").param("body", "Rejected").param("readme", "true").param("temporaryUploadFiles", "9"),
+                    post("/owner/TestProj/post/1/edit").param("title", "Changed").param("body", "Rejected"),
+                    post("/owner/TestProj/post/1/edit").param("title", "Changed").param("body", "Rejected").param("readme", "false")
+                )
+                requests.forEach { request ->
+                    mockMvc.perform(request.principal(userAuth))
+                        .andExpect(status().isBadRequest)
+                        .andExpect(view().name("error/badrequest"))
+                        .andExpect(model().attribute("messageKey", "post.readme.unsupported"))
+                }
+                verify(exactly = 0) { postingService.createPosting(any(), any(), any(), any()) }
+                verify(exactly = 0) { postingService.updatePosting(any(), any(), any(), any(), any(), any(), any(), any()) }
+                verify { attachmentService wasNot io.mockk.Called }
+                existing.readme shouldBe true
+                existing.title shouldBe "Original"
+            }
+        }
 
         describe("GET /{owner}/{projectName}/posts") {
             it("비공개 프로젝트일 때 멤버라면 200 OK와 board/list 뷰를 반환해야 한다") {
@@ -364,7 +394,7 @@ class BoardViewControllerSpec : DescribeSpec({
 
                 val request = PostingForm(title = "제목", body = "본문", temporaryUploadFiles = "900")
 
-                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/TestProj/post/5"
                 verify(exactly = 1) {
@@ -395,7 +425,7 @@ class BoardViewControllerSpec : DescribeSpec({
 
                 val request = PostingForm(title = "새 README", body = "새 본문", readme = true)
 
-                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/TestProj"
                 verify(exactly = 0) { postingService.createPosting(any(), any(), any()) }
@@ -415,7 +445,7 @@ class BoardViewControllerSpec : DescribeSpec({
 
                 val request = PostingForm(title = "첫 README", body = "본문", readme = true)
 
-                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/TestProj"
                 verify(exactly = 1) { postingService.createPosting(1L, any(), 10L) }
@@ -433,7 +463,7 @@ class BoardViewControllerSpec : DescribeSpec({
 
                 val request = PostingForm(title = "이슈 템플릿", body = "템플릿 내용", issueTemplate = "true")
 
-                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/TestProj"
                 verify(exactly = 0) { postingService.createPosting(any(), any(), any()) }
@@ -465,7 +495,7 @@ class BoardViewControllerSpec : DescribeSpec({
                     branch = "develop"
                 )
 
-                val result = boardViewController.createPost("owner", "CodeEditProj", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "CodeEditProj", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/CodeEditProj/code/develop/src/main/Foo.kt"
                 verify(exactly = 0) { postingService.createPosting(any(), any(), any()) }
@@ -505,7 +535,7 @@ class BoardViewControllerSpec : DescribeSpec({
 
                 val request = PostingForm(title = "제목", body = "본문")
 
-                val result = boardViewController.createPost("owner", "PublicProj", request, nonMemberAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "PublicProj", request, nonMemberAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/PublicProj/post/1"
             }
@@ -574,18 +604,21 @@ class BoardViewControllerSpec : DescribeSpec({
                     .andExpect(model().attributeExists("attachmentsJson"))
             }
 
-            it("Git 프로젝트가 아니면 canReadmefy가 false여야 한다") {
+            it("existing SVN README cannot be opened as an ordinary edit form") {
                 val memberUser = User(id = 10L, loginId = "testuser", name = "테스트유저")
+                val project = Project(id = 1L, name = "TestProj", owner = "owner", vcs = "SUBVERSION")
+                val posting = Posting(id = 5L, number = 1L, project = project, readme = true)
                 memberUser.projectUsers.add(ProjectUser(id = 962L, user = memberUser, project = project, role = Role(id = RoleType.MEMBER.roleType)))
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
                 every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
                 every { postingService.getPosting(1L, 1L) } returns posting
-                every { attachmentRepository.findByContainerTypeAndContainerId(ResourceType.BOARD_POST, "5") } returns emptyList()
 
                 mockMvc.perform(get("/owner/TestProj/post/1/editform").principal(userAuth))
-                    .andExpect(status().isOk)
-                    .andExpect(model().attribute("canReadmefy", false))
+                    .andExpect(status().isBadRequest)
+                    .andExpect(view().name("error/badrequest"))
+                posting.readme shouldBe true
+                verify(exactly = 0) { postingService.updatePosting(any(), any(), any(), any(), any(), any(), any(), any()) }
             }
 
             it("직접 멤버가 아니어도 그룹 멤버라면 board/edit 뷰에 접근할 수 있어야 한다") {
@@ -1057,19 +1090,18 @@ class BoardViewControllerSpec : DescribeSpec({
                     .andExpect(model().attribute("preparedPostBody", ""))
             }
 
-            it("readme=true여도 Git 프로젝트가 아니면 canReadmefy가 false여야 한다") {
+            it("SVN README entry is rejected instead of offering an ordinary posting form") {
                 val memberUser = User(id = 10L, loginId = "testuser", name = "테스트유저")
+                val project = Project(id = 1L, name = "TestProj", owner = "owner", vcs = "SVN", projectScope = ProjectScope.PUBLIC)
                 memberUser.projectUsers.add(ProjectUser(id = 986L, user = memberUser, project = project, role = Role(id = RoleType.MEMBER.roleType)))
-                val mockRepo = mockk<PlayRepository>()
-                every { mockRepo.getRawFile("HEAD", "README.md") } returns "내용".toByteArray(Charsets.UTF_8)
-                every { repositoryService.getRepository(project) } returns mockRepo
                 every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
                 every { userRepository.findByLoginId("testuser") } returns Optional.of(memberUser)
                 every { projectUserRepository.existsByProjectIdAndUserId(1L, 10L) } returns true
 
                 mockMvc.perform(get("/owner/TestProj/post/new").param("readme", "true").principal(userAuth))
-                    .andExpect(status().isOk)
-                    .andExpect(model().attribute("canReadmefy", false))
+                    .andExpect(status().isBadRequest)
+                    .andExpect(view().name("error/badrequest"))
+                verify(exactly = 0) { postingService.createPosting(any(), any(), any(), any()) }
             }
 
             it("직접 멤버가 아니어도 그룹 멤버라면 isAllowedToNotice가 true여야 한다") {
@@ -1138,7 +1170,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { projectUserRepository.existsByProjectIdAndUserId(101L, 10L) } returns true
 
                 val request = PostingForm(title = "커밋", body = "내용", path = "a.txt")
-                val result = boardViewController.createPost("owner", "BrokenRepo", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "BrokenRepo", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/BrokenRepo/code//a.txt"
                 verify(exactly = 0) { postingService.createPosting(any(), any(), any()) }
@@ -1154,7 +1186,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { projectUserRepository.existsByProjectIdAndUserId(102L, 10L) } returns true
 
                 val request = PostingForm(title = "템플릿", body = "내용", issueTemplate = "true")
-                val result = boardViewController.createPost("owner", "BrokenIssueTpl", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "BrokenIssueTpl", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/BrokenIssueTpl"
                 verify(exactly = 0) { postingService.createPosting(any(), any(), any()) }
@@ -1173,7 +1205,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { postingService.createPosting(103L, any(), 10L) } returns savedPosting
 
                 val request = PostingForm(title = "README", body = "내용", readme = true)
-                val result = boardViewController.createPost("owner", "BrokenReadmeCommit", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "BrokenReadmeCommit", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/BrokenReadmeCommit"
             }
@@ -1196,7 +1228,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 } returns 1
 
                 val request = PostingForm(title = "제목", body = "본문", temporaryUploadFiles = "901, abc, ")
-                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/TestProj/post/6"
                 verify(exactly = 1) {
@@ -1230,7 +1262,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 } returns 1
 
                 val request = PostingForm(title = "제목", body = null, notice = null, readme = null, temporaryUploadFiles = "902")
-                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/TestProj/post/20"
                 verify(exactly = 1) {
@@ -1251,7 +1283,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { projectUserRepository.existsByProjectIdAndUserId(104L, 10L) } returns true
 
                 val request = PostingForm(title = "템플릿", body = null, issueTemplate = "true")
-                val result = boardViewController.createPost("owner", "BrokenIssueTplNullBody", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "BrokenIssueTplNullBody", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/BrokenIssueTplNullBody"
             }
@@ -1268,7 +1300,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { postingService.createPosting(105L, any(), 45L) } returns savedPosting
 
                 val request = PostingForm(title = "제목", body = "본문", path = "a.txt")
-                val result = boardViewController.createPost("owner", "PathNonMember", request, nonMemberAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "PathNonMember", request, nonMemberAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/PathNonMember/post/21"
                 verify(exactly = 1) { postingService.createPosting(105L, any(), 45L) }
@@ -1285,7 +1317,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { postingService.createPosting(1L, any(), 10L) } returns savedPosting
 
                 val request = PostingForm(title = "제목", body = "본문", path = "   ")
-                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/TestProj/post/24"
             }
@@ -1299,7 +1331,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { projectUserRepository.existsByProjectIdAndUserId(106L, 10L) } returns true
 
                 val request = PostingForm(title = "커밋", body = null, path = "a.txt")
-                val result = boardViewController.createPost("owner", "BrokenPathNullBody", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "BrokenPathNullBody", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/BrokenPathNullBody/code//a.txt"
             }
@@ -1317,7 +1349,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { postingService.createPosting(107L, any(), 10L) } returns savedPosting
 
                 val request = PostingForm(title = "README", body = "무시됨", readme = true)
-                val result = boardViewController.createPost("owner", "BrokenReadmeNullBody", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "BrokenReadmeNullBody", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/BrokenReadmeNullBody"
             }
@@ -1333,7 +1365,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { postingService.createPosting(1L, any(), 10L) } returns savedPosting
 
                 val request = PostingForm(title = "제목", body = "본문", temporaryUploadFiles = "   ")
-                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap())
+                val result = boardViewController.createPost("owner", "TestProj", request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/TestProj/post/23"
                 verify(exactly = 0) { attachmentService.moveOnlySelected(any(), any(), ResourceType.BOARD_POST, "140", any(), any()) }
@@ -1437,7 +1469,7 @@ class BoardViewControllerSpec : DescribeSpec({
                 every { postingService.updatePosting(1L, 1L, "제목", "", false, false, 10L, false) } returns posting
 
                 val request = PostingForm(title = "제목", body = null, notice = null, readme = null, sendNotificationMail = null)
-                val result = boardViewController.editPost("owner", "TestProj", 1L, request, userAuth, ExtendedModelMap())
+                val result = boardViewController.editPost("owner", "TestProj", 1L, request, userAuth, ExtendedModelMap(), MockHttpServletResponse())
 
                 result shouldBe "redirect:/owner/TestProj/post/1"
                 verify(exactly = 1) { postingService.updatePosting(1L, 1L, "제목", "", false, false, 10L, false) }

@@ -168,6 +168,30 @@ class ProjectViewControllerSpec : DescribeSpec({
         val userAuth = UsernamePasswordAuthenticationToken("testuser", "password")
 
         describe("GET /{owner}/{projectName}") {
+            listOf("SUBVERSION", "SVN", "MERCURIAL", "HG", "GIT", null, "legacy-default").forEach { vcs ->
+                listOf(false, true).forEach { member ->
+                    it("$vcs README edit affordance follows writer support and COMMIT permission (member=$member)") {
+                        val target = Project(id = 1L, name = "TestProj", owner = "owner", vcs = vcs, projectScope = ProjectScope.PUBLIC)
+                        val viewer = User(id = 10L, loginId = "testuser", name = "Viewer")
+                        if (member) viewer.projectUsers.add(ProjectUser(user = viewer, project = target, role = managerRole))
+                        every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(target)
+                        every { userRepository.findByLoginId("testuser") } returns Optional.of(viewer)
+                        every { projectUserRepository.findByProjectId(1L) } returns emptyList()
+                        every { watchService.isWatching(any(), any(), any()) } returns false
+                        every { watchService.findWatchers(any(), any()) } returns emptySet()
+                        val repo = mockk<PlayRepository>()
+                        every { repositoryService.getRepository(target) } returns repo
+                        every { repo.isFile("README.md") } returns true
+                        every { repo.getRawFile("HEAD", "README.md") } returns "# Existing README".toByteArray()
+                        every { markdownService.renderFileInReadme("# Existing README", target) } returns "<h1>Existing README</h1>"
+                        mockMvc.perform(get("/owner/TestProj").principal(userAuth))
+                            .andExpect(status().isOk)
+                            .andExpect(model().attribute("readmeHtml", "<h1>Existing README</h1>"))
+                            .andExpect(model().attribute("canEditReadme", vcs !in listOf("SUBVERSION", "SVN", "MERCURIAL", "HG") && member))
+                    }
+                }
+            }
+
             it("비공개 프로젝트일 때 멤버라면 200 OK와 project/home 뷰를 반환해야 한다") {
                 val memberUser = User(id = 10L, loginId = "testuser", name = "테스트유저")
                 memberUser.projectUsers.add(ProjectUser(id = 900L, user = memberUser, project = project, role = managerRole))
