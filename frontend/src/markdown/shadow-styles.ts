@@ -6,7 +6,7 @@ const stylesheets = [
 ];
 
 /** Reuse the page's cached styles inside the boundary, not the page's selectors. */
-export function mountShadow(host: HTMLElement, css: string) {
+export function mountShadow(host: HTMLElement, styles: readonly string[]) {
   const root = host.attachShadow({mode: 'open'});
   const ready = Promise.all(stylesheets.map(href => new Promise<void>(resolve => {
     const link = document.createElement('link');
@@ -16,9 +16,12 @@ export function mountShadow(host: HTMLElement, css: string) {
     link.onerror = () => resolve();
     root.append(link);
   })));
-  const style = document.createElement('style');
-  style.textContent = css;
+  for (const css of styles) {
+    const style = document.createElement('style');
+    style.textContent = css;
+    root.append(style);
+  }
   const mount = document.createElement('div');
-  root.append(style, mount);
+  root.append(mount);
   return {root, mount, ready};
 }

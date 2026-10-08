@@ -54,15 +54,16 @@ The reuse audit found 19 `markdownEditor` include templates: issues (3), board (
 
 [`data-action` and its keyboard filters](https://stimulus.hotwired.dev/reference/actions#keyboardevent-filter) route click/Enter/Space to `toggle(Event)`. It handles only help controls, prevents their default action and updates `active`, `aria-expanded` and panel `hidden` through scoped `tab`/`panel` targets; existing `data-target` panel class names remain. There is no `data-toggle="markdown-help"`, editor help signal or editor-owned help listener. The DOM stores the open state; there is no `connect()` reset.
 
-Vue owns the shadow toolbar and preview, not the slotted help, notice or input subtrees. Stimulus therefore continues to discover help through document queries and retains open panels across same-node reparenting and Turbo clones. The shadow root reuses the same cached Bootstrap, icon, Yona and highlighting stylesheets; component-only rules preserve toolbar and preview sizing.
+Vue owns the shadow toolbar and preview, not the slotted help, clear-draft button, notice or input subtrees. Stimulus therefore continues to discover help through document queries and retains open panels across same-node reparenting and Turbo clones. The clear-draft slot remains in the toolbar immediately after the checklist button. The shadow root reuses the same cached Bootstrap, icon, Yona and highlighting stylesheets; each `.ce.vue` component owns its additional rules in a `<style>` block.
 
 Renderer output is genuinely inside its shadow root. Heading fragments scroll explicitly across that boundary, task-list integration queries the renderer's shadow root while retaining the host's permission/form context, and reference popovers initialize against the output subtree. Renderer snapshots remain inert light-DOM templates so Turbo clones preserve source. The measurements below are historical pre-Vue results, not measurements of this cutover.
 
 ### Internal functions
 
-- `yona-markdown-editor.ts`: textarea initialization, event binding and line indentation are separate operations. Completion separates the request (`mentionSuggestions`), response conversion (`mentionSuggestion`) and safe DOM construction (`suggestionOption`).
+- `MarkdownEditor.ce.vue`: real `<script setup lang="ts">`, `<template>` and `<style>` sections own preview state, toolbar markup, checklist insertion and local styles. Native controls/host are shallow props, never deep reactive state. Static `<slot v-pre>` elements remain native Shadow DOM slots rather than Vue slot outlets; the compiler preserves `yona-*` elements, and renderer `sourceElement` uses a property binding.
+- `yona-markdown-editor.ts`: the HTMLElement bridge retains public `.value`/`.ready`, original textarea initialization, form/reset/reconnect events and line indentation. Completion separates the request (`mentionSuggestions`), response conversion (`mentionSuggestion`) and safe DOM construction (`suggestionOption`).
 - `yona-markdown-help.ts`: one local Stimulus controller owns help toggling through declarative actions; the Vue editor retains its server-rendered root in a slot.
-- `yona-markdown-renderer.ts`: snapshot initialization and post-mount enhancement stay in the element; `markdownOutput` owns parsing/sanitization, and `commentLineBreaks` owns comment-only newline rules.
+- `yona-markdown-renderer.ts`: snapshot initialization and post-mount enhancement stay in the element; `markdownOutput` owns parsing/sanitization, and `commentLineBreaks` owns comment-only newline rules. `MarkdownRenderer.ce.vue` owns output markup and local styles; its `v-html` receives only the already-sanitized snapshot.
 - `plugins/structure.ts`: headings, link policy, reference collection/resolution and DOM replacement each have a named function.
 - `runtime/reference-batch-resolver.ts`: `send` orchestrates the batch; `fetchMetadata` handles requests/validation, and `settleBatch` handles caching/subscriber cleanup.
 
@@ -84,14 +85,16 @@ Mermaid loads only for Mermaid fences. A shared 24 ms queue renders sequentially
 
 ## Build and checks
 
-`./gradlew processResources` and `bootJar` depend on `pnpmInstall` and `buildFrontend`. The pinned `pnpm-lock.yaml` is installed with `--frozen-lockfile --ignore-scripts`. esbuild emits ESM entries for each `frontend/src/<area>/yona-*.ts` and shared lazy chunks into `build/generated/frontend/web`, served under `/javascripts/<area>/`; generated bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `pnpm.cmd` on Windows.
+`./gradlew processResources` and `bootJar` depend on `pnpmInstall`, `typecheckFrontend` and `buildFrontend`; Gradle `test` also runs template typechecking. The pinned `pnpm-lock.yaml` is installed with `--frozen-lockfile --ignore-scripts`. esbuild uses `unplugin-vue/esbuild` in `.ce.vue` custom-element mode, emitting component styles inline for each shadow root, ESM and lazy chunks into `build/generated/frontend/web`. `vue-tsc` checks TypeScript and SFC templates. Generated bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `pnpm.cmd` on Windows.
+
+The frontend pins TypeScript 6 because `vue-tsc` currently requires the JavaScript compiler entry point removed by native TypeScript 7. Production SFC source maps are disabled, matching the existing minified bundle build and avoiding the esbuild adapter adding JavaScript source-map comments to inline CSS.
 
 ```sh
 cd frontend
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm run build
+pnpm run typecheck
 pnpm test
-pnpm exec tsc --noEmit
 # From the repository root, against a running application:
 node frontend/scripts/check-markdown-structure.mjs http://localhost:8080
 node frontend/scripts/check-markdown-enhancements.mjs http://localhost:8080

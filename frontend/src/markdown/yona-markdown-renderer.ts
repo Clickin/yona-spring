@@ -1,4 +1,5 @@
-import {createApp, h, nextTick} from 'vue';
+import {createApp, nextTick} from 'vue';
+import MarkdownRenderer from './MarkdownRenderer.ce.vue';
 import {mountShadow} from './shadow-styles';
 import {micromark, type Options} from 'micromark';
 import {gfm, gfmHtml} from 'micromark-extension-gfm';
@@ -37,14 +38,8 @@ export class YonaMarkdownRenderer extends HTMLElement {
     this.snapshot.content.append(document.createTextNode(markdown));
     const markup = markdownOutput(markdown, this.getAttribute('mode') === 'document').innerHTML;
     this.replaceChildren(this.snapshot);
-    const shadow = mountShadow(this, `
-      :host { display: block; }
-      .markdown-wrap { padding: 0 !important; font-size: inherit; }
-      .markdown-output img { max-width: 100%; }
-    `);
-    createApp({render: () => h('div', {class: 'markdown-wrap'}, [
-      h('div', {class: 'markdown-output', innerHTML: markup}),
-    ])}).mount(shadow.mount);
+    const shadow = mountShadow(this, MarkdownRenderer.styles ?? []);
+    createApp(MarkdownRenderer, {markup}).mount(shadow.mount);
     this.output = shadow.root.querySelector<HTMLDivElement>('.markdown-output')!;
     this.mounted = shadow.ready;
     this.classList.add('markdown-wrap');

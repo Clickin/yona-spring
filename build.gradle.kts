@@ -220,9 +220,24 @@ val copyTurbo = tasks.register<Copy>("copyTurbo") {
 	into(turboResources)
 }
 
+val typecheckFrontend = tasks.register<Exec>("typecheckFrontend") {
+	dependsOn(pnpmInstall)
+	workingDir("frontend")
+	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "pnpm.cmd" else "pnpm",
+		"run", "typecheck")
+	inputs.files("frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/tsconfig.json")
+	inputs.dir("frontend/src")
+	val stamp = layout.buildDirectory.file("generated/frontend/typecheck.stamp")
+	outputs.file(stamp)
+	doLast {
+		stamp.get().asFile.parentFile.mkdirs()
+		stamp.get().asFile.writeText("passed\n")
+	}
+}
+
 val frontendResources = layout.buildDirectory.dir("generated/frontend/web")
 val buildFrontend = tasks.register<Exec>("buildFrontend") {
-	dependsOn(pnpmInstall)
+	dependsOn(typecheckFrontend)
 	workingDir("frontend")
 	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "pnpm.cmd" else "pnpm",
 		"run", "build")
@@ -246,7 +261,7 @@ val testFrontend = tasks.register<Exec>("testFrontend") {
 }
 
 tasks.test {
-	dependsOn(testFrontend)
+	dependsOn(testFrontend, typecheckFrontend)
 }
 
 tasks.processResources {

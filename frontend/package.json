@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.mjs",
+    "typecheck": "vue-tsc --noEmit",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {
@@ -23,7 +24,9 @@
   },
   "devDependencies": {
     "esbuild": "0.28.2",
-    "typescript": "7.0.2"
+    "typescript": "6.0.3",
+    "unplugin-vue": "8.0.0",
+    "vue-tsc": "3.3.12"
   },
   "packageManager": "pnpm@10.28.2"
 }
