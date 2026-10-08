@@ -70,6 +70,26 @@ private fun seedInitialCommit(bareDir: File, branch: String, filePath: String, c
 // 하위 경로(nested path) 파일도 기존 트리를 보존하며 반영한다.
 class BareCommitSpec : DescribeSpec({
     describe("BareCommit.commitTextFile(branchName, path, text, message)") {
+        it("commits a config path as a Git blob without changing the server repository configuration") {
+            val base = Files.createTempDirectory("yona-barecommit-config").toFile()
+            try {
+                val directory = File(base, "owner/project.git")
+                Git.init().setDirectory(directory).setBare(true).setInitialBranch("main").call().close()
+                val configuration = File(directory, "config").readBytes()
+                val bare = BareCommit(Project(id = 1L, owner = "owner", name = "project"),
+                    User(loginId = "owner", name = "Owner", email = "owner@example.com"), base.absolutePath)
+                bare.setRefName("refs/heads/main")
+
+                val committed = bare.commitTextFile("main", "config", "versioned project configuration", "project configuration")!!
+
+                File(directory, "config").readBytes().contentEquals(configuration) shouldBe true
+                FileRepositoryBuilder().setGitDir(directory).build().use { repository ->
+                    readTreeFiles(repository, committed)["config"] shouldBe "versioned project configuration"
+                }
+            } finally {
+                base.deleteRecursively()
+            }
+        }
         it("지정한 브랜치에만 커밋을 반영하고 다른 브랜치(master)는 건드리지 않는다") {
             val gitBaseDir = Files.createTempDirectory("yona-barecommit-test").toFile()
             val bareDir = File(gitBaseDir, "tester/repo.git")
@@ -113,7 +133,7 @@ class BareCommitSpec : DescribeSpec({
         }
 
         // getRefUpdate()의 headObjectId==null 분기, getCommitBuilder()의 setParentId 미호출 분기,
-        // createTemporaryIndex()의 headId==null 분기(기존 트리 병합 생략)를 함께 검증한다 — 이전 커밋이
+        // in-core 인덱스의 headId==null 분기(기존 트리 병합 생략)를 함께 검증한다 — 이전 커밋이
         // 전혀 없는 완전히 새 브랜치에 첫 커밋을 반영하는 케이스.
         it("커밋이 하나도 없는 새 브랜치에 첫 커밋을 반영하면 부모 없이 커밋해야 한다") {
             val gitBaseDir = Files.createTempDirectory("yona-barecommit-test").toFile()
@@ -145,8 +165,7 @@ class BareCommitSpec : DescribeSpec({
             }
         }
 
-        // createTemporaryIndex() 트리 순회 루프의 walkPath == path 분기(신규 blob으로 덮어쓰고 기존
-        // 엔트리는 건너뜀) 검증 -- 같은 경로에 다시 커밋해 기존 파일을 덮어쓰는 케이스.
+        // 같은 경로에 다시 커밋하면 기존 엔트리를 새 blob으로 대체한다.
         it("이미 존재하는 경로에 다시 커밋하면 새 blob으로 덮어써야 한다(walkPath == path 분기)") {
             val gitBaseDir = Files.createTempDirectory("yona-barecommit-test").toFile()
             val bareDir = File(gitBaseDir, "tester/repo.git")

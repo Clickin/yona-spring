@@ -2,11 +2,22 @@ package com.github.yonaprojects.yona.domain.project
 
 import jakarta.persistence.EntityManager
 import jakarta.persistence.LockModeType
+import org.slf4j.LoggerFactory
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.annotation.Propagation
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
+import com.github.yonaprojects.yona.domain.vcs.RepositoryArchive
+import com.github.yonaprojects.yona.domain.vcs.PendingRepositoryReset
+import com.github.yonaprojects.yona.domain.vcs.RepositoryUnavailableException
 import com.github.yonaprojects.yona.domain.vcs.nextVcsInCycle
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.user.User
@@ -76,8 +87,20 @@ class ProjectServiceImpl(
     private val svnBaseDir: String,
     @Value("\${yona.hg.base-dir:/tmp/yona/hg}")
     private val hgBaseDir: String,
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val repositoryArchive: RepositoryArchive,
+    transactionManager: PlatformTransactionManager
 ) : ProjectService {
+    private val logger = LoggerFactory.getLogger(ProjectServiceImpl::class.java)
+    private val resetTransaction = TransactionTemplate(transactionManager).apply {
+        propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
+    }
+
+    private fun reloadProject(projectId: Long, loaded: Project, lock: LockModeType = LockModeType.PESSIMISTIC_WRITE): Project {
+        entityManager.detach(loaded)
+        return entityManager.find(Project::class.java, projectId, lock)
+            ?: throw IllegalArgumentException("Project not found")
+    }
 
     // 프로젝트가 이전/개명된 뒤에도 이 서비스 메서드를 쓰는 모든 호출부(SVN/Git 인가 필터 등)가
     // 자동으로 예전 owner/name도 계속 찾을 수 있다.
@@ -129,8 +152,19 @@ class ProjectServiceImpl(
 
     @Transactional
     override fun updateProject(projectId: Long, param: UpdateProjectParam): Project {
-        val project = projectRepository.findById(projectId)
+        return if (param.name != null || !param.defaultBranch.isNullOrBlank()) {
+            RepositoryAccess.exclusive(projectId) {
+                updateProjectState(projectId, param)
+            }
+        } else {
+            updateProjectState(projectId, param)
+        }
+    }
+
+    private fun updateProjectState(projectId: Long, param: UpdateProjectParam): Project {
+        val loaded = projectRepository.findById(projectId)
             .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
+        val project = reloadProject(projectId, loaded)
 
         // 개명 검사를 가장 먼저 수행해, 다른 필드가 바뀌기 전에 실패하면 아무 것도 반영되지
         // 않게 한다.
@@ -144,6 +178,20 @@ class ProjectServiceImpl(
             val owner = project.owner ?: ""
             if (projectRepository.existsByOwnerIgnoreCaseAndNameIgnoreCaseAndIdNot(owner, param.name, projectId)) {
                 throw IllegalArgumentException("이미 사용 중인 프로젝트 이름입니다.")
+            }
+
+            val vcsUpper = project.vcs?.uppercase()
+            val baseDir = when (vcsUpper) {
+                "SUBVERSION", "SVN" -> svnBaseDir
+                "MERCURIAL", "HG" -> hgBaseDir
+                else -> gitBaseDir
+            }
+            val suffix = when (vcsUpper) {
+                "SUBVERSION", "SVN", "MERCURIAL", "HG" -> ""
+                else -> ".git"
+            }
+            if (!RepositoryAccess.isWithinRoot(File(baseDir, "$owner/${param.name}$suffix"), File(baseDir))) {
+                throw RepositoryUnavailableException()
             }
 
             val originalName = project.name
@@ -197,77 +245,80 @@ class ProjectServiceImpl(
 
     @Transactional
     override fun deleteProject(projectId: Long) {
-        val project = projectRepository.findById(projectId)
-            .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
-
-        projectTransferRepository.deleteAll(projectTransferRepository.findByProjectId(projectId))
-
-        // thread.project==이 프로젝트인 스레드를 지운다(reviewComments는 CommentThread 엔티티의
-        // cascade=ALL, orphanRemoval=true로 함께 삭제됨). thread.project가 다른 프로젝트(fork가 제3
-        // 프로젝트로 보낸 PR 등)인 스레드는 이 단계로는 안 잡히고, 아래 deletePullRequestCascade()가
-        // PR 단위로 마저 정리한다.
-        commentThreadRepository.deleteAll(commentThreadRepository.findByProject(project))
-
-        // 이 프로젝트가 보낸(fromProject) PR과 받은(toProject) PR을 모두 지운다.
-        (pullRequestRepository.findByFromProject(project) + pullRequestRepository.findByToProject(project))
-            .forEach { deletePullRequestCascade(it) }
-
-        // 이 프로젝트를 fork한 자식 프로젝트는 삭제하지 않고, 그 fork가 관여한 PR만 정리한 뒤
-        // 원본 연결을 끊는다 — fork 프로젝트 자체나 그 이슈/게시글 등은 보존.
-        project.forkingProjects.forEach { fork ->
-            (pullRequestRepository.findByFromProject(fork) + pullRequestRepository.findByToProject(fork))
+        RepositoryAccess.exclusive(projectId) {
+            val loaded = projectRepository.findById(projectId)
+                .orElseThrow { IllegalArgumentException("프로젝트를 찾을 수 없습니다.") }
+            val project = reloadProject(projectId, loaded)
+        
+            projectTransferRepository.deleteAll(projectTransferRepository.findByProjectId(projectId))
+        
+            // thread.project==이 프로젝트인 스레드를 지운다(reviewComments는 CommentThread 엔티티의
+            // cascade=ALL, orphanRemoval=true로 함께 삭제됨). thread.project가 다른 프로젝트(fork가 제3
+            // 프로젝트로 보낸 PR 등)인 스레드는 이 단계로는 안 잡히고, 아래 deletePullRequestCascade()가
+            // PR 단위로 마저 정리한다.
+            commentThreadRepository.deleteAll(commentThreadRepository.findByProject(project))
+        
+            // 이 프로젝트가 보낸(fromProject) PR과 받은(toProject) PR을 모두 지운다.
+            (pullRequestRepository.findByFromProject(project) + pullRequestRepository.findByToProject(project))
                 .forEach { deletePullRequestCascade(it) }
-            fork.originalProject = null
-            projectRepository.save(fork)
+        
+            // 이 프로젝트를 fork한 자식 프로젝트는 삭제하지 않고, 그 fork가 관여한 PR만 정리한 뒤
+            // 원본 연결을 끊는다 — fork 프로젝트 자체나 그 이슈/게시글 등은 보존.
+            project.forkingProjects.forEach { fork ->
+                (pullRequestRepository.findByFromProject(fork) + pullRequestRepository.findByToProject(fork))
+                    .forEach { deletePullRequestCascade(it) }
+                fork.originalProject = null
+                projectRepository.save(fork)
+            }
+        
+            // yona Project.delete()의 issues 루프 대응(댓글/이벤트/즐겨찾기/첨부파일/TitleHead까지
+            // IssueServiceImpl.deleteIssueCascade()가 함께 정리).
+            issueRepository.findByProject(project).forEach { issueService.deleteIssueCascade(it) }
+        
+            // yona Project.delete()의 IssueLabelCategory 삭제 대응(라벨 및 조인테이블까지 함께 정리).
+            issueLabelCategoryRepository.findByProject(project).forEach { category ->
+                issueLabelService.deleteCategory(category.id!!)
+            }
+        
+            // yona Project.delete()의 assignees 루프 대응 — Issue.assignee의 cascade=ALL로 대부분
+            // 이미 삭제되지만, 어떤 이슈에도 연결되지 않은 잔여 Assignee가 있을 경우를 대비한 방어적 정리.
+            assigneeRepository.deleteAll(assigneeRepository.findByProjectId(projectId))
+        
+            // yona Project.delete()의 webhooks 루프 대응 — WebhookThread.webhook_id FK가
+            // nullable=false라 웹훅을 지우기 전에 먼저 정리해야 한다.
+            webhookRepository.findByProjectId(projectId).forEach { webhook ->
+                webhookThreadRepository.deleteAll(webhookThreadRepository.findByWebhookId(webhook.id!!))
+                webhookRepository.delete(webhook)
+            }
+        
+            // yona Project.delete()의 posts 루프 대응 — 프로젝트 전체가 삭제되는 상황이라
+            // 게시글 개수만큼 알림이 발행되지 않도록 deletePosting() 대신 알림을 발행하지 않는
+            // deletePostingCascade()를 쓴다(legacy도 Project.delete()에서 posting.delete()를 직접
+            // 호출할 뿐 알림 발행 경로를 타지 않는다).
+            postingRepository.findByProject(project).forEach { postingService.deletePostingCascade(it) }
+        
+            // yona Project.delete()의 labels 루프 대응 — yona의 Label은 project 소유 필드가 없는
+            // category+name 기반 공용 개체라 project_label 조인테이블 행은 Project 삭제 시 Hibernate가
+            // 자동으로 정리한다(별도 unlink 호출 불필요).
+        
+            // 연관 멤버 삭제
+            val members = projectUserRepository.findByProjectId(projectId)
+            projectUserRepository.deleteAll(members)
+        
+            watchService.deleteAll(ResourceType.PROJECT, projectId.toString())
+        
+            // DB Project 행만 지우고 물리 bare 저장소 디렉터리를 남겨두면, 같은 owner/name으로
+            // 재생성하거나 새로 fork를 시도할 때 이미 존재하는 디렉터리/파일과 충돌해
+            // FileAlreadyExistsException이 500으로 튄다. 프로젝트 삭제는 물리 저장소가 이미 없거나
+            // 삭제 중 오류가 나도 DB 정리 자체를 막지 않는다. 저장소 초기화의 archive와는 별개다.
+            try {
+                repositoryService.getRepository(project).delete()
+            } catch (e: Exception) {
+                // 물리 저장소 삭제 실패는 DB 삭제를 막지 않는다.
+            }
+        
+            projectRepository.delete(project)
         }
-
-        // yona Project.delete()의 issues 루프 대응(댓글/이벤트/즐겨찾기/첨부파일/TitleHead까지
-        // IssueServiceImpl.deleteIssueCascade()가 함께 정리).
-        issueRepository.findByProject(project).forEach { issueService.deleteIssueCascade(it) }
-
-        // yona Project.delete()의 IssueLabelCategory 삭제 대응(라벨 및 조인테이블까지 함께 정리).
-        issueLabelCategoryRepository.findByProject(project).forEach { category ->
-            issueLabelService.deleteCategory(category.id!!)
-        }
-
-        // yona Project.delete()의 assignees 루프 대응 — Issue.assignee의 cascade=ALL로 대부분
-        // 이미 삭제되지만, 어떤 이슈에도 연결되지 않은 잔여 Assignee가 있을 경우를 대비한 방어적 정리.
-        assigneeRepository.deleteAll(assigneeRepository.findByProjectId(projectId))
-
-        // yona Project.delete()의 webhooks 루프 대응 — WebhookThread.webhook_id FK가
-        // nullable=false라 웹훅을 지우기 전에 먼저 정리해야 한다.
-        webhookRepository.findByProjectId(projectId).forEach { webhook ->
-            webhookThreadRepository.deleteAll(webhookThreadRepository.findByWebhookId(webhook.id!!))
-            webhookRepository.delete(webhook)
-        }
-
-        // yona Project.delete()의 posts 루프 대응 — 프로젝트 전체가 삭제되는 상황이라
-        // 게시글 개수만큼 알림이 발행되지 않도록 deletePosting() 대신 알림을 발행하지 않는
-        // deletePostingCascade()를 쓴다(legacy도 Project.delete()에서 posting.delete()를 직접
-        // 호출할 뿐 알림 발행 경로를 타지 않는다).
-        postingRepository.findByProject(project).forEach { postingService.deletePostingCascade(it) }
-
-        // yona Project.delete()의 labels 루프 대응 — yona의 Label은 project 소유 필드가 없는
-        // category+name 기반 공용 개체라 project_label 조인테이블 행은 Project 삭제 시 Hibernate가
-        // 자동으로 정리한다(별도 unlink 호출 불필요).
-
-        // 연관 멤버 삭제
-        val members = projectUserRepository.findByProjectId(projectId)
-        projectUserRepository.deleteAll(members)
-
-        watchService.deleteAll(ResourceType.PROJECT, projectId.toString())
-
-        // DB Project 행만 지우고 물리 bare 저장소 디렉터리를 남겨두면, 같은 owner/name으로
-        // 재생성하거나 새로 fork를 시도할 때 이미 존재하는 디렉터리/파일과 충돌해
-        // FileAlreadyExistsException이 500으로 튄다. changeVCS()와 동일한 패턴을 쓴다 — 물리
-        // 저장소가 이미 없거나 삭제 중 오류가 나도 DB 정리 자체는 막지 않는다.
-        try {
-            repositoryService.getRepository(project).delete()
-        } catch (e: Exception) {
-            // 물리 저장소 삭제 실패는 DB 삭제를 막지 않는다(changeVCS()와 동일한 방어적 처리).
-        }
-
-        projectRepository.delete(project)
     }
 
     // pullRequest FK만으로 스레드를 찾아 thread.project 값과 무관하게 지운다 — 위쪽
@@ -361,85 +412,89 @@ class ProjectServiceImpl(
             throw IllegalArgumentException("이 프로젝트 이전을 수락할 권한이 없습니다.")
         }
 
-        val project = pt.project
-        val originalOwner = project.owner ?: ""
-        val originalName = project.name
-        val newOwner = pt.destination
-        val newName = pt.newProjectName
-        val senderId = pt.sender.id!!
-
-        // 마지막 이전/개명 기록으로부터 24시간이 지났을 때만(또는 최초일 때만) 예전 위치를 갱신한다
-        // — 짧은 시간 내 연속 이전이 일어나도 "예전 위치" 포인터가 계속 최신으로만 덮어써지지
-        // 않도록 방지한다.
-        recordRenameOrTransferHistoryIfLastChangePassed24HoursFrom(project, originalOwner, originalName)
-
-        // 물리 저장소 폴더명 이동 — SvnRepository/HgRepository는 접미사 없는 "$owner/$name" 경로를
-        // 쓰므로, git만 ".git" 접미사를 붙여야 한다(그렇지 않으면 SVN/Mercurial 프로젝트는
-        // sourceDir.exists()가 거짓이 되어 물리 이동이 조용히 no-op된다).
-        val vcsUpper = project.vcs?.uppercase()
-        val baseDir = when (vcsUpper) {
-            "SUBVERSION", "SVN" -> svnBaseDir
-            "MERCURIAL", "HG" -> hgBaseDir
-            else -> gitBaseDir
-        }
-        val dirSuffix = when (vcsUpper) {
-            "SUBVERSION", "SVN", "MERCURIAL", "HG" -> ""
-            else -> ".git"
-        }
-        val sourceDir = File(baseDir, "$originalOwner/$originalName$dirSuffix")
-        val targetDir = File(baseDir, "$newOwner/$newName$dirSuffix")
-        if (sourceDir.exists()) {
-            targetDir.parentFile.mkdirs()
-            sourceDir.renameTo(targetDir)
-        }
-
-        // DB 메타데이터 변경 반영
-        project.owner = newOwner
-        project.name = newName
-        // 목적지가 조직이면 그 조직으로, 개인이면 null로 명시적으로 갱신한다.
-        project.organization = organizationRepository.findByName(newOwner).orElse(null)
-        projectRepository.save(project)
-
-        // 이 프로젝트를 즐겨찾기한 모든 사용자의 비정규화된 owner/projectName도 함께 갱신한다 —
-        // 그렇지 않으면 즐겨찾기 표시가 이관 후에도 옛 owner/projectName으로 남는다.
-        favoriteProjectRepository.findByProjectId(project.id!!).forEach {
-            it.owner = project.owner ?: ""
-            it.projectName = project.name ?: ""
-            favoriteProjectRepository.save(it)
-        }
-
-        // 권한(Role) 변경 처리
-        // 1. 보낸 사람이 MANAGER였다면 MEMBER로 강등
-        val senderProjectUser = projectUserRepository.findByProjectIdAndUserId(project.id!!, senderId).orElse(null)
-        if (senderProjectUser != null && senderProjectUser.role.id == RoleType.MANAGER.roleType) {
-            val memberRole = roleRepository.findById(RoleType.MEMBER.roleType)
-                .orElseThrow { IllegalStateException("MEMBER role not found") }
-            senderProjectUser.role = memberRole
-            projectUserRepository.save(senderProjectUser)
-        }
-
-        // 2. 이관 목적지(destination) 사용자가 존재한다면 MANAGER 권한 부여
-        val newOwnerUser = userRepository.findByLoginId(newOwner).orElse(null)
-        if (newOwnerUser != null) {
-            val newOwnerProjectUser = projectUserRepository.findByProjectIdAndUserId(project.id!!, newOwnerUser.id!!).orElse(null)
-            val managerRole = roleRepository.findById(RoleType.MANAGER.roleType)
-                .orElseThrow { IllegalStateException("MANAGER role not found") }
-            if (newOwnerProjectUser != null) {
-                newOwnerProjectUser.role = managerRole
-                projectUserRepository.save(newOwnerProjectUser)
-            } else {
-                val projectUser = ProjectUser(
-                    project = project,
-                    user = newOwnerUser,
-                    role = managerRole
-                )
-                projectUserRepository.save(projectUser)
+        RepositoryAccess.exclusive(pt.project.id!!) {
+            val project = reloadProject(pt.project.id!!, pt.project)
+            val originalOwner = project.owner ?: ""
+            val originalName = project.name
+            val newOwner = pt.destination
+            val newName = pt.newProjectName
+            val senderId = pt.sender.id!!
+        
+            // 마지막 이전/개명 기록으로부터 24시간이 지났을 때만(또는 최초일 때만) 예전 위치를 갱신한다
+            // — 짧은 시간 내 연속 이전이 일어나도 "예전 위치" 포인터가 계속 최신으로만 덮어써지지
+            // 않도록 방지한다.
+            recordRenameOrTransferHistoryIfLastChangePassed24HoursFrom(project, originalOwner, originalName)
+        
+            // 물리 저장소 폴더명 이동 — SvnRepository/HgRepository는 접미사 없는 "$owner/$name" 경로를
+            // 쓰므로, git만 ".git" 접미사를 붙여야 한다(그렇지 않으면 SVN/Mercurial 프로젝트는
+            // sourceDir.exists()가 거짓이 되어 물리 이동이 조용히 no-op된다).
+            val vcsUpper = project.vcs?.uppercase()
+            val baseDir = when (vcsUpper) {
+                "SUBVERSION", "SVN" -> svnBaseDir
+                "MERCURIAL", "HG" -> hgBaseDir
+                else -> gitBaseDir
             }
+            val dirSuffix = when (vcsUpper) {
+                "SUBVERSION", "SVN", "MERCURIAL", "HG" -> ""
+                else -> ".git"
+            }
+            val sourceDir = File(baseDir, "$originalOwner/$originalName$dirSuffix")
+            val targetDir = File(baseDir, "$newOwner/$newName$dirSuffix")
+            if (!RepositoryAccess.isWithinRoot(sourceDir, File(baseDir)) ||
+                !RepositoryAccess.isWithinRoot(targetDir, File(baseDir))) throw RepositoryUnavailableException()
+            if (sourceDir.exists()) {
+                targetDir.parentFile.mkdirs()
+                sourceDir.renameTo(targetDir)
+            }
+        
+            // DB 메타데이터 변경 반영
+            project.owner = newOwner
+            project.name = newName
+            // 목적지가 조직이면 그 조직으로, 개인이면 null로 명시적으로 갱신한다.
+            project.organization = organizationRepository.findByName(newOwner).orElse(null)
+            projectRepository.save(project)
+        
+            // 이 프로젝트를 즐겨찾기한 모든 사용자의 비정규화된 owner/projectName도 함께 갱신한다 —
+            // 그렇지 않으면 즐겨찾기 표시가 이관 후에도 옛 owner/projectName으로 남는다.
+            favoriteProjectRepository.findByProjectId(project.id!!).forEach {
+                it.owner = project.owner ?: ""
+                it.projectName = project.name ?: ""
+                favoriteProjectRepository.save(it)
+            }
+        
+            // 권한(Role) 변경 처리
+            // 1. 보낸 사람이 MANAGER였다면 MEMBER로 강등
+            val senderProjectUser = projectUserRepository.findByProjectIdAndUserId(project.id!!, senderId).orElse(null)
+            if (senderProjectUser != null && senderProjectUser.role.id == RoleType.MANAGER.roleType) {
+                val memberRole = roleRepository.findById(RoleType.MEMBER.roleType)
+                    .orElseThrow { IllegalStateException("MEMBER role not found") }
+                senderProjectUser.role = memberRole
+                projectUserRepository.save(senderProjectUser)
+            }
+        
+            // 2. 이관 목적지(destination) 사용자가 존재한다면 MANAGER 권한 부여
+            val newOwnerUser = userRepository.findByLoginId(newOwner).orElse(null)
+            if (newOwnerUser != null) {
+                val newOwnerProjectUser = projectUserRepository.findByProjectIdAndUserId(project.id!!, newOwnerUser.id!!).orElse(null)
+                val managerRole = roleRepository.findById(RoleType.MANAGER.roleType)
+                    .orElseThrow { IllegalStateException("MANAGER role not found") }
+                if (newOwnerProjectUser != null) {
+                    newOwnerProjectUser.role = managerRole
+                    projectUserRepository.save(newOwnerProjectUser)
+                } else {
+                    val projectUser = ProjectUser(
+                        project = project,
+                        user = newOwnerUser,
+                        role = managerRole
+                    )
+                    projectUserRepository.save(projectUser)
+                }
+            }
+        
+            // 완료된 이관 요청은 accepted=true로 남겨두지 않고 DB에서 삭제한다.
+            pt.accepted = true
+            projectTransferRepository.delete(pt)
         }
-
-        // 완료된 이관 요청은 accepted=true로 남겨두지 않고 DB에서 삭제한다.
-        pt.accepted = true
-        projectTransferRepository.delete(pt)
     }
 
     private fun isAuthorizedToAcceptTransfer(destination: String, acceptor: User): Boolean {
@@ -465,82 +520,87 @@ class ProjectServiceImpl(
         destinationOwner: String,
         destinationName: String
     ): Project {
-        val original = projectRepository.findById(projectId)
-            .orElseThrow { IllegalArgumentException("Original project not found") }
-        val forker = userRepository.findById(forkerId)
-            .orElseThrow { IllegalArgumentException("Forker user not found") }
-
-        val destOwner = if (destinationOwner.isNotBlank()) destinationOwner else forker.loginId
-        val destName = if (destinationName.isNotBlank()) destinationName else original.name
-
-        // destinationOwner는 호출자가 폼/REST 바디로 직접 지정하는 임의 문자열이다 — 이 권한
-        // 검사가 없으면 자신이 속하지 않은 조직/타인의 이름을 지정해 그 네임스페이스에 프로젝트를
-        // 만들고 스스로 MANAGER가 될 수 있다. acceptTransfer()와 동일한 규칙을 재사용한다.
-        if (!isAuthorizedToAcceptTransfer(destOwner, forker)) {
-            throw IllegalArgumentException("'$destOwner' 이름으로 포크할 권한이 없습니다 — 본인 계정이거나 관리자(ORG_ADMIN)로 속한 조직만 목적지로 지정할 수 있습니다.")
-        }
-
-        // 목적지가 이미 존재하면 파일시스템 하드링크를 시도하기도 전에 400 계열로 거절한다 —
-        // 예측 가능한 충돌이므로 트랜잭션 롤백에 기대는 대신 사전 검증으로 막는 게 더 저렴하다.
-        if (projectRepository.findByOwnerAndName(destOwner, destName).isPresent) {
-            throw IllegalArgumentException("'$destOwner/$destName' 프로젝트가 이미 존재합니다.")
-        }
-
-        // 포크 대상 껍데기 프로젝트 엔티티 복제 생성
-        val forked = Project(
-            name = destName,
-            overview = original.overview,
-            vcs = original.vcs,
-            siteurl = "http://localhost:9000/$destName",
-            owner = destOwner,
-            projectScope = original.projectScope,
-            originalProject = original
-        )
-        val savedFork = projectRepository.save(forked)
-
-        // 포크 유저를 자식 프로젝트의 MANAGER 멤버로 매핑
-        val managerRole = roleRepository.findById(RoleType.MANAGER.roleType)
-            .orElseThrow { IllegalStateException("MANAGER role not found") }
-        val projectUser = ProjectUser(
-            project = savedFork,
-            user = forker,
-            role = managerRole
-        )
-        projectUserRepository.save(projectUser)
-
-        // 물리 저장소를 하드링크(Hard Link) 방식으로 무복사 복제 — cloneHardLinkedRepository() 자체는
-        // 디렉터리를 재귀적으로 훑어 모든 파일을 하드링크하는 범용 구현이라 git 전용이 아니다
-        // (SVN/Mercurial 저장소 디렉터리 구조에도 그대로 적용 가능). 예전에는 sourceDir/targetDir이
-        // vcs 종류와 무관하게 항상 ".git" 접미사를 붙이고 있어(acceptTransfer()와 동일한 결함),
-        // SvnRepository/HgRepository의 접미사 없는 실제 경로와 어긋나 SVN/Mercurial 프로젝트는
-        // sourceDir.exists()가 거짓이 되어 포크 시 물리 복제가 조용히 no-op됐다 — 아래처럼 vcs
-        // 종류에 따라 접미사를 다르게 붙이도록 고쳤다.
-        val vcsUpper = original.vcs?.uppercase()
-        val baseDir = when (vcsUpper) {
-            "SUBVERSION", "SVN" -> svnBaseDir
-            "MERCURIAL", "HG" -> hgBaseDir
-            else -> gitBaseDir
-        }
-        val dirSuffix = when (vcsUpper) {
-            "SUBVERSION", "SVN", "MERCURIAL", "HG" -> ""
-            else -> ".git"
-        }
-        val sourceDir = File(baseDir, "${original.owner}/${original.name}$dirSuffix")
-        val targetDir = File(baseDir, "$destOwner/$destName$dirSuffix")
-
-        if (sourceDir.exists()) {
-            try {
-                cloneHardLinkedRepository(sourceDir, targetDir)
-            } catch (e: IOException) {
-                // 위 findByOwnerAndName() 사전 체크와 실제 하드링크 사이에는 시간차가 있다(TOCTOU)
-                // — 동시에 두 번 fork하면 나중 요청이 FileAlreadyExistsException으로 실패한다. 이
-                // 메서드는 @Transactional이라 예외가 전파되면 방금 저장한 row는 롤백되므로, 순차
-                // 중복 fork와 동일한 메시지로 통일해 500 대신 400으로 거절한다.
+        return RepositoryAccess.read(projectId) {
+            val loaded = projectRepository.findById(projectId)
+                .orElseThrow { IllegalArgumentException("Original project not found") }
+            val original = reloadProject(projectId, loaded, LockModeType.PESSIMISTIC_READ)
+            val forker = userRepository.findById(forkerId)
+                .orElseThrow { IllegalArgumentException("Forker user not found") }
+        
+            val destOwner = if (destinationOwner.isNotBlank()) destinationOwner else forker.loginId
+            val destName = if (destinationName.isNotBlank()) destinationName else original.name
+        
+            // destinationOwner는 호출자가 폼/REST 바디로 직접 지정하는 임의 문자열이다 — 이 권한
+            // 검사가 없으면 자신이 속하지 않은 조직/타인의 이름을 지정해 그 네임스페이스에 프로젝트를
+            // 만들고 스스로 MANAGER가 될 수 있다. acceptTransfer()와 동일한 규칙을 재사용한다.
+            if (!isAuthorizedToAcceptTransfer(destOwner, forker)) {
+                throw IllegalArgumentException("'$destOwner' 이름으로 포크할 권한이 없습니다 — 본인 계정이거나 관리자(ORG_ADMIN)로 속한 조직만 목적지로 지정할 수 있습니다.")
+            }
+        
+            // 목적지가 이미 존재하면 파일시스템 하드링크를 시도하기도 전에 400 계열로 거절한다 —
+            // 예측 가능한 충돌이므로 트랜잭션 롤백에 기대는 대신 사전 검증으로 막는 게 더 저렴하다.
+            if (projectRepository.findByOwnerAndName(destOwner, destName).isPresent) {
                 throw IllegalArgumentException("'$destOwner/$destName' 프로젝트가 이미 존재합니다.")
             }
+        
+            // 포크 대상 껍데기 프로젝트 엔티티 복제 생성
+            val forked = Project(
+                name = destName,
+                overview = original.overview,
+                vcs = original.vcs,
+                siteurl = "http://localhost:9000/$destName",
+                owner = destOwner,
+                projectScope = original.projectScope,
+                originalProject = original
+            )
+            val savedFork = projectRepository.save(forked)
+        
+            // 포크 유저를 자식 프로젝트의 MANAGER 멤버로 매핑
+            val managerRole = roleRepository.findById(RoleType.MANAGER.roleType)
+                .orElseThrow { IllegalStateException("MANAGER role not found") }
+            val projectUser = ProjectUser(
+                project = savedFork,
+                user = forker,
+                role = managerRole
+            )
+            projectUserRepository.save(projectUser)
+        
+            // 물리 저장소를 하드링크(Hard Link) 방식으로 무복사 복제 — cloneHardLinkedRepository() 자체는
+            // 디렉터리를 재귀적으로 훑어 모든 파일을 하드링크하는 범용 구현이라 git 전용이 아니다
+            // (SVN/Mercurial 저장소 디렉터리 구조에도 그대로 적용 가능). 예전에는 sourceDir/targetDir이
+            // vcs 종류와 무관하게 항상 ".git" 접미사를 붙이고 있어(acceptTransfer()와 동일한 결함),
+            // SvnRepository/HgRepository의 접미사 없는 실제 경로와 어긋나 SVN/Mercurial 프로젝트는
+            // sourceDir.exists()가 거짓이 되어 포크 시 물리 복제가 조용히 no-op됐다 — 아래처럼 vcs
+            // 종류에 따라 접미사를 다르게 붙이도록 고쳤다.
+            val vcsUpper = original.vcs?.uppercase()
+            val baseDir = when (vcsUpper) {
+                "SUBVERSION", "SVN" -> svnBaseDir
+                "MERCURIAL", "HG" -> hgBaseDir
+                else -> gitBaseDir
+            }
+            val dirSuffix = when (vcsUpper) {
+                "SUBVERSION", "SVN", "MERCURIAL", "HG" -> ""
+                else -> ".git"
+            }
+            val sourceDir = File(baseDir, "${original.owner}/${original.name}$dirSuffix")
+            val targetDir = File(baseDir, "$destOwner/$destName$dirSuffix")
+            if (!RepositoryAccess.isWithinRoot(sourceDir, File(baseDir)) ||
+                !RepositoryAccess.isWithinRoot(targetDir, File(baseDir))) throw RepositoryUnavailableException()
+        
+            if (sourceDir.exists()) {
+                try {
+                    cloneHardLinkedRepository(sourceDir, targetDir)
+                } catch (e: IOException) {
+                    // 위 findByOwnerAndName() 사전 체크와 실제 하드링크 사이에는 시간차가 있다(TOCTOU)
+                    // — 동시에 두 번 fork하면 나중 요청이 FileAlreadyExistsException으로 실패한다. 이
+                    // 메서드는 @Transactional이라 예외가 전파되면 방금 저장한 row는 롤백되므로, 순차
+                    // 중복 fork와 동일한 메시지로 통일해 500 대신 400으로 거절한다.
+                    throw IllegalArgumentException("'$destOwner/$destName' 프로젝트가 이미 존재합니다.")
+                }
+            }
+        
+            savedFork
         }
-
-        return savedFork
     }
 
     /**
@@ -566,33 +626,73 @@ class ProjectServiceImpl(
         }
     }
 
-    @Transactional
-    override fun changeVCS(projectId: Long, confirmation: VcsResetConfirmation): Project {
-        val loaded = projectRepository.findById(projectId).orElseThrow { IllegalArgumentException("Project not found") }
-        // Reload only this OSIV-cached entity; refresh cascades through the permission-check graph.
-        entityManager.detach(loaded)
-        val project = entityManager.find(Project::class.java, projectId, LockModeType.PESSIMISTIC_WRITE)
-            ?: throw IllegalArgumentException("Project not found")
-        confirmation.validate(project)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    override fun changeVCS(projectId: Long, confirmation: VcsResetConfirmation): Project =
+        RepositoryAccess.archive(projectId) {
+            var pending: PendingRepositoryReset? = null
+            var completion = TransactionSynchronization.STATUS_UNKNOWN
+            try {
+                val changed = resetTransaction.execute {
+                    TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                        override fun afterCompletion(status: Int) {
+                            completion = status
+                        }
+                    })
+                    val loaded = projectRepository.findById(projectId)
+                        .orElseThrow { IllegalArgumentException("Project not found") }
+                    val project = reloadProject(projectId, loaded)
+                    confirmation.validate(project)
 
-        for (fork in project.forkingProjects) {
-            fork.originalProject = null
-            projectRepository.save(fork)
+                    val oldRepository = repositoryService.getRepository(project)
+                    val nextVcs = nextVcsInCycle(project.vcs)
+                    val newRepository = repositoryService.getRepository(project, nextVcs)
+                    val operation = repositoryArchive.begin(
+                        projectId, project.vcs, oldRepository.getDirectory().toPath(), newRepository.getDirectory().toPath()
+                    )
+                    pending = operation
+                    operation.createTarget(newRepository)
+
+                    for (fork in project.forkingProjects) {
+                        fork.originalProject = null
+                        projectRepository.save(fork)
+                    }
+                    project.forkingProjects.clear()
+                    project.vcs = nextVcs
+                    projectRepository.save(project)
+                }!!
+                logger.info("Repository reset committed for project {}; archive retained at {}", projectId, pending!!.archiveDirectory)
+                changed
+            } catch (failure: Throwable) {
+                val operation = pending
+                if (operation == null && (failure is InvalidVcsResetConfirmation || failure is VcsResetConflict)) {
+                    throw failure
+                }
+                if (operation != null && completion == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                    try {
+                        operation.rollback()
+                    } catch (recoveryFailure: Throwable) {
+                        failure.addSuppressed(recoveryFailure)
+                        logger.error(
+                            "Repository reset compensation failed for project {}; archive retained at {}, failed target quarantine at {}. Operator recovery required.",
+                            projectId, operation.archiveDirectory, operation.failedTargetDirectory, failure
+                        )
+                        throw RepositoryResetFailure(failure)
+                    }
+                } else if (operation != null) {
+                    // A commit/afterCommit exception does not prove rollback. Never overwrite possibly committed data.
+                    logger.error(
+                        "Repository reset failed with transaction completion {} for project {}; archive at {} and new target preserved. Operator reconciliation required.",
+                        completion, projectId, operation.archiveDirectory, failure
+                    )
+                    throw RepositoryResetFailure(failure)
+                }
+                logger.error(
+                    "Repository reset failed for project {}; completed compensation where applicable, failed target retained at {}",
+                    projectId, operation?.failedTargetDirectory, failure
+                )
+                throw RepositoryResetFailure(failure)
+            }
         }
-        project.forkingProjects.clear()
-
-        try {
-            repositoryService.getRepository(project).delete()
-        } catch (e: Exception) {
-            // ignore
-        }
-
-        project.vcs = nextVcsInCycle(project.vcs)
-
-        repositoryService.getRepository(project).create()
-
-        return projectRepository.save(project)
-    }
 
     override fun getProjectLabels(projectId: Long): Set<Label> {
         val project = projectRepository.findById(projectId)

@@ -20,6 +20,7 @@ import com.github.yonaprojects.yona.domain.pullrequest.ReviewCommentRepository
 import com.github.yonaprojects.yona.domain.user.User
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
 import com.github.yonaprojects.yona.domain.watch.WatchRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpStatus
@@ -281,7 +282,9 @@ class MentionController(
     // yona addCommitAuthor 대응 - 커밋 작성자를 이메일로 조회하고, email prefix를 loginId로 보는 폴백 검색도 함께 시도한다.
     private fun collectCommitAuthor(project: Project, commitId: String): List<User> {
         val commit = try {
-            repositoryService.getRepository(project).getCommit(commitId)
+            RepositoryAccess.readBoth(project.id, null) {
+                repositoryService.getRepository(project).getCommit(commitId)
+            }
         } catch (e: Exception) {
             null
         } ?: return emptyList()

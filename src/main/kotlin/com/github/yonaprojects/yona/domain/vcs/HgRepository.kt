@@ -696,7 +696,7 @@ class HgRepository(
         message: String,
         authorName: String?,
         authorEmail: String?
-    ) {
+    ): Unit = RepositoryAccess.session {
         useHg { hg ->
             val normalizedPath = path.trim('/')
             require(normalizedPath.isNotEmpty() && normalizedPath.split("/").none { it.isEmpty() || it == ".." }) {

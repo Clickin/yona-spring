@@ -29,9 +29,14 @@ class RepositoryService(
 ) {
     private val objectMapper = ObjectMapper()
 
-    fun getRepository(project: Project): PlayRepository {
-        val vcsType = project.vcs?.uppercase() ?: "GIT"
-        return if (vcsType == "SUBVERSION" || vcsType == "SVN") {
+    fun getRepository(project: Project, vcs: String? = null): PlayRepository {
+        val vcsType = normalizeVcs(vcs ?: project.vcs)
+        val baseDir = when (vcsType) {
+            "SUBVERSION" -> svnBaseDir
+            "MERCURIAL" -> hgBaseDir
+            else -> gitBaseDir
+        }
+        val repository = if (vcsType == "SUBVERSION") {
             SvnRepository(
                 ownerName = project.owner ?: "",
                 projectName = project.name,
@@ -39,7 +44,7 @@ class RepositoryService(
             ) { loginId ->
                 userRepository.findByLoginId(loginId).orElse(null)
             }
-        } else if (vcsType == "MERCURIAL" || vcsType == "HG") {
+        } else if (vcsType == "MERCURIAL") {
             HgRepository(
                 ownerName = project.owner ?: "",
                 projectName = project.name,
@@ -69,6 +74,8 @@ class RepositoryService(
                 gpgVerifier = { revCommit -> gpgSignatureVerifier.verify(revCommit) }
             )
         }
+        if (!RepositoryAccess.isWithinRoot(repository.getDirectory(), File(baseDir))) throw RepositoryUnavailableException()
+        return repository
     }
 
     fun getFileAsRaw(userName: String, projectName: String, revision: String, path: String): ByteArray? {

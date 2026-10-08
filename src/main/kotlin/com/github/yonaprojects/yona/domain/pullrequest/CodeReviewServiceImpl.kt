@@ -9,6 +9,7 @@ import com.github.yonaprojects.yona.domain.user.UserIdent
 import com.github.yonaprojects.yona.domain.user.UserRepository
 import com.github.yonaprojects.yona.domain.vcs.PlayRepository
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
 import com.github.yonaprojects.yona.domain.notification.NotificationEvent
 import com.github.yonaprojects.yona.domain.notification.NotificationEventRecorder
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
@@ -74,7 +75,9 @@ class CodeReviewServiceImpl(
 
                 thread.commitId?.let { cid ->
                     try {
-                        val commit = repositoryService.getRepository(project).getCommit(cid)
+                        val commit = RepositoryAccess.readBoth(project.id, null) {
+                            repositoryService.getRepository(project).getCommit(cid)
+                        }
                         val codeAuthor = commit?.getAuthor()
                         // 테스트 커버리지 도달 불가(COVERAGE_BACKLOG.md [i] 참고): RepositoryService의
                         // userResolver는 userRepository.findByEmail() 결과만 반환하므로 codeAuthor가
@@ -185,7 +188,9 @@ class CodeReviewServiceImpl(
         val baseWatchers = mutableSetOf<User>()
 
         try {
-            val author = repositoryService.getRepository(project).getCommit(commitId)?.getAuthor()
+            val author = RepositoryAccess.readBoth(project.id, null) {
+                repositoryService.getRepository(project).getCommit(commitId)?.getAuthor()
+            }
             // 테스트 커버리지 도달 불가: createReviewComment의 codeAuthor 로딩과 동일한 이유
             // (userResolver는 실제 영속 User만 반환)로 author.id != null은 항상 참이다.
             if (author != null && author.id != null && !author.isGuest) {
@@ -427,20 +432,22 @@ class CodeReviewServiceImpl(
             path = path.substring(1)
         }
 
-        val repository = repositoryService.getRepository(pullRequest.toProject)
-
-        return try {
-            val unchangedFromMergeBase = noChangesBetween(
-                repository, pullRequest.mergedCommitIdFrom!!, thread.prevCommitId, path
-            )
-            if (!unchangedFromMergeBase) {
+        return RepositoryAccess.readBoth(pullRequest.toProject.id, null) {
+            val repository = repositoryService.getRepository(pullRequest.toProject)
+        
+            try {
+                val unchangedFromMergeBase = noChangesBetween(
+                    repository, pullRequest.mergedCommitIdFrom!!, thread.prevCommitId, path
+                )
+                if (!unchangedFromMergeBase) {
+                    true
+                } else {
+                    !noChangesBetween(repository, pullRequest.mergedCommitIdTo!!, commitId, path)
+                }
+            } catch (e: Exception) {
+                // yona MissingObjectException 처리와 동일 — git 객체 조회 실패 시 outdated로 간주(안전한 기본값)
                 true
-            } else {
-                !noChangesBetween(repository, pullRequest.mergedCommitIdTo!!, commitId, path)
             }
-        } catch (e: Exception) {
-            // yona MissingObjectException 처리와 동일 — git 객체 조회 실패 시 outdated로 간주(안전한 기본값)
-            true
         }
     }
 

@@ -14,6 +14,7 @@ import io.mockk.*
 import tools.jackson.databind.ObjectMapper
 import tools.jackson.databind.node.ObjectNode
 import java.io.FileNotFoundException
+import java.nio.file.Files
 import java.util.Optional
 
 @Suppress("UNCHECKED_CAST")
@@ -99,6 +100,28 @@ class RepositoryServiceSpec : DescribeSpec({
             proj.owner = null
             val repo = service.getRepository(proj)
             repo.shouldBeInstanceOf<GitRepository>()
+        }
+
+        it("selects the reset target without changing the managed project's VCS") {
+            val project = Project(id = 1L, owner = "owner", name = "reset", vcs = "GIT")
+            service.getRepository(project, "SUBVERSION").shouldBeInstanceOf<SvnRepository>()
+            project.vcs shouldBe "GIT"
+        }
+
+        listOf("GIT" to ".git", "SUBVERSION" to "", "MERCURIAL" to "").forEach { (vcs, suffix) ->
+            it("rejects $vcs browser repository selection through an archive symlink") {
+                val root = tempdir().toPath()
+                val served = Files.createDirectories(root.resolve("served"))
+                val archived = Files.createDirectory(root.resolve("archive"))
+                Files.createDirectories(served.resolve("owner"))
+                Files.createSymbolicLink(served.resolve("owner/project$suffix"), archived)
+                val realService = RepositoryService(userRepository, projectRepository, gpgSignatureVerifier,
+                    served.toString(), served.toString(), served.toString(), "main")
+
+                shouldThrow<RepositoryUnavailableException> {
+                    realService.getRepository(Project(id = 1L, owner = "owner", name = "project", vcs = vcs))
+                }
+            }
         }
     }
 

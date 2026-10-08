@@ -1,6 +1,7 @@
 package com.github.yonaprojects.yona.web
 
 import com.github.yonaprojects.yona.config.security.AccessControl
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
 import com.github.yonaprojects.yona.domain.enumeration.EventType
 import com.github.yonaprojects.yona.domain.enumeration.Operation
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
@@ -251,7 +252,9 @@ class PullRequestViewController(
         if (project == null) return "master"
         val target = project.originalProject ?: project
         return try {
-            repositoryService.getRepository(target).getDefaultBranch().substringAfter("refs/heads/")
+            RepositoryAccess.readBoth(target.id, null) {
+                repositoryService.getRepository(target).getDefaultBranch().substringAfter("refs/heads/")
+            }
         } catch (e: Exception) {
             "master"
         }
@@ -369,7 +372,9 @@ class PullRequestViewController(
         var canRestoreBranch = false
         if (pullRequest.state == State.MERGED) {
             try {
-                val refs = repositoryService.getRepository(pullRequest.fromProject).getRefNames()
+                val refs = RepositoryAccess.readBoth(pullRequest.fromProject.id, null) {
+                    repositoryService.getRepository(pullRequest.fromProject).getRefNames()
+                }
                 val exists = refs.any { it.substringAfter("refs/heads/") == pullRequest.fromBranch }
                 canDeleteBranch = exists
                 canRestoreBranch = !exists
@@ -574,7 +579,9 @@ class PullRequestViewController(
 
     private fun branchNamesOf(project: Project): List<String> {
         return try {
-            repositoryService.getRepository(project).getRefNames().map { it.substringAfter("refs/heads/") }
+            RepositoryAccess.readBoth(project.id, null) {
+                repositoryService.getRepository(project).getRefNames().map { it.substringAfter("refs/heads/") }
+            }
         } catch (e: Exception) {
             emptyList()
         }

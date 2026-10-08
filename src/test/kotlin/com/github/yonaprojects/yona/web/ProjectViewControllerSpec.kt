@@ -5,6 +5,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectRepository
 import com.github.yonaprojects.yona.domain.project.VcsResetConfirmation
 import com.github.yonaprojects.yona.domain.project.InvalidVcsResetConfirmation
 import com.github.yonaprojects.yona.domain.project.VcsResetConflict
+import com.github.yonaprojects.yona.domain.project.RepositoryResetFailure
 import com.github.yonaprojects.yona.domain.project.ProjectScope
 import com.github.yonaprojects.yona.domain.project.ProjectUser
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
@@ -408,7 +409,11 @@ class ProjectViewControllerSpec : DescribeSpec({
                 }
             }
 
-            listOf(InvalidVcsResetConfirmation() to 400, VcsResetConflict() to 409).forEach { (failure, expectedStatus) ->
+            listOf(
+                InvalidVcsResetConfirmation() to 400,
+                VcsResetConflict() to 409,
+                RepositoryResetFailure(java.io.IOException("/private/archive/secret-repository")) to 500
+            ).forEach { (failure, expectedStatus) ->
                 it("서비스 재검증 실패도 올바른 HTTP 상태로 반환한다: $expectedStatus") {
                     every { projectRepository.findByOwnerAndNameOrPreviousPlace("owner", "TestProj") } returns Optional.of(project)
                     every { userRepository.findByLoginId("testuser") } returns Optional.of(user)
@@ -419,6 +424,7 @@ class ProjectViewControllerSpec : DescribeSpec({
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"projectId":1,"projectName":"TestProj","expectedVcs":"GIT","accepted":true}"""))
                         .andExpect(status().`is`(expectedStatus))
+                        .andExpect(content().string(""))
                 }
             }
         }

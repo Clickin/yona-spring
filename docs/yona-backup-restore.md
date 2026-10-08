@@ -31,14 +31,17 @@ Backing up settings and files
 ---
 Legacy kept everything under one `YONA_DATA` directory (`conf`/`uploads`/`repo`/`logs`) that you
 could just tar up. yona splits physical storage across independent settings instead. Back up
-these four locations (see [README's "Deployment configuration"](../README.md#deployment-configuration-especially-on-windows)
+all configured locations (see [README's "Deployment configuration"](../README.md#deployment-configuration-especially-on-windows)
 for each key's default and purpose):
 
 ```
 - yona.git.base-dir    - Git bare repositories
 - yona.svn.base-dir    - SVN repositories
+- yona.hg.base-dir     - Mercurial repositories
 - yona.lfs.base-dir    - Git LFS objects
 - yona.upload.base-dir - Attachment uploads
+- yona.repository-archive.base-dir - Retained repositories and failed-target quarantines
+- yona.repository-archive.git-dir / svn-dir / hg-dir - Optional per-filesystem archive overrides
 ```
 
 If left at their defaults (`/tmp/yona/...`), reconfigure them to a persistent directory first,
@@ -46,19 +49,58 @@ then back those directories up regularly. `application.yml` itself is part of th
 artifact and doesn't need separate backup, except for any production-only overrides it contains
 (DB passwords, OAuth2 client secrets, etc.) — those should be backed up too.
 
-Repository type changes are destructive resets
+Repository type changes retain a private archive
 ---
 The repository-type setting initializes an empty repository of the next type
 (Git → Subversion → Mercurial → Git). It does **not** convert code or history.
-The existing code/history deletion warning, agreement checkbox, and confirmation
-dialog remain in place. Managers must also type the exact current project name.
+The warning, agreement checkbox, confirmation dialog, and exact project-name
+confirmation remain. The project ID, issues, boards, and other collaboration
+data remain; child forks are disconnected, not deleted.
 
-The project ID, issues, boards, and other collaboration data remain. Child forks
-are disconnected from the project; their own repositories are not deleted.
-Back up the database and repository files before resetting. At this stage, the
-old repository is physically deleted, and a database rollback cannot restore its
-files if repository creation or database persistence fails. This confirmation
-step does not provide archive recovery.
+The previous repository is moved into a private archive before creating the new
+repository. A confirmed database rollback restores it. Any partial new repository
+is moved into a private failed-target quarantine rather than recursively deleted.
+Successful resets retain their archives; no automatic pruning or restore UI is provided.
+
+Before enabling resets, configure persistent private locations:
+
+```yaml
+yona:
+  repository-archive:
+    single-serving-process: true
+    base-dir: /var/lib/yona-private-archives
+    # Optional: each override must be on the corresponding repository filesystem.
+    # git-dir: /mnt/git-private-archives
+    # svn-dir: /mnt/svn-private-archives
+    # hg-dir: /mnt/hg-private-archives
+```
+
+Enable `single-serving-process` only when this JVM is the sole repository server
+and writer. Other Yona instances, external Git/SVN/Hg servers, hooks that leave
+background writers, and restore jobs must not mutate these directories concurrently.
+The process drains active repository operations and pauses new repository sessions
+across projects while resetting. Existing forks can share mutable files through hard
+links, so shared files are copied to independent inodes before archiving. Plan a
+maintenance window and sufficient space for these copies; ordinary unshared files
+are moved without copying.
+
+Archive roots must be disjoint from all repository, LFS, upload, static-resource,
+and servlet-resource roots. Use an owner-only POSIX filesystem supporting stable
+file identities, hard-link counts, and same-filesystem atomic moves. Cross-filesystem
+moves are rejected without a copy/delete fallback. Configure the next VCS's archive
+root on its filesystem too, so a failed target can be quarantined safely.
+Do not export archives through another web/VCS server or place symlinks to them in
+served directories. Local imports cannot adopt an archive as an ordinary repository.
+
+Back up the database, active repositories, and every configured archive/quarantine
+root together. Existing commit references are not translated to the new VCS.
+If commit completion is unknown, a path was replaced, or compensation failed,
+the server preserves the available data and reports operator recovery instead of
+overwriting possibly committed state. Do not retry blindly. Stop all serving/writing
+processes, back up the retained directories, inspect the project's current VCS and
+fork relationships, and compare repository identities/history with the logged operation.
+Restore only a confirmed rolled-back source into an unoccupied serving path. Preserve
+unexpected files and failed targets separately until reconciliation is complete.
 
 The POST endpoint `/{owner}/{projectName}/changeVCS` now requires a JSON body
 and the usual authenticated manager session and CSRF token:

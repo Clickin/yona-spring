@@ -9,6 +9,7 @@ import com.github.yonaprojects.yona.domain.project.ProjectService
 import com.github.yonaprojects.yona.domain.project.VcsResetConfirmation
 import com.github.yonaprojects.yona.domain.project.InvalidVcsResetConfirmation
 import com.github.yonaprojects.yona.domain.project.VcsResetConflict
+import com.github.yonaprojects.yona.domain.project.RepositoryResetFailure
 import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.project.ProjectUser
 import com.github.yonaprojects.yona.domain.role.RoleType
@@ -421,6 +422,8 @@ class ProjectViewController(
             return ResponseEntity.badRequest().build()
         } catch (_: VcsResetConflict) {
             return ResponseEntity.status(HttpStatus.CONFLICT).build()
+        } catch (_: RepositoryResetFailure) {
+            return ResponseEntity.internalServerError().build()
         }
 
         return ResponseEntity.noContent().build()

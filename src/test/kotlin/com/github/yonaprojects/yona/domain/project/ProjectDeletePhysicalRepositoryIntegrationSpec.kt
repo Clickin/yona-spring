@@ -13,8 +13,8 @@ import java.io.File
 // DB의 Project 행은 지우지만 {yona.git.base-dir}/{owner}/{project}.git 물리 bare 저장소 디렉터리는
 // 파일시스템에 그대로 남겨, 이후 같은 owner/name으로 새 프로젝트를 만들면(createProject의
 // repositoryService.getRepository(project).create() -> GitRepository.create()가 이미 존재하는
-// 디렉터리와 충돌) FileAlreadyExistsException이 그대로 500으로 튄다(실측 확인). changeVCS()가 이미
-// 쓰고 있는 "getRepository(project).delete() 후 재생성" 패턴을 deleteProject()에도 적용해 고쳤다 —
+// 디렉터리와 충돌) FileAlreadyExistsException이 그대로 500으로 튄다(실측 확인).
+// 프로젝트 삭제 시 물리 저장소도 정리해 고쳤다. 저장소 초기화의 archive와는 별개다 —
 // 이 스펙은 mockk가 아닌 실제 RepositoryService/GitRepository + 실제 파일시스템으로 그 수정을
 // 고정한다.
 class ProjectDeletePhysicalRepositoryIntegrationSpec @Autowired constructor(

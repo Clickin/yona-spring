@@ -6,6 +6,9 @@ import com.github.yonaprojects.yona.domain.project.ProjectUserRepository
 import com.github.yonaprojects.yona.domain.sshkey.SshCommandAuthorization
 import com.github.yonaprojects.yona.domain.vcs.BranchProtectionPreReceiveHook
 import com.github.yonaprojects.yona.domain.vcs.RejectPushToReservedRefsPreReceiveHook
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
+import com.github.yonaprojects.yona.domain.vcs.RepositoryUnavailableException
+import java.io.File
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 import org.eclipse.jgit.transport.PreReceiveHook
 import org.eclipse.jgit.transport.PreReceiveHookChain
@@ -33,40 +36,48 @@ class UnsupportedGitServiceException(service: String?) : Exception("지원하지
 class GitSshProtocolHandler(
     private val protectedBranchRepository: ProtectedBranchRepository,
     private val projectUserRepository: ProjectUserRepository,
-    private val gpgSignatureVerifier: GpgSignatureVerifier
+    private val gpgSignatureVerifier: GpgSignatureVerifier,
+    private val servingRoot: File
 ) {
     /** authorization.allowed/repoDir/service는 호출부가 이미 검증했다고 가정한다(denied 케이스는
      * 호출부에서 처리) — 이 메서드는 오직 "허용된 요청을 실제로 처리"하는 데만 집중한다. */
     fun handle(authorization: SshCommandAuthorization, input: InputStream, output: OutputStream, error: OutputStream) {
-        val repoDir = requireNotNull(authorization.repoDir) { "authorization.repoDir must not be null when allowed" }
-        val service = authorization.service
-
-        val repository = FileRepositoryBuilder().setGitDir(repoDir).build()
-        try {
-            when (service) {
-                "git-upload-pack" -> UploadPack(repository).upload(input, output, error)
-                "git-receive-pack" -> {
-                    val receivePack = ReceivePack(repository)
-                    // GitServletConfig(HTTPS)와 완전히 동일한 훅 체이닝 — refs/yobi/* 예약 ref
-                    // 거부는 항상 적용, project를 알 수 없는 경우가 아니라면 브랜치 보호 규칙도
-                    // 함께 검사한다. pusher는 Deploy Key로 push한 경우 null(익명 push와 동일한
-                    // 의미).
-                    val preReceiveHooks = mutableListOf<PreReceiveHook>(RejectPushToReservedRefsPreReceiveHook())
-                    if (authorization.project != null) {
-                        preReceiveHooks.add(
+        val project = authorization.project ?: throw RepositoryUnavailableException()
+        val projectId = project.id ?: throw RepositoryUnavailableException()
+        RepositoryAccess.read(projectId) {
+            val repoDir = authorization.repoDir ?: throw RepositoryUnavailableException()
+            if (!RepositoryAccess.isWithinRoot(repoDir, servingRoot) || !repoDir.isDirectory) {
+                throw RepositoryUnavailableException()
+            }
+            val repository = FileRepositoryBuilder().setGitDir(repoDir).build()
+            try {
+                when (val service = authorization.service) {
+                    "git-upload-pack" -> UploadPack(repository).upload(input, output, error)
+                    "git-receive-pack" -> {
+                        val receivePack = ReceivePack(repository)
+                        val preReceiveHooks = listOf<PreReceiveHook>(
+                            RejectPushToReservedRefsPreReceiveHook(),
                             BranchProtectionPreReceiveHook(
-                                authorization.project, authorization.pusher, protectedBranchRepository,
+                                project, authorization.pusher, protectedBranchRepository,
                                 projectUserRepository, gpgSignatureVerifier
                             )
                         )
+                        receivePack.setPreReceiveHook(PreReceiveHookChain.newChain(preReceiveHooks))
+                        receivePack.receive(input, output, error)
                     }
-                    receivePack.setPreReceiveHook(PreReceiveHookChain.newChain(preReceiveHooks))
-                    receivePack.receive(input, output, error)
+                    else -> throw UnsupportedGitServiceException(service)
                 }
-                else -> throw UnsupportedGitServiceException(service)
+            } finally {
+                try {
+                    repository.close()
+                } finally {
+                    try {
+                        output.flush()
+                    } finally {
+                        error.flush()
+                    }
+                }
             }
-        } finally {
-            repository.close()
         }
     }
 }

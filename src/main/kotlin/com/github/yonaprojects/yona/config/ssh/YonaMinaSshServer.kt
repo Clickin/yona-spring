@@ -42,7 +42,9 @@ final class YonaMinaSshServer(
     @Value("\${yona.ssh.mina.port:2222}")
     private val configuredPort: Int,
     @Value("\${yona.ssh.mina.host-key-path:\${yona.data:data}/ssh/host_ed25519_key}")
-    private val hostKeyPath: String
+    private val hostKeyPath: String,
+    @Value("\${yona.git.base-dir:/tmp/yona/git}")
+    private val gitBaseDir: String
 ) {
     private val logger = LoggerFactory.getLogger(YonaMinaSshServer::class.java)
 
@@ -87,7 +89,8 @@ final class YonaMinaSshServer(
             val principal = channel.session.getAttribute(PRINCIPAL_ATTRIBUTE)
                 ?: throw IOException("인증되지 않은 세션입니다.")
             YonaSshGitCommand(
-                command, principal, sshAuthService, protectedBranchRepository, projectUserRepository, gpgSignatureVerifier
+                command, principal, sshAuthService, protectedBranchRepository, projectUserRepository,
+                gpgSignatureVerifier, File(gitBaseDir)
             )
         }
 

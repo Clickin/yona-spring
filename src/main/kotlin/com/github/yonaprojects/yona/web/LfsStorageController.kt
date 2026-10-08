@@ -1,5 +1,6 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.FileSystemResource
 import org.springframework.core.io.Resource
@@ -29,7 +30,7 @@ class LfsStorageController(
             return ResponseEntity.badRequest().build()
         }
         val file = getObjectFile(owner, project, oid)
-        if (!file.exists() || !file.isFile) {
+        if (!RepositoryAccess.isWithinRoot(file, File(lfsBaseDir)) || !file.exists() || !file.isFile) {
             return ResponseEntity.notFound().build()
         }
 
@@ -51,6 +52,9 @@ class LfsStorageController(
             return ResponseEntity.badRequest().build()
         }
         val file = getObjectFile(owner, project, oid)
+        if (!RepositoryAccess.isWithinRoot(file, File(lfsBaseDir))) {
+            return ResponseEntity.notFound().build()
+        }
         file.parentFile.mkdirs()
 
         try {

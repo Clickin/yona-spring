@@ -1,5 +1,8 @@
 package com.github.yonaprojects.yona.web
 
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
+import org.springframework.web.util.UriUtils
+import java.nio.charset.StandardCharsets
 import jakarta.servlet.ServletConfig
 import jakarta.servlet.ServletContext
 import jakarta.servlet.http.HttpServletRequest
@@ -22,6 +25,7 @@ class SvnController(
 ) {
 
     private val logger = LoggerFactory.getLogger(SvnController::class.java)
+    // DAVServlet retains DAVConfig only; DAVRepositoryManager and DAV resources are request-scoped.
     private val davServletCache = ConcurrentHashMap<String, DAVServlet>()
 
     // yona conf/routes:320-325의 "/svn/*path" catch-all(Play 와일드카드 라우트, SvnApp.serviceWithPath())
@@ -42,7 +46,19 @@ class SvnController(
             return
         }
 
-        val ownerName = segments[1]
+        val ownerName: String
+        val projectName: String
+        try {
+            ownerName = UriUtils.decode(segments[1], StandardCharsets.UTF_8)
+            projectName = UriUtils.decode(segments[2], StandardCharsets.UTF_8)
+        } catch (_: IllegalArgumentException) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST)
+            return
+        }
+        if (!RepositoryAccess.isWithinRoot(File(baseDir, "$ownerName/$projectName"), File(baseDir))) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND)
+            return
+        }
 
         val davServlet = davServletCache.computeIfAbsent(ownerName) { owner ->
             val servlet = DAVServlet()
@@ -87,6 +103,8 @@ class SvnController(
             if (!response.isCommitted) {
                 response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR)
             }
+        } finally {
+            response.flushBuffer()
         }
     }
 

@@ -49,6 +49,8 @@ class ProjectChangeVcsConfirmationIntegrationSpec @Autowired constructor(
             listOf("git", "svn", "hg", "lfs", "upload").forEach { vcs ->
                 registry.add("yona.$vcs.base-dir") { root.resolve(vcs).toString() }
             }
+            registry.add("yona.repository-archive.base-dir") { root.resolve("archive").toString() }
+            registry.add("yona.repository-archive.single-serving-process") { "true" }
         }
     }
 

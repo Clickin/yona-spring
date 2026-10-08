@@ -8,6 +8,7 @@ import com.github.yonaprojects.yona.domain.role.RoleType
 import com.github.yonaprojects.yona.domain.vcs.FileDiff
 import com.github.yonaprojects.yona.domain.vcs.GitCommit
 import com.github.yonaprojects.yona.domain.vcs.RepositoryService
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
 import com.github.yonaprojects.yona.domain.vcs.GitRepository
 import com.github.yonaprojects.yona.domain.vcs.HgRepository
 import com.github.yonaprojects.yona.domain.vcs.HgCommit
@@ -92,55 +93,56 @@ class PullRequestServiceImpl(
     override fun attemptMerge(pullRequestId: Long): PullRequestMergeResult {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
-
-        val playRepo = repositoryService.getRepository(pullRequest.toProject)
-        // Mercurial 프로젝트는 JGit이 아니라 hg4j 기반 계산으로 분기한다(클래스 하단 "Mercurial(hg4j)
-        // 대응" 섹션 참고).
-        if (playRepo is HgRepository) {
-            return hgAttemptMerge(pullRequest)
-        }
-        val gitDir = playRepo.getDirectory()
-
-        return FileRepositoryBuilder().setGitDir(gitDir).build().use { repo ->
-            val fromGitDir = repositoryService.getRepository(pullRequest.fromProject).getDirectory().absolutePath
-            val tempBranch = "refs/yobi/pull-check/${pullRequest.fromProject.owner}/${pullRequest.fromProject.name}/${pullRequest.fromBranch}"
-
-            // 소스 리포지토리로부터 임시 브랜치로 fetch
-            Git(repo).fetch()
-                .setRemote(fromGitDir)
-                .setRefSpecs(
-                    RefSpec()
-                        .setSource(qualifyBranchRef(pullRequest.fromBranch))
-                        .setDestination(tempBranch)
-                        .setForceUpdate(true)
-                )
-                .call()
-
-            val merger = MergeStrategy.RECURSIVE.newMerger(repo, true) as ThreeWayMerger
-            val leftParent = repo.resolve(pullRequest.toBranch)
-                ?: throw IllegalArgumentException("Target branch '${pullRequest.toBranch}' not found")
-            val rightParent = repo.resolve(tempBranch)
-                ?: throw IllegalArgumentException("Fetched source branch not found")
-
-            val success = merger.merge(leftParent, rightParent)
-            val result = PullRequestMergeResult(pullRequest = pullRequest)
-
-            if (success) {
-                result.setResolvedStateOfPullRequest()
-            } else {
-                result.setConflictStateOfPullRequest()
+        return RepositoryAccess.readBoth(pullRequest.fromProject.id, pullRequest.toProject.id) {
+            val playRepo = repositoryService.getRepository(pullRequest.toProject)
+            // Mercurial 프로젝트는 JGit이 아니라 hg4j 기반 계산으로 분기한다(클래스 하단 "Mercurial(hg4j)
+            // 대응" 섹션 참고).
+            if (playRepo is HgRepository) {
+                return hgAttemptMerge(pullRequest)
             }
-
-            result.gitCommits = diffCommits(repo, leftParent, rightParent)
-            pullRequest.lastCommitId = rightParent.name
-            pullRequestRepository.save(pullRequest)
-
-            // 임시 브랜치 삭제
-            val refUpdate = repo.updateRef(tempBranch)
-            refUpdate.isForceUpdate = true
-            refUpdate.delete()
-
-            result
+            val gitDir = playRepo.getDirectory()
+        
+            FileRepositoryBuilder().setGitDir(gitDir).build().use { repo ->
+                val fromGitDir = repositoryService.getRepository(pullRequest.fromProject).getDirectory().absolutePath
+                val tempBranch = "refs/yobi/pull-check/${pullRequest.fromProject.owner}/${pullRequest.fromProject.name}/${pullRequest.fromBranch}"
+        
+                // 소스 리포지토리로부터 임시 브랜치로 fetch
+                Git(repo).fetch()
+                    .setRemote(fromGitDir)
+                    .setRefSpecs(
+                        RefSpec()
+                            .setSource(qualifyBranchRef(pullRequest.fromBranch))
+                            .setDestination(tempBranch)
+                            .setForceUpdate(true)
+                    )
+                    .call()
+        
+                val merger = MergeStrategy.RECURSIVE.newMerger(repo, true) as ThreeWayMerger
+                val leftParent = repo.resolve(pullRequest.toBranch)
+                    ?: throw IllegalArgumentException("Target branch '${pullRequest.toBranch}' not found")
+                val rightParent = repo.resolve(tempBranch)
+                    ?: throw IllegalArgumentException("Fetched source branch not found")
+        
+                val success = merger.merge(leftParent, rightParent)
+                val result = PullRequestMergeResult(pullRequest = pullRequest)
+        
+                if (success) {
+                    result.setResolvedStateOfPullRequest()
+                } else {
+                    result.setConflictStateOfPullRequest()
+                }
+        
+                result.gitCommits = diffCommits(repo, leftParent, rightParent)
+                pullRequest.lastCommitId = rightParent.name
+                pullRequestRepository.save(pullRequest)
+        
+                // 임시 브랜치 삭제
+                val refUpdate = repo.updateRef(tempBranch)
+                refUpdate.isForceUpdate = true
+                refUpdate.delete()
+        
+                result
+            }
         }
     }
 
@@ -149,49 +151,51 @@ class PullRequestServiceImpl(
     // fromProject/toProject/fromBranch/toBranch만으로 동작한다.
     @Transactional(readOnly = true)
     override fun previewMerge(fromProject: Project, toProject: Project, fromBranch: String, toBranch: String): MergePreviewResult {
-        val playRepo = repositoryService.getRepository(toProject)
-        if (playRepo is HgRepository) {
-            return hgPreviewMerge(fromProject, toProject, fromBranch, toBranch)
-        }
-        val gitDir = playRepo.getDirectory()
-
-        return FileRepositoryBuilder().setGitDir(gitDir).build().use { repo ->
-            val fromGitDir = repositoryService.getRepository(fromProject).getDirectory().absolutePath
-            val tempBranch = "refs/yobi/pull-check/${fromProject.owner}/${fromProject.name}/$fromBranch"
-
-            // 소스 리포지토리로부터 임시 브랜치로 fetch (legacy fetchSourceTemporarilly() 대응)
-            Git(repo).fetch()
-                .setRemote(fromGitDir)
-                .setRefSpecs(
-                    RefSpec()
-                        .setSource(qualifyBranchRef(fromBranch))
-                        .setDestination(tempBranch)
-                        .setForceUpdate(true)
+        return RepositoryAccess.readBoth(fromProject.id, toProject.id) {
+            val playRepo = repositoryService.getRepository(toProject)
+            if (playRepo is HgRepository) {
+                return hgPreviewMerge(fromProject, toProject, fromBranch, toBranch)
+            }
+            val gitDir = playRepo.getDirectory()
+        
+            FileRepositoryBuilder().setGitDir(gitDir).build().use { repo ->
+                val fromGitDir = repositoryService.getRepository(fromProject).getDirectory().absolutePath
+                val tempBranch = "refs/yobi/pull-check/${fromProject.owner}/${fromProject.name}/$fromBranch"
+        
+                // 소스 리포지토리로부터 임시 브랜치로 fetch (legacy fetchSourceTemporarilly() 대응)
+                Git(repo).fetch()
+                    .setRemote(fromGitDir)
+                    .setRefSpecs(
+                        RefSpec()
+                            .setSource(qualifyBranchRef(fromBranch))
+                            .setDestination(tempBranch)
+                            .setForceUpdate(true)
+                    )
+                    .call()
+        
+                val merger = MergeStrategy.RECURSIVE.newMerger(repo, true) as ThreeWayMerger
+                val leftParent = repo.resolve(toBranch)
+                    ?: throw IllegalArgumentException("Target branch '$toBranch' not found")
+                val rightParent = repo.resolve(tempBranch)
+                    ?: throw IllegalArgumentException("Source branch '$fromBranch' not found")
+        
+                val success = merger.merge(leftParent, rightParent)
+                val commits = diffCommits(repo, leftParent, rightParent)
+                val (suggestedTitle, suggestedBody) = suggestTitleAndBody(commits)
+        
+                // 임시 브랜치 삭제 (legacy attemptMerge()가 fetchSourceTemporarilly()로 만든 임시 ref를
+                // 병합 성공/실패와 무관하게 매번 정리하는 것과 동일)
+                val refUpdate = repo.updateRef(tempBranch)
+                refUpdate.isForceUpdate = true
+                refUpdate.delete()
+        
+                MergePreviewResult(
+                    commits = commits,
+                    conflict = !success,
+                    suggestedTitle = suggestedTitle,
+                    suggestedBody = suggestedBody
                 )
-                .call()
-
-            val merger = MergeStrategy.RECURSIVE.newMerger(repo, true) as ThreeWayMerger
-            val leftParent = repo.resolve(toBranch)
-                ?: throw IllegalArgumentException("Target branch '$toBranch' not found")
-            val rightParent = repo.resolve(tempBranch)
-                ?: throw IllegalArgumentException("Source branch '$fromBranch' not found")
-
-            val success = merger.merge(leftParent, rightParent)
-            val commits = diffCommits(repo, leftParent, rightParent)
-            val (suggestedTitle, suggestedBody) = suggestTitleAndBody(commits)
-
-            // 임시 브랜치 삭제 (legacy attemptMerge()가 fetchSourceTemporarilly()로 만든 임시 ref를
-            // 병합 성공/실패와 무관하게 매번 정리하는 것과 동일)
-            val refUpdate = repo.updateRef(tempBranch)
-            refUpdate.isForceUpdate = true
-            refUpdate.delete()
-
-            MergePreviewResult(
-                commits = commits,
-                conflict = !success,
-                suggestedTitle = suggestedTitle,
-                suggestedBody = suggestedBody
-            )
+            }
         }
     }
 
@@ -352,110 +356,111 @@ class PullRequestServiceImpl(
     override fun merge(pullRequestId: Long, updater: User): PullRequestMergeResult {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
-
-        // 이 가드가 없으면 이미 MERGED된 PR을 다시 merge할 때마다 새 머지 커밋을 만들어
-        // refs/heads/{toBranch}에 중복으로 이어붙인다. 머지는 OPEN 상태에서만 의미가 있으므로 그 외
-        // 상태(MERGED/CLOSED)면 여기서 즉시 거절한다.
-        if (pullRequest.state != State.OPEN) {
-            throw IllegalArgumentException(
-                "이미 ${pullRequest.state} 상태인 풀 리퀘스트는 머지할 수 없습니다."
-            )
-        }
-
-        // toBranch에 걸린 ProtectedBranch 규칙 검사. LackingReviewerException(아래) 검사보다 먼저
-        // 두는 특별한 이유는 없다 — 둘 다 merge()를 조기에 거부하는 독립적인 가드일 뿐이라 순서는 임의다.
-        checkBranchProtectionForMerge(pullRequest, updater)
-
-        // require_approvals를 실제 PullRequestReview 판정과 연결한다. fetch 이전(leftParent/
-        // rightParent가 필요 없는 검사)이라 checkBranchProtectionForMerge()와 같은 지점에서 호출한다.
-        checkApprovalsForMerge(pullRequest, updater)
-
-        // 최소 리뷰어 검증 조건 체크
-        val project = pullRequest.toProject
-        if (project.isUsingReviewerCount) {
-            val currentReviewersCount = pullRequest.reviewers.size
-            if (currentReviewersCount < project.defaultReviewerCount) {
-                throw LackingReviewerException(
-                    "리뷰어 수가 부족하여 머지할 수 없습니다. " +
-                    "(필요: ${project.defaultReviewerCount}명, 현재: ${currentReviewersCount}명)"
+        return RepositoryAccess.readBoth(pullRequest.fromProject.id, pullRequest.toProject.id) {
+            // 이 가드가 없으면 이미 MERGED된 PR을 다시 merge할 때마다 새 머지 커밋을 만들어
+            // refs/heads/{toBranch}에 중복으로 이어붙인다. 머지는 OPEN 상태에서만 의미가 있으므로 그 외
+            // 상태(MERGED/CLOSED)면 여기서 즉시 거절한다.
+            if (pullRequest.state != State.OPEN) {
+                throw IllegalArgumentException(
+                    "이미 ${pullRequest.state} 상태인 풀 리퀘스트는 머지할 수 없습니다."
                 )
             }
-        }
-
-        val playRepo = repositoryService.getRepository(pullRequest.toProject)
-        if (playRepo is HgRepository) {
-            return hgMerge(pullRequest, updater)
-        }
-        val gitDir = playRepo.getDirectory()
-
-        return FileRepositoryBuilder().setGitDir(gitDir).build().use { repo ->
-            val fromGitDir = repositoryService.getRepository(pullRequest.fromProject).getDirectory().absolutePath
-            val fetchSourceRef = "refs/yobi/pull/${pullRequest.id}/head"
-
-            // 공식 fetch source branch로 fetch (qualifyBranchRef 관련 근본원인은 클래스 상단 주석 참고)
-            Git(repo).fetch()
-                .setRemote(fromGitDir)
-                .setRefSpecs(
-                    RefSpec()
-                        .setSource(qualifyBranchRef(pullRequest.fromBranch))
-                        .setDestination(fetchSourceRef)
-                        .setForceUpdate(true)
+        
+            // toBranch에 걸린 ProtectedBranch 규칙 검사. LackingReviewerException(아래) 검사보다 먼저
+            // 두는 특별한 이유는 없다 — 둘 다 merge()를 조기에 거부하는 독립적인 가드일 뿐이라 순서는 임의다.
+            checkBranchProtectionForMerge(pullRequest, updater)
+        
+            // require_approvals를 실제 PullRequestReview 판정과 연결한다. fetch 이전(leftParent/
+            // rightParent가 필요 없는 검사)이라 checkBranchProtectionForMerge()와 같은 지점에서 호출한다.
+            checkApprovalsForMerge(pullRequest, updater)
+        
+            // 최소 리뷰어 검증 조건 체크
+            val project = pullRequest.toProject
+            if (project.isUsingReviewerCount) {
+                val currentReviewersCount = pullRequest.reviewers.size
+                if (currentReviewersCount < project.defaultReviewerCount) {
+                    throw LackingReviewerException(
+                        "리뷰어 수가 부족하여 머지할 수 없습니다. " +
+                        "(필요: ${project.defaultReviewerCount}명, 현재: ${currentReviewersCount}명)"
+                    )
+                }
+            }
+        
+            val playRepo = repositoryService.getRepository(pullRequest.toProject)
+            if (playRepo is HgRepository) {
+                return hgMerge(pullRequest, updater)
+            }
+            val gitDir = playRepo.getDirectory()
+        
+            FileRepositoryBuilder().setGitDir(gitDir).build().use { repo ->
+                val fromGitDir = repositoryService.getRepository(pullRequest.fromProject).getDirectory().absolutePath
+                val fetchSourceRef = "refs/yobi/pull/${pullRequest.id}/head"
+        
+                // 공식 fetch source branch로 fetch (qualifyBranchRef 관련 근본원인은 클래스 상단 주석 참고)
+                Git(repo).fetch()
+                    .setRemote(fromGitDir)
+                    .setRefSpecs(
+                        RefSpec()
+                            .setSource(qualifyBranchRef(pullRequest.fromBranch))
+                            .setDestination(fetchSourceRef)
+                            .setForceUpdate(true)
+                    )
+                    .call()
+        
+                val merger = MergeStrategy.RECURSIVE.newMerger(repo, true) as ThreeWayMerger
+                val leftParent = repo.resolve(pullRequest.toBranch)
+                    ?: throw IllegalArgumentException("Target branch '${pullRequest.toBranch}' not found")
+                val rightParent = repo.resolve(fetchSourceRef)
+                    ?: throw IllegalArgumentException("Source head ref not found")
+        
+                // toBranch에 걸린 규칙이 require_signed_commits라면, 실제로 병합될 커밋(leftParent..rightParent
+                // 범위)을 여기서 검사한다. leftParent/rightParent가 확정된 시점에서만 그 범위를 계산할 수
+                // 있으므로 checkBranchProtectionForMerge()(fetch 전, restrict_push_to만 검사)보다
+                // 늦게 실행된다.
+                checkSignedCommitsForMerge(pullRequest, updater, repo, leftParent, rightParent)
+        
+                val success = merger.merge(leftParent, rightParent)
+                val result = PullRequestMergeResult(pullRequest = pullRequest)
+        
+                if (!success) {
+                    result.setConflictStateOfPullRequest()
+                    result.gitCommits = diffCommits(repo, leftParent, rightParent)
+                    pullRequestRepository.save(pullRequest)
+                    return@use result
+                }
+        
+                // 머지 성공: 머지 커밋 생성
+                val whoMerges = PersonIdent(updater.name, updater.email ?: "yona@yona.io")
+                val diff = diffCommits(repo, leftParent, rightParent)
+                // additionalTargetRef로 실제 대상 브랜치도 함께 갱신한다(아래 createMergeCommitAndUpdateRef() 참고).
+                val mergeCommitId = createMergeCommitAndUpdateRef(
+                    repo, pullRequest, leftParent, rightParent, merger, whoMerges, diff,
+                    additionalTargetRef = qualifyBranchRef(pullRequest.toBranch)
                 )
-                .call()
-
-            val merger = MergeStrategy.RECURSIVE.newMerger(repo, true) as ThreeWayMerger
-            val leftParent = repo.resolve(pullRequest.toBranch)
-                ?: throw IllegalArgumentException("Target branch '${pullRequest.toBranch}' not found")
-            val rightParent = repo.resolve(fetchSourceRef)
-                ?: throw IllegalArgumentException("Source head ref not found")
-
-            // toBranch에 걸린 규칙이 require_signed_commits라면, 실제로 병합될 커밋(leftParent..rightParent
-            // 범위)을 여기서 검사한다. leftParent/rightParent가 확정된 시점에서만 그 범위를 계산할 수
-            // 있으므로 checkBranchProtectionForMerge()(fetch 전, restrict_push_to만 검사)보다
-            // 늦게 실행된다.
-            checkSignedCommitsForMerge(pullRequest, updater, repo, leftParent, rightParent)
-
-            val success = merger.merge(leftParent, rightParent)
-            val result = PullRequestMergeResult(pullRequest = pullRequest)
-
-            if (!success) {
-                result.setConflictStateOfPullRequest()
-                result.gitCommits = diffCommits(repo, leftParent, rightParent)
+        
+                // DB 업데이트
+                result.gitCommits = diff
+                result.setMergedStateOfPullRequest(updater)
+                pullRequest.mergedCommitIdFrom = leftParent.name
+                pullRequest.mergedCommitIdTo = mergeCommitId.name
+                pullRequest.lastCommitId = rightParent.name
+                pullRequest.received = Instant.now()
+                pullRequest.isMerging = false
+        
                 pullRequestRepository.save(pullRequest)
-                return@use result
-            }
-
-            // 머지 성공: 머지 커밋 생성
-            val whoMerges = PersonIdent(updater.name, updater.email ?: "yona@yona.io")
-            val diff = diffCommits(repo, leftParent, rightParent)
-            // additionalTargetRef로 실제 대상 브랜치도 함께 갱신한다(아래 createMergeCommitAndUpdateRef() 참고).
-            val mergeCommitId = createMergeCommitAndUpdateRef(
-                repo, pullRequest, leftParent, rightParent, merger, whoMerges, diff,
-                additionalTargetRef = qualifyBranchRef(pullRequest.toBranch)
-            )
-
-            // DB 업데이트
-            result.gitCommits = diff
-            result.setMergedStateOfPullRequest(updater)
-            pullRequest.mergedCommitIdFrom = leftParent.name
-            pullRequest.mergedCommitIdTo = mergeCommitId.name
-            pullRequest.lastCommitId = rightParent.name
-            pullRequest.received = Instant.now()
-            pullRequest.isMerging = false
-
-            pullRequestRepository.save(pullRequest)
-            updatePullRequestCommits(pullRequest, diff)
-
-            // 비동기 이벤트 발행
-            eventPublisher.publishEvent(
-                PullRequestMergeEvent(
-                    pullRequestId = pullRequest.id!!,
-                    sender = updater,
-                    isNewPullRequest = false
+                updatePullRequestCommits(pullRequest, diff)
+        
+                // 비동기 이벤트 발행
+                eventPublisher.publishEvent(
+                    PullRequestMergeEvent(
+                        pullRequestId = pullRequest.id!!,
+                        sender = updater,
+                        isNewPullRequest = false
+                    )
                 )
-            )
-
-            result
+        
+                result
+            }
         }
     }
 
@@ -652,59 +657,60 @@ class PullRequestServiceImpl(
     private fun updateMerge(pullRequestId: Long): PullRequestMergeResult {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
-
-        val playRepo = repositoryService.getRepository(pullRequest.toProject)
-        // Mercurial은 진짜 changelog가 append-only라 Git처럼 "재검사 때마다
-        // refs/yobi/pull/{id}/merged에 버려질 수 있는 미리보기 커밋"을 만들 방법이 없다(만들면
-        // 재검사할 때마다 실제 프로젝트 히스토리에 영구 쓰레기 changeset이 쌓인다). 그래서
-        // hgAttemptMerge()와 동일한 순수 계산(TreeMergeCommand)만 수행하고 mergedCommitIdFrom/
-        // mergedCommitIdTo는 항상 null로 남긴다 — Git의 attemptMerge()도 이 두 필드는 건드리지
-        // 않으므로 "미리보기 전용 부수효과가 없다"는 계약은 동일하게 지켜진다(다만 outdated 리뷰
-        // 코멘트 감지처럼 이 필드에 기대는 부가 기능은 Hg에서 동작하지 않는다).
-        if (playRepo is HgRepository) {
-            return hgAttemptMerge(pullRequest)
-        }
-        val gitDir = playRepo.getDirectory()
-
-        return FileRepositoryBuilder().setGitDir(gitDir).build().use { repo ->
-            val fromGitDir = repositoryService.getRepository(pullRequest.fromProject).getDirectory().absolutePath
-            val fetchedSourceRef = "refs/yobi/pull/${pullRequest.id}/head"
-
-            Git(repo).fetch()
-                .setRemote(fromGitDir)
-                .setRefSpecs(
-                    RefSpec()
-                        .setSource(qualifyBranchRef(pullRequest.fromBranch))
-                        .setDestination(fetchedSourceRef)
-                        .setForceUpdate(true)
-                )
-                .call()
-
-            val merger = MergeStrategy.RECURSIVE.newMerger(repo, true) as ThreeWayMerger
-            val leftParent = repo.resolve(pullRequest.toBranch)
-                ?: throw IllegalArgumentException("Target branch '${pullRequest.toBranch}' not found")
-            val rightParent = repo.resolve(fetchedSourceRef)
-                ?: throw IllegalArgumentException("Fetched source branch not found")
-
-            val success = merger.merge(leftParent, rightParent)
-            val result = PullRequestMergeResult(pullRequest = pullRequest)
-            val diff = diffCommits(repo, leftParent, rightParent)
-
-            if (success) {
-                val whoMerges = PersonIdent(siteName, "yona@yona.io")
-                val mergeCommitId = createMergeCommitAndUpdateRef(repo, pullRequest, leftParent, rightParent, merger, whoMerges, diff)
-                result.setResolvedStateOfPullRequest()
-                pullRequest.mergedCommitIdFrom = leftParent.name
-                pullRequest.mergedCommitIdTo = mergeCommitId.name
-            } else {
-                result.setConflictStateOfPullRequest()
+        return RepositoryAccess.readBoth(pullRequest.fromProject.id, pullRequest.toProject.id) {
+            val playRepo = repositoryService.getRepository(pullRequest.toProject)
+            // Mercurial은 진짜 changelog가 append-only라 Git처럼 "재검사 때마다
+            // refs/yobi/pull/{id}/merged에 버려질 수 있는 미리보기 커밋"을 만들 방법이 없다(만들면
+            // 재검사할 때마다 실제 프로젝트 히스토리에 영구 쓰레기 changeset이 쌓인다). 그래서
+            // hgAttemptMerge()와 동일한 순수 계산(TreeMergeCommand)만 수행하고 mergedCommitIdFrom/
+            // mergedCommitIdTo는 항상 null로 남긴다 — Git의 attemptMerge()도 이 두 필드는 건드리지
+            // 않으므로 "미리보기 전용 부수효과가 없다"는 계약은 동일하게 지켜진다(다만 outdated 리뷰
+            // 코멘트 감지처럼 이 필드에 기대는 부가 기능은 Hg에서 동작하지 않는다).
+            if (playRepo is HgRepository) {
+                return hgAttemptMerge(pullRequest)
             }
-
-            result.gitCommits = diff
-            pullRequest.lastCommitId = rightParent.name
-            pullRequestRepository.save(pullRequest)
-
-            result
+            val gitDir = playRepo.getDirectory()
+        
+            FileRepositoryBuilder().setGitDir(gitDir).build().use { repo ->
+                val fromGitDir = repositoryService.getRepository(pullRequest.fromProject).getDirectory().absolutePath
+                val fetchedSourceRef = "refs/yobi/pull/${pullRequest.id}/head"
+        
+                Git(repo).fetch()
+                    .setRemote(fromGitDir)
+                    .setRefSpecs(
+                        RefSpec()
+                            .setSource(qualifyBranchRef(pullRequest.fromBranch))
+                            .setDestination(fetchedSourceRef)
+                            .setForceUpdate(true)
+                    )
+                    .call()
+        
+                val merger = MergeStrategy.RECURSIVE.newMerger(repo, true) as ThreeWayMerger
+                val leftParent = repo.resolve(pullRequest.toBranch)
+                    ?: throw IllegalArgumentException("Target branch '${pullRequest.toBranch}' not found")
+                val rightParent = repo.resolve(fetchedSourceRef)
+                    ?: throw IllegalArgumentException("Fetched source branch not found")
+        
+                val success = merger.merge(leftParent, rightParent)
+                val result = PullRequestMergeResult(pullRequest = pullRequest)
+                val diff = diffCommits(repo, leftParent, rightParent)
+        
+                if (success) {
+                    val whoMerges = PersonIdent(siteName, "yona@yona.io")
+                    val mergeCommitId = createMergeCommitAndUpdateRef(repo, pullRequest, leftParent, rightParent, merger, whoMerges, diff)
+                    result.setResolvedStateOfPullRequest()
+                    pullRequest.mergedCommitIdFrom = leftParent.name
+                    pullRequest.mergedCommitIdTo = mergeCommitId.name
+                } else {
+                    result.setConflictStateOfPullRequest()
+                }
+        
+                result.gitCommits = diff
+                pullRequest.lastCommitId = rightParent.name
+                pullRequestRepository.save(pullRequest)
+        
+                result
+            }
         }
     }
 
@@ -1219,69 +1225,75 @@ class PullRequestServiceImpl(
     }
 
     override fun getDiff(pullRequest: PullRequest): List<FileDiff> {
-        val playRepoA = repositoryService.getRepository(pullRequest.toProject)
-
-        if (pullRequest.mergedCommitIdFrom != null && pullRequest.mergedCommitIdTo != null) {
+        return RepositoryAccess.readBoth(pullRequest.fromProject.id, pullRequest.toProject.id) {
+            val playRepoA = repositoryService.getRepository(pullRequest.toProject)
+        
+            if (pullRequest.mergedCommitIdFrom != null && pullRequest.mergedCommitIdTo != null) {
+                @Suppress("UNCHECKED_CAST")
+                return playRepoA.getDiff(pullRequest.mergedCommitIdFrom!!, pullRequest.mergedCommitIdTo!!) as List<FileDiff>
+            }
+            
+            val playRepoB = repositoryService.getRepository(pullRequest.fromProject)
+            if (playRepoA is GitRepository && playRepoB is GitRepository) {
+                val revA = pullRequest.toBranch
+                val revB = pullRequest.lastCommitId ?: pullRequest.fromBranch
+                return playRepoA.getDiff(revA, playRepoB, revB)
+            }
+            
+            val revA = pullRequest.mergedCommitIdFrom ?: pullRequest.toBranch
+            val revB = pullRequest.mergedCommitIdTo ?: pullRequest.lastCommitId ?: pullRequest.fromBranch
             @Suppress("UNCHECKED_CAST")
-            return playRepoA.getDiff(pullRequest.mergedCommitIdFrom!!, pullRequest.mergedCommitIdTo!!) as List<FileDiff>
+            playRepoA.getDiff(revA, revB) as List<FileDiff>
         }
-        
-        val playRepoB = repositoryService.getRepository(pullRequest.fromProject)
-        if (playRepoA is GitRepository && playRepoB is GitRepository) {
-            val revA = pullRequest.toBranch
-            val revB = pullRequest.lastCommitId ?: pullRequest.fromBranch
-            return playRepoA.getDiff(revA, playRepoB, revB)
-        }
-        
-        val revA = pullRequest.mergedCommitIdFrom ?: pullRequest.toBranch
-        val revB = pullRequest.mergedCommitIdTo ?: pullRequest.lastCommitId ?: pullRequest.fromBranch
-        @Suppress("UNCHECKED_CAST")
-        return playRepoA.getDiff(revA, revB) as List<FileDiff>
     }
 
     override fun getDiff(pullRequest: PullRequest, commitId: String): List<FileDiff> {
         val project = if (pullRequest.state == State.MERGED) pullRequest.toProject else pullRequest.fromProject
-        val playRepo = repositoryService.getRepository(project)
-        @Suppress("UNCHECKED_CAST")
-        return playRepo.getDiff(commitId) as List<FileDiff>
+        return RepositoryAccess.readBoth(project.id, null) {
+            val playRepo = repositoryService.getRepository(project)
+            @Suppress("UNCHECKED_CAST")
+            playRepo.getDiff(commitId) as List<FileDiff>
+        }
     }
 
     @Transactional
     override fun deleteFromBranch(pullRequestId: Long): PullRequest {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
-
-        if (pullRequest.state != State.MERGED) {
-            throw InvalidBranchOperationException("병합된 PR만 원본 브랜치를 삭제할 수 있습니다.")
+        return RepositoryAccess.readBoth(pullRequest.fromProject.id, pullRequest.toProject.id) {
+            if (pullRequest.state != State.MERGED) {
+                throw InvalidBranchOperationException("병합된 PR만 원본 브랜치를 삭제할 수 있습니다.")
+            }
+        
+            val playRepo = repositoryService.getRepository(pullRequest.fromProject)
+            val branch = playRepo.getBranches().firstOrNull { isSameBranch(it.name, pullRequest.fromBranch) }
+                ?: throw InvalidBranchOperationException("원본 브랜치를 찾을 수 없습니다: ${pullRequest.fromBranch}")
+        
+            playRepo.deleteBranch(pullRequest.fromBranch)
+            pullRequest.lastCommitId = branch.headCommit.getId()
+        
+            pullRequestRepository.save(pullRequest)
         }
-
-        val playRepo = repositoryService.getRepository(pullRequest.fromProject)
-        val branch = playRepo.getBranches().firstOrNull { isSameBranch(it.name, pullRequest.fromBranch) }
-            ?: throw InvalidBranchOperationException("원본 브랜치를 찾을 수 없습니다: ${pullRequest.fromBranch}")
-
-        playRepo.deleteBranch(pullRequest.fromBranch)
-        pullRequest.lastCommitId = branch.headCommit.getId()
-
-        return pullRequestRepository.save(pullRequest)
     }
 
     @Transactional
     override fun restoreFromBranch(pullRequestId: Long): PullRequest {
         val pullRequest = pullRequestRepository.findById(pullRequestId)
             .orElseThrow { IllegalArgumentException("PullRequest with ID $pullRequestId not found") }
-
-        val lastCommitId = pullRequest.lastCommitId
-            ?: throw InvalidBranchOperationException("복원할 브랜치의 커밋 정보가 없습니다.")
-
-        val playRepo = repositoryService.getRepository(pullRequest.fromProject)
-        val alreadyExists = playRepo.getBranches().any { isSameBranch(it.name, pullRequest.fromBranch) }
-        if (alreadyExists) {
-            throw InvalidBranchOperationException("이미 존재하는 브랜치입니다: ${pullRequest.fromBranch}")
+        return RepositoryAccess.readBoth(pullRequest.fromProject.id, pullRequest.toProject.id) {
+            val lastCommitId = pullRequest.lastCommitId
+                ?: throw InvalidBranchOperationException("복원할 브랜치의 커밋 정보가 없습니다.")
+        
+            val playRepo = repositoryService.getRepository(pullRequest.fromProject)
+            val alreadyExists = playRepo.getBranches().any { isSameBranch(it.name, pullRequest.fromBranch) }
+            if (alreadyExists) {
+                throw InvalidBranchOperationException("이미 존재하는 브랜치입니다: ${pullRequest.fromBranch}")
+            }
+        
+            playRepo.createBranch(pullRequest.fromBranch, lastCommitId)
+        
+            pullRequest
         }
-
-        playRepo.createBranch(pullRequest.fromBranch, lastCommitId)
-
-        return pullRequest
     }
 
     private fun isSameBranch(refName: String, branchName: String): Boolean {

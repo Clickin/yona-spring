@@ -73,6 +73,18 @@ yona:
     # 이 값을 지정하지 않으면 JGit이 서버가 돌아가는 머신의 전역 git 설정(init.defaultBranch)을
     # 그대로 따르게 되어 배포 환경마다 다른 이름으로 생성될 수 있다(사용자 요청으로 결정론적으로 고정).
     default-branch: "${YONA_GIT_DEFAULT_BRANCH:main}"
+  repository-archive:
+    # Disabled until the operator confirms that only this JVM serves/modifies repositories.
+    # External sshd must relay here; no external svnserve, shared nodes or OS access during reset.
+    single-serving-process: ${YONA_REPOSITORY_ARCHIVE_SINGLE_SERVING_PROCESS:false}
+    # Private POSIX 0700 location, outside every repository/LFS/upload/static/servlet root.
+    # Filesystems must support ATOMIC_MOVE, stable file keys and hard-link counts; no recursive cleanup.
+    # Existing directories are never chmodded. Original archives and failed targets require manual retention/recovery.
+    base-dir: "${YONA_REPOSITORY_ARCHIVE_BASE_DIR:/tmp/yona-archive}"
+    # Optional per-VCS private locations on each repository's filesystem, including failed targets (no copy fallback).
+    git-dir: "${YONA_REPOSITORY_ARCHIVE_GIT_DIR:}"
+    svn-dir: "${YONA_REPOSITORY_ARCHIVE_SVN_DIR:}"
+    hg-dir: "${YONA_REPOSITORY_ARCHIVE_HG_DIR:}"
   signup:
     allowed-email-domains: "${YONA_SIGNUP_ALLOWED_EMAIL_DOMAINS:}"
   notification:

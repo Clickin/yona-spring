@@ -13,6 +13,9 @@ import com.github.yonaprojects.yona.domain.vcs.BranchProtectionPreReceiveHook
 import com.github.yonaprojects.yona.domain.vcs.PushedBranchRepository
 import com.github.yonaprojects.yona.domain.vcs.RejectPushToReservedRefsPreReceiveHook
 import com.github.yonaprojects.yona.domain.vcs.YonaPostReceiveHook
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
+import org.eclipse.jgit.errors.RepositoryNotFoundException
+import org.eclipse.jgit.lfs.errors.LfsException
 import io.micrometer.core.instrument.MeterRegistry
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.http.server.GitServlet
@@ -96,6 +99,9 @@ class GitServletConfig(
                 // 정규화해 항상 같은 경로로 resolve한다.
                 val normalizedName = if (name.endsWith(".git")) name else "$name.git"
                 val repoFile = File(gitBaseDir, normalizedName)
+                if (!RepositoryAccess.isWithinRoot(repoFile, gitBaseDir)) {
+                    throw RepositoryNotFoundException("Repository is unavailable")
+                }
 
                 // 위키 저장소("<owner>/<project>.wiki.git")는 웹 UI에서 첫 페이지를 저장할 때만
                 // 만들어진다(WikiServiceImpl.ensureRepository()) — 페이지를 하나도 만들지 않은
@@ -175,6 +181,9 @@ class GitServletConfig(
                 val project = parts.getOrNull(1) ?: "default"
 
                 val projectLfsDir = File(lfsBaseDir, "$owner/$project")
+                if (!RepositoryAccess.isWithinRoot(projectLfsDir, File(lfsBaseDir))) {
+                    throw LfsException("Repository is unavailable")
+                }
                 if (!projectLfsDir.exists()) {
                     projectLfsDir.mkdirs()
                 }

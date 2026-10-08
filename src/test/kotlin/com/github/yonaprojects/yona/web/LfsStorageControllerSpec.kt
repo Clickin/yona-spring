@@ -113,5 +113,41 @@ class LfsStorageControllerSpec : DescribeSpec({
             result.statusCode shouldBe HttpStatus.INTERNAL_SERVER_ERROR
             File(tempDir, "owner/proj/objects/aa/bb/$oid").exists() shouldBe false
         }
+
+        it("never reads or overwrites an archived object through a project or object symlink, then serves a restored object") {
+            for (linkProject in listOf(true, false)) {
+                val fixture = Files.createTempDirectory("lfs-archive-isolation-")
+                try {
+                    val serving = Files.createDirectory(fixture.resolve("serving"))
+                    val archive = Files.createDirectory(fixture.resolve("archive"))
+                    val isolatedMvc = MockMvcBuilders.standaloneSetup(LfsStorageController(serving.toString())).build()
+                    val oid = "aabb" + "1".repeat(60)
+                    val archivedObject = archive.resolve("objects/aa/bb/$oid")
+                    Files.createDirectories(archivedObject.parent)
+                    Files.writeString(archivedObject, "private-archive-marker")
+                    val activeProject = serving.resolve("owner/project")
+                    val activeObject = activeProject.resolve("objects/aa/bb/$oid")
+                    val link = if (linkProject) activeProject else activeObject
+                    Files.createDirectories(link.parent)
+                    Files.createSymbolicLink(link, if (linkProject) archive else archivedObject)
+                    val url = "/git-lfs/owner/project/objects/$oid"
+
+                    val denied = isolatedMvc.perform(get(url)).andExpect(status().isNotFound).andReturn()
+                    denied.response.contentAsString.contains("private-archive-marker") shouldBe false
+                    denied.response.contentAsString.contains(fixture.toString()) shouldBe false
+                    isolatedMvc.perform(put(url).content("overwrite")).andExpect(status().isNotFound)
+                    Files.readString(archivedObject) shouldBe "private-archive-marker"
+
+                    Files.delete(link)
+                    Files.move(if (linkProject) archive else archivedObject, link)
+                    isolatedMvc.perform(get(url)).andExpect(status().isOk)
+                        .andExpect(MockMvcResultMatchers.content().string("private-archive-marker"))
+                    isolatedMvc.perform(put(url).content("restored-active")).andExpect(status().isCreated)
+                    Files.readString(activeObject) shouldBe "restored-active"
+                } finally {
+                    fixture.toFile().deleteRecursively()
+                }
+            }
+        }
     }
 })

@@ -9,6 +9,9 @@ import com.github.yonaprojects.yona.domain.sshkey.SshCommandAuthorization
 import com.github.yonaprojects.yona.domain.vcs.HgBranchProtectionPrePushkeyHook
 import com.github.yonaprojects.yona.domain.vcs.HgYonaPostPushkeyHook
 import com.github.yonaprojects.yona.domain.vcs.PushedBranchRepository
+import com.github.yonaprojects.yona.domain.vcs.RepositoryAccess
+import com.github.yonaprojects.yona.domain.vcs.RepositoryUnavailableException
+import java.io.File
 import io.github.search5.hg4j.api.HgHook
 import io.github.search5.hg4j.lib.HgRepository
 import io.github.search5.hg4j.transport.HgSshWireServer
@@ -46,48 +49,51 @@ class HgSshProtocolHandler(
     private val pullRequestRepository: PullRequestRepository,
     private val pushedBranchRepository: PushedBranchRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
+    private val servingRoot: File
 ) {
     fun handle(authorization: SshCommandAuthorization, input: InputStream, output: OutputStream) {
-        val repoDir = requireNotNull(authorization.repoDir) { "authorization.repoDir must not be null when allowed" }
-
-        val repository = HgRepository(repoDir)
-        try {
-            val server = HgSshWireServer(repository)
-            server.registerPreChangegroupHook(
-                HgHook {
-                    if (!authorization.isWrite) {
-                        throw IOException(authorization.reason ?: "이 저장소에 push 권한이 없습니다.")
-                    }
-                    true
-                }
-            )
-
-            val project = authorization.project
-            if (project != null) {
-                server.registerPrePushkeyHook(
-                    HgHook { context ->
-                        HgBranchProtectionPrePushkeyHook(
-                            project, authorization.pusher, protectedBranchRepository, projectUserRepository, gpgSignatureVerifier
-                        ).run(context)
-                    }
-                )
-                val pusher = authorization.pusher
-                if (pusher != null) {
-                    server.registerPostPushkeyHook(
+        val project = authorization.project ?: throw RepositoryUnavailableException()
+        val projectId = project.id ?: throw RepositoryUnavailableException()
+        RepositoryAccess.read(projectId) {
+            val repoDir = authorization.repoDir ?: throw RepositoryUnavailableException()
+            if (!RepositoryAccess.isWithinRoot(repoDir, servingRoot) || !repoDir.isDirectory) {
+                throw RepositoryUnavailableException()
+            }
+            try {
+                HgRepository(repoDir).use { repository ->
+                    val server = HgSshWireServer(repository)
+                    server.registerPreChangegroupHook(
+                        HgHook {
+                            if (!authorization.isWrite) {
+                                throw IOException(authorization.reason ?: "이 저장소에 push 권한이 없습니다.")
+                            }
+                            true
+                        }
+                    )
+                    server.registerPrePushkeyHook(
                         HgHook { context ->
-                            HgYonaPostPushkeyHook(
-                                project, pusher, projectRepository, pullRequestRepository,
-                                pushedBranchRepository, eventPublisher, meterRegistry
+                            HgBranchProtectionPrePushkeyHook(
+                                project, authorization.pusher, protectedBranchRepository, projectUserRepository, gpgSignatureVerifier
                             ).run(context)
                         }
                     )
+                    val pusher = authorization.pusher
+                    if (pusher != null) {
+                        server.registerPostPushkeyHook(
+                            HgHook { context ->
+                                HgYonaPostPushkeyHook(
+                                    project, pusher, projectRepository, pullRequestRepository,
+                                    pushedBranchRepository, eventPublisher, meterRegistry
+                                ).run(context)
+                            }
+                        )
+                    }
+                    server.handleConnection(input, output)
                 }
+            } finally {
+                output.flush()
             }
-
-            server.handleConnection(input, output)
-        } finally {
-            repository.close()
         }
     }
 }

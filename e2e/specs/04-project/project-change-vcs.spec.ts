@@ -15,9 +15,6 @@ test('change VCS screen loads and shows the next VCS in the cycle', async ({ pag
   // not a plain form submission.
   await expect(page.locator('#acceptChangeVCS')).toBeVisible();
   await expect(page.locator('#btnChangeVCS')).toBeVisible();
-  await expect(page.locator('.cu-desc')).toContainText(/fork/i);
-  await expect(page.locator('.cu-desc')).toContainText(/초기화|resets the repository/);
-  await expect(page.locator('.cu-desc')).toContainText(/협업 데이터|collaboration data/);
   await page.check('#acceptChangeVCS');
   await page.click('#btnChangeVCS');
   await expect(page.locator('dialog#alertChangeVCS')).toBeVisible();

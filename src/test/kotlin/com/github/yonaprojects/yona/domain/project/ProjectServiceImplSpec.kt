@@ -2,6 +2,15 @@ package com.github.yonaprojects.yona.domain.project
 
 import jakarta.persistence.EntityManager
 import jakarta.persistence.LockModeType
+import com.github.yonaprojects.yona.domain.vcs.RepositoryArchive
+import com.github.yonaprojects.yona.domain.vcs.PendingRepositoryReset
+import com.github.yonaprojects.yona.domain.vcs.nextVcsInCycle
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.TransactionSystemException
+import org.springframework.transaction.support.AbstractPlatformTransactionManager
+import org.springframework.transaction.support.DefaultTransactionStatus
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.github.yonaprojects.yona.domain.attachment.AttachmentService
 import com.github.yonaprojects.yona.domain.enumeration.ResourceType
 import com.github.yonaprojects.yona.domain.watch.WatchService
@@ -55,6 +64,16 @@ import java.nio.file.Files
 import java.time.Instant
 import java.util.Optional
 
+private class ResetTestTransactionManager : AbstractPlatformTransactionManager() {
+    var commitFailure: RuntimeException? = null
+    override fun doGetTransaction(): Any = Any()
+    override fun doBegin(transaction: Any, definition: TransactionDefinition) = Unit
+    override fun doCommit(status: DefaultTransactionStatus) {
+        commitFailure?.let { throw it }
+    }
+    override fun doRollback(status: DefaultTransactionStatus) = Unit
+}
+
 class ProjectServiceImplSpec : DescribeSpec({
     val projectRepository = mockk<ProjectRepository>()
     val projectUserRepository = mockk<ProjectUserRepository>()
@@ -81,6 +100,8 @@ class ProjectServiceImplSpec : DescribeSpec({
     val favoriteProjectRepository = mockk<FavoriteProjectRepository>(relaxed = true)
     val watchService = mockk<WatchService>(relaxed = true)
     val entityManager = mockk<EntityManager>(relaxed = true)
+    val repositoryArchive = mockk<RepositoryArchive>()
+    val resetTransactionManager = ResetTestTransactionManager()
 
     val projectService = ProjectServiceImpl(
         projectRepository,
@@ -110,8 +131,14 @@ class ProjectServiceImplSpec : DescribeSpec({
         "/tmp/yona/git",
         "/tmp/yona/svn",
         "/tmp/yona/hg",
-        entityManager
+        entityManager, repositoryArchive, resetTransactionManager
     )
+
+    beforeTest {
+        var detached: Project? = null
+        every { entityManager.detach(any()) } answers { detached = firstArg<Project>() }
+        every { entityManager.find(Project::class.java, any<Long>(), any<LockModeType>()) } answers { detached }
+    }
 
     describe("ProjectServiceImpl.acceptTransfer") {
         val sender = User(id = 1L, loginId = "sender", name = "보내는사람")
@@ -1378,7 +1405,7 @@ class ProjectServiceImplSpec : DescribeSpec({
             every { projectRepository.findById(1L) } returns Optional.of(project)
             every { projectRepository.delete(project) } returns Unit
 
-            // TASK-0421(버그9) — 물리 git 저장소도 함께 삭제돼야 한다(changeVCS()와 동일한 패턴).
+            // TASK-0421(버그9) — 프로젝트 삭제 시 물리 git 저장소도 함께 삭제돼야 한다.
             val repo = mockk<PlayRepository>(relaxed = true)
             every { repositoryService.getRepository(project) } returns repo
 
@@ -1966,7 +1993,8 @@ class ProjectServiceImplSpec : DescribeSpec({
             assigneeRepository, webhookRepository, webhookThreadRepository, postingRepository, postingService,
             commentThreadRepository, pullRequestRepository, pullRequestEventRepository, pullRequestCommitRepository,
             favoriteProjectRepository, watchService,
-            customGitBase.absolutePath, customSvnBase.absolutePath, "/tmp/yona/hg", entityManager
+            customGitBase.absolutePath, customSvnBase.absolutePath, "/tmp/yona/hg",
+            entityManager, repositoryArchive, resetTransactionManager
         )
 
         it("포크 시 하드코딩된 /tmp/yona/git이 아니라 주입된 gitBaseDir 설정을 따라야 한다") {
@@ -2035,110 +2063,112 @@ class ProjectServiceImplSpec : DescribeSpec({
         }
     }
 
-    // yona Project.java의 VCS 전환(Git<->SVN) 기능 대응 — 기존 저장소 삭제 후 다음 VCS로 재생성,
-    // fork 자식과의 연결은 모두 끊는다. yona-wiki P3-12(Mercurial 지원) 1라운드로 2지선다 토글이
-    // GIT->SUBVERSION->MERCURIAL->GIT 3종 순환(nextVcsInCycle)으로 확장됨.
     describe("ProjectServiceImpl.changeVCS") {
+        val oldRepository = mockk<PlayRepository>(relaxed = true)
+        val newRepository = mockk<PlayRepository>(relaxed = true)
+        val pending = mockk<PendingRepositoryReset>(relaxed = true)
+
         beforeTest {
-            clearMocks(projectRepository, repositoryService, entityManager)
+            clearMocks(projectRepository, repositoryService, entityManager, repositoryArchive, oldRepository, newRepository, pending)
+            resetTransactionManager.commitFailure = null
             every { entityManager.find(Project::class.java, any<Long>(), LockModeType.PESSIMISTIC_WRITE) } answers {
                 projectRepository.findById(secondArg<Long>()).orElse(null)
             }
+            every { oldRepository.getDirectory() } returns File("/test/old")
+            every { newRepository.getDirectory() } returns File("/test/new")
+            every { repositoryService.getRepository(any(), null) } returns oldRepository
+            every { repositoryService.getRepository(any(), match { it != null }) } returns newRepository
+            every { repositoryArchive.begin(any(), any(), any(), any()) } returns pending
+            every { pending.archiveDirectory } returns File("/test/archive").toPath()
+            every { pending.createTarget(any()) } answers { firstArg<PlayRepository>().create() }
         }
-        it("프로젝트를 찾을 수 없으면 예외가 발생해야 한다") {
-            every { projectRepository.findById(9500L) } returns Optional.empty()
 
-            shouldThrow<IllegalArgumentException> {
+        it("프로젝트가 없으면 실패하며 파일시스템을 변경하지 않는다") {
+            every { projectRepository.findById(9500L) } returns Optional.empty()
+            val failure = shouldThrow<RepositoryResetFailure> {
                 projectService.changeVCS(9500L, VcsResetConfirmation(9500L, "missing", "GIT", true))
+            }
+            (failure.cause is IllegalArgumentException) shouldBe true
+            verify(exactly = 0) { repositoryArchive.begin(any(), any(), any(), any()) }
+        }
+
+        listOf("GIT" to "GIT", null to "GIT", "SUBVERSION" to "SVN", "MERCURIAL" to "HG").forEach { (vcs, expected) ->
+            it("$vcs 저장소를 archive한 뒤 생성하고 성공 시에만 fork 관계와 VCS를 바꾼다") {
+                val project = Project(id = 9560L, name = "reset", owner = "owner", vcs = vcs)
+                val fork = Project(id = 9561L, name = "fork", owner = "forker", originalProject = project)
+                project.forkingProjects.add(fork)
+                every { projectRepository.findById(9560L) } returns Optional.of(project)
+                every { projectRepository.save(any()) } answers { firstArg<Project>() }
+                every { pending.createTarget(newRepository) } answers {
+                    project.vcs shouldBe vcs
+                    fork.originalProject shouldBe project
+                    newRepository.create()
+                }
+
+                val result = projectService.changeVCS(9560L, VcsResetConfirmation(9560L, project.name, expected, true))
+
+                result.id shouldBe 9560L
+                result.vcs shouldBe nextVcsInCycle(vcs)
+                fork.originalProject shouldBe null
+                project.forkingProjects.size shouldBe 0
+                verify(exactly = 0) { oldRepository.delete() }
+                verify(exactly = 1) { newRepository.create() }
+                verify(exactly = 0) { pending.rollback() }
             }
         }
 
-        it("GIT 프로젝트는 SUBVERSION으로 전환되고, fork 자식들의 원본 연결이 모두 끊어져야 한다") {
-            val fork1 = Project(id = 9561L, name = "fork1", owner = "forker1")
-            val fork2 = Project(id = 9562L, name = "fork2", owner = "forker2")
-            val project = Project(
-                id = 9560L, name = "vcs-switch", owner = "owner", vcs = "GIT",
-                forkingProjects = mutableListOf(fork1, fork2)
-            )
-            fork1.originalProject = project
-            fork2.originalProject = project
-            val vcsPlayRepository = mockk<PlayRepository>()
-            every { projectRepository.findById(9560L) } returns Optional.of(project)
-            every { projectRepository.save(fork1) } returns fork1
-            every { projectRepository.save(fork2) } returns fork2
-            every { projectRepository.save(project) } returns project
-            every { repositoryService.getRepository(project) } returns vcsPlayRepository
-            every { vcsPlayRepository.delete() } returns Unit
-            every { vcsPlayRepository.create() } returns Unit
-
-            val result = projectService.changeVCS(9560L, VcsResetConfirmation(9560L, project.name, "GIT", true))
-
-            result.vcs shouldBe "SUBVERSION"
-            result.id shouldBe 9560L
-            fork1.originalProject shouldBe null
-            fork2.originalProject shouldBe null
-            project.forkingProjects.size shouldBe 0
-            verify(exactly = 1) { vcsPlayRepository.delete() }
-            verify(exactly = 1) { vcsPlayRepository.create() }
-            verify(exactly = 1) { projectRepository.save(fork1) }
-            verify(exactly = 1) { projectRepository.save(fork2) }
-        }
-
-        it("vcs가 null이면 기본값 GIT으로 취급해 SUBVERSION으로 전환돼야 한다") {
-            val project = Project(id = 9563L, name = "vcs-null", owner = "owner", vcs = null)
-            val vcsPlayRepository = mockk<PlayRepository>()
-            every { projectRepository.findById(9563L) } returns Optional.of(project)
-            every { repositoryService.getRepository(project) } returns vcsPlayRepository
-            every { vcsPlayRepository.delete() } returns Unit
-            every { vcsPlayRepository.create() } returns Unit
-            every { projectRepository.save(project) } returns project
-
-            val result = projectService.changeVCS(9563L, VcsResetConfirmation(9563L, project.name, "GIT", true))
-
-            result.vcs shouldBe "SUBVERSION"
-        }
-
-        it("SUBVERSION 프로젝트는 MERCURIAL로 전환돼야 한다") {
-            val project = Project(id = 9564L, name = "vcs-svn", owner = "owner", vcs = "SUBVERSION")
-            val vcsPlayRepository = mockk<PlayRepository>()
-            every { projectRepository.findById(9564L) } returns Optional.of(project)
-            every { repositoryService.getRepository(project) } returns vcsPlayRepository
-            every { vcsPlayRepository.delete() } returns Unit
-            every { vcsPlayRepository.create() } returns Unit
-            every { projectRepository.save(project) } returns project
-
-            val result = projectService.changeVCS(9564L, VcsResetConfirmation(9564L, project.name, "SVN", true))
-
-            result.vcs shouldBe "MERCURIAL"
-        }
-
-        it("MERCURIAL 프로젝트는 다시 GIT으로 전환돼야 한다(순환)") {
-            val project = Project(id = 9566L, name = "vcs-hg", owner = "owner", vcs = "MERCURIAL")
-            val vcsPlayRepository = mockk<PlayRepository>()
-            every { projectRepository.findById(9566L) } returns Optional.of(project)
-            every { repositoryService.getRepository(project) } returns vcsPlayRepository
-            every { vcsPlayRepository.delete() } returns Unit
-            every { vcsPlayRepository.create() } returns Unit
-            every { projectRepository.save(project) } returns project
-
-            val result = projectService.changeVCS(9566L, VcsResetConfirmation(9566L, project.name, "HG", true))
-
-            result.vcs shouldBe "GIT"
-        }
-
-        it("기존 저장소 삭제 중 예외가 발생해도 무시하고 새 VCS로 저장소를 생성해야 한다") {
-            val project = Project(id = 9565L, name = "vcs-delete-fail", owner = "owner", vcs = "GIT")
-            val vcsPlayRepository = mockk<PlayRepository>()
+        it("archive 이동 실패는 무시하지 않으며 기존 VCS와 fork를 바꾸지 않는다") {
+            val project = Project(id = 9565L, name = "archive-fail", owner = "owner", vcs = "GIT")
+            val fork = Project(id = 9566L, name = "fork", owner = "forker", originalProject = project)
+            project.forkingProjects.add(fork)
             every { projectRepository.findById(9565L) } returns Optional.of(project)
-            every { repositoryService.getRepository(project) } returns vcsPlayRepository
-            every { vcsPlayRepository.delete() } throws RuntimeException("delete failed")
-            every { vcsPlayRepository.create() } returns Unit
-            every { projectRepository.save(project) } returns project
+            val original = java.io.IOException("move failed")
+            every { repositoryArchive.begin(any(), any(), any(), any()) } throws original
 
-            val result = projectService.changeVCS(9565L, VcsResetConfirmation(9565L, project.name, "GIT", true))
+            shouldThrow<RepositoryResetFailure> {
+                projectService.changeVCS(9565L, VcsResetConfirmation(9565L, project.name, "GIT", true))
+            }.cause?.cause shouldBe original
 
-            result.vcs shouldBe "SUBVERSION"
-            verify(exactly = 1) { vcsPlayRepository.create() }
+            project.vcs shouldBe "GIT"
+            fork.originalProject shouldBe project
+            verify(exactly = 0) { newRepository.create() }
+            verify(exactly = 0) { projectRepository.save(any()) }
+        }
+
+        it("새 저장소 생성 실패는 트랜잭션 rollback 완료 후 보상한다") {
+            val project = Project(id = 9567L, name = "create-fail", owner = "owner", vcs = "GIT")
+            every { projectRepository.findById(9567L) } returns Optional.of(project)
+            every { pending.createTarget(newRepository) } throws java.io.IOException("partial create")
+
+            shouldThrow<RepositoryResetFailure> {
+                projectService.changeVCS(9567L, VcsResetConfirmation(9567L, project.name, "GIT", true))
+            }
+
+            verify(exactly = 1) { pending.rollback() }
+            verify(exactly = 0) { projectRepository.save(any()) }
+        }
+
+        listOf(false, true).forEach { committed ->
+            it("commit 결과가 ${if (committed) "성공" else "불명확"}이면 예외가 나도 저장소를 되돌리지 않는다") {
+                val project = Project(id = 9568L, name = "commit-outcome", owner = "owner", vcs = "GIT")
+                every { projectRepository.findById(9568L) } returns Optional.of(project)
+                every { projectRepository.save(project) } returns project
+                if (committed) {
+                    every { pending.createTarget(newRepository) } answers {
+                        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                            override fun afterCommit() { throw IllegalStateException("after commit failed") }
+                        })
+                    }
+                } else {
+                    resetTransactionManager.commitFailure = TransactionSystemException("commit outcome unknown")
+                }
+
+                shouldThrow<RepositoryResetFailure> {
+                    projectService.changeVCS(9568L, VcsResetConfirmation(9568L, project.name, "GIT", true))
+                }
+
+                verify(exactly = 0) { pending.rollback() }
+            }
         }
 
         listOf(
@@ -2161,7 +2191,7 @@ class ProjectServiceImplSpec : DescribeSpec({
                 project.vcs shouldBe "GIT"
                 fork.originalProject shouldBe project
                 project.forkingProjects shouldBe listOf(fork)
-                verify(exactly = 0) { repositoryService.getRepository(any()) }
+                verify(exactly = 0) { repositoryService.getRepository(any(), any()) }
                 verify(exactly = 0) { projectRepository.save(any()) }
             }
         }
@@ -2179,7 +2209,7 @@ class ProjectServiceImplSpec : DescribeSpec({
             }
 
             project.vcs shouldBe "MERCURIAL"
-            verify(exactly = 0) { repositoryService.getRepository(any()) }
+            verify(exactly = 0) { repositoryService.getRepository(any(), any()) }
             verify(exactly = 0) { projectRepository.save(any()) }
         }
     }

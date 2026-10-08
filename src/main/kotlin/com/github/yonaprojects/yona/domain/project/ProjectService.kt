@@ -40,6 +40,8 @@ data class VcsResetConfirmation(
 
 class InvalidVcsResetConfirmation : IllegalArgumentException("Repository reset confirmation does not match")
 class VcsResetConflict : IllegalStateException("Repository type changed; reload the confirmation page")
+class RepositoryResetFailure(cause: Throwable) :
+    IllegalStateException("Repository reset failed. Contact the server operator before retrying.", cause)
 
 data class AttachLabelResult(
     val label: Label,

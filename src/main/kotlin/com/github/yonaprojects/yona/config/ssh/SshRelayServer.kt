@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -71,14 +72,20 @@ class SshRelayServer(
     @Value("\${yona.ssh.relay.enabled:true}")
     private val enabledSetting: Boolean,
     @Value("\${yona.ssh.relay.socket-path:/tmp/yona/ssh-relay.sock}")
-    private val socketPathSetting: String
+    private val socketPathSetting: String,
+    @Value("\${yona.git.base-dir:/tmp/yona/git}")
+    private val gitBaseDir: String,
+    @Value("\${yona.hg.base-dir:/tmp/yona/hg}")
+    private val hgBaseDir: String
 ) {
     private val logger = LoggerFactory.getLogger(SshRelayServer::class.java)
 
-    private val gitProtocolHandler = GitSshProtocolHandler(protectedBranchRepository, projectUserRepository, gpgSignatureVerifier)
+    private val gitProtocolHandler = GitSshProtocolHandler(
+        protectedBranchRepository, projectUserRepository, gpgSignatureVerifier, File(gitBaseDir)
+    )
     private val hgProtocolHandler = HgSshProtocolHandler(
         protectedBranchRepository, projectUserRepository, gpgSignatureVerifier,
-        projectRepository, pullRequestRepository, pushedBranchRepository, eventPublisher, meterRegistry
+        projectRepository, pullRequestRepository, pushedBranchRepository, eventPublisher, meterRegistry, File(hgBaseDir)
     )
 
     private var serverChannel: ServerSocketChannel? = null
@@ -193,7 +200,7 @@ class SshRelayServer(
             } catch (e: Exception) {
                 logger.warn("SSH relay connection failed", e)
                 try {
-                    writeErrorLine(output, "내부 오류: ${e.message}")
+                    writeErrorLine(output, "Repository is unavailable")
                 } catch (ignored: Exception) {
                 }
             }
