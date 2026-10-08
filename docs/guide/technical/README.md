@@ -156,7 +156,8 @@ JGit이 요청한 프록시와 무관하게 `policy.proxy()`를 쓴다. TLS는 `
 JGit의 trust manager·hostname verifier 변경은 무시한다. 3xx 응답은 `SOURCE_REDIRECT`, 타임아웃은 연결 10초,
 읽기 30초이며 JGit이 늘릴 수 없다. 자격 증명은 `credentialRef`가 있을 때만 읽고 가져오기가 끝나면 지운다.
 
-진행 위치는 ref별 행(`repository_mirror_ref`)이고 선형 커서는 -1로 둔다. 새 커밋은 가져온 ref의 끝에서
+진행 위치는 ref별 행(`repository_mirror_ref`)이고 선형 커서는 -1로 둔다. ref 이름은 대소문자를 구분하지만
+MariaDB/MySQL 기본 collation은 그렇지 않으므로, 유일성과 조회는 이름의 SHA-256(`ref_key`)으로 한다. 새 커밋은 가져온 ref의 끝에서
 닿고 저장된 어느 위치에서도 닿지 않으며 이번 실행에서 앞선 ref가 가져가지 않은 커밋이다(annotated tag는
 커밋으로 벗긴다). 부모가 자식보다 먼저 오도록 색인하고, 커밋이 `batchSize`보다 많은 ref는 조각 단위로
 색인한다. 각 조각의 checkpoint가 ref 행을 그 조각의 마지막 커밋으로 옮기고 마지막 조각이 끝(tip)으로
@@ -203,8 +204,9 @@ e-mail이 없으면 키도 없다.
 - 북마크: 실행마다 원본의 `bookmarks`를 따라 로컬 북마크를 만들고 옮기고 지운다(Git ref처럼 강제 이동과
   삭제를 따른다). 로컬에 없는 node를 가리키거나 저장할 수 없는 이름은 건너뛴다.
 - 한계: hg4j가 changegroup 전체를 메모리에서 반영하므로 한 번의 pull은 `max-bundle-bytes`(기본 100MB,
-  최대 16GiB)를 넘을 수 없다. 넘으면 `SOURCE_RESPONSE_TOO_LARGE`(FAILED)이며, 운영자가 JVM 힙과 함께
-  값을 올린 뒤 재시도한다.
+  최대 1GiB)를 넘을 수 없다. 넘으면 `SOURCE_RESPONSE_TOO_LARGE`(FAILED)이며, 운영자가 JVM 힙과 함께
+  값을 올린 뒤 재시도한다. 반영 중에는 bundle과 파싱한 changegroup이 함께 메모리에 있으므로 힙은 이 값의
+  몇 배가 필요하다.
 
 ### 이슈 참조와 알림
 

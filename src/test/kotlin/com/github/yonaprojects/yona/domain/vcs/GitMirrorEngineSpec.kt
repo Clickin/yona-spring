@@ -362,6 +362,15 @@ class GitMirrorEngineSpec @Autowired constructor(
                 rows() shouldBe mapOf("refs/heads/other" to o1.name)
             }
 
+            it("stores positions of refs whose names differ only in case as separate rows on every database") {
+                val a = "a".repeat(40)
+                val b = "b".repeat(40)
+                indexer.index(mirror.id!!, worker, fence, emptyList(), emptyList(), mapOf("refs/heads/Feature" to a, "refs/heads/feature" to b))
+                rows() shouldBe mapOf("refs/heads/Feature" to a, "refs/heads/feature" to b)
+                indexer.index(mirror.id!!, worker, fence, emptyList(), emptyList(), mapOf("refs/heads/feature" to a), listOf("refs/heads/Feature"))
+                rows() shouldBe mapOf("refs/heads/feature" to a)
+            }
+
             it("adds no references for a new branch or tag at an already indexed commit") {
                 val engine = localSeam(engineOf(5))
                 val c1 = source.commit("c1 #1")

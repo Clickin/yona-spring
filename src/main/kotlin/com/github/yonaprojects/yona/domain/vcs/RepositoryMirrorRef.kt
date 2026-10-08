@@ -13,7 +13,9 @@ import org.springframework.data.jpa.repository.JpaRepository
 @Entity
 @Table(
     name = "repository_mirror_ref",
-    uniqueConstraints = [UniqueConstraint(name = "uk_mirror_ref_name", columnNames = ["mirror_id", "ref_name"])]
+    // Ref names are case-sensitive, but the default MariaDB/MySQL collations compare case-insensitively, so
+    // uniqueness and lookups use an exact digest of the name.
+    uniqueConstraints = [UniqueConstraint(name = "uk_mirror_ref_key", columnNames = ["mirror_id", "ref_key"])]
 )
 class RepositoryMirrorRef(
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,8 +27,22 @@ class RepositoryMirrorRef(
     @Column(name = "ref_name", nullable = false, length = 255)
     var refName: String = "",
     @Column(name = "commit_id", nullable = false, length = 64)
-    var commitId: String = ""
-)
+    var commitId: String = "",
+    @Column(name = "ref_key", nullable = false, length = 64)
+    var refKey: String = keyOf(refName)
+) {
+    @PrePersist
+    @PreUpdate
+    fun syncKey() {
+        refKey = keyOf(refName)
+    }
+
+    companion object {
+        fun keyOf(refName: String): String = java.util.HexFormat.of().formatHex(
+            java.security.MessageDigest.getInstance("SHA-256").digest(refName.toByteArray(Charsets.UTF_8))
+        )
+    }
+}
 
 interface RepositoryMirrorRefRepository : JpaRepository<RepositoryMirrorRef, Long> {
     fun findAllByMirrorId(mirrorId: Long): List<RepositoryMirrorRef>

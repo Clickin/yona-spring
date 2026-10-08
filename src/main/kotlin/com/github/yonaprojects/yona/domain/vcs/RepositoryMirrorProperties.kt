@@ -34,6 +34,7 @@ class RepositoryMirrorProperties {
 
     private companion object {
         const val MIN_BUNDLE_BYTES = 1L shl 20
-        const val MAX_BUNDLE_BYTES = 1L shl 34
+        // A JVM byte array (the in-memory pull buffer) cannot reach 2 GiB.
+        const val MAX_BUNDLE_BYTES = 1L shl 30
     }
 }

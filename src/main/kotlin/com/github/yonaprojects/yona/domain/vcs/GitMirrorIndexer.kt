@@ -28,8 +28,8 @@ class GitMirrorIndexer(
     ) {
         indexer.index(id, owner, fence, commits, refNames) { mirror ->
             for (names in positions.keys.chunked(NAMES_PER_QUERY)) {
-                val rows = entityManager.createQuery("select r from RepositoryMirrorRef r where r.mirror.id = :id and r.refName in :names", RepositoryMirrorRef::class.java)
-                    .setParameter("id", id).setParameter("names", names).resultList.associateBy { it.refName }
+                val rows = entityManager.createQuery("select r from RepositoryMirrorRef r where r.mirror.id = :id and r.refKey in :keys", RepositoryMirrorRef::class.java)
+                    .setParameter("id", id).setParameter("keys", names.map(RepositoryMirrorRef::keyOf)).resultList.associateBy { it.refName }
                 for (name in names) {
                     val row = rows[name]
                     if (row != null) row.commitId = positions.getValue(name)
@@ -37,8 +37,8 @@ class GitMirrorIndexer(
                 }
             }
             for (names in deletions.chunked(NAMES_PER_QUERY)) {
-                entityManager.createQuery("delete from RepositoryMirrorRef r where r.mirror.id = :id and r.refName in :names")
-                    .setParameter("id", id).setParameter("names", names).executeUpdate()
+                entityManager.createQuery("delete from RepositoryMirrorRef r where r.mirror.id = :id and r.refKey in :keys")
+                    .setParameter("id", id).setParameter("keys", names.map(RepositoryMirrorRef::keyOf)).executeUpdate()
             }
         }
     }
