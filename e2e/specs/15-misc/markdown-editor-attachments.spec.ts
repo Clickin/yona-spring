@@ -236,3 +236,54 @@ test('attachment shadow UI preserves native form data and completed files across
   expect(await widget.evaluate(host => new FormData(host.closest('form')!).get('temporaryUploadFiles'))).toBe('');
   await expect(widget.locator('.attached-file-marker')).toHaveCount(0);
 });
+
+test('an in-flight upload survives a real Vue unmount and reconnect without duplicate listeners', async ({ page }) => {
+  const textarea = await openIssueForm(page);
+  const widget = page.locator('yona-attachments#upload');
+  const {promise: responseGate, resolve: releaseResponse} = Promise.withResolvers<void>();
+  let uploads = 0;
+  await page.route('**/files', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    uploads++;
+    const response = await route.fetch();
+    await responseGate;
+    await route.fulfill({ response });
+  });
+  try {
+    await dispatch(page, 'drop', { png: 'pending-reconnect.png' });
+    await expect(widget.locator('.attached-file.temporary')).toHaveCount(1);
+    await expect(textarea).toHaveValue(/^<!--_.+_-->$/);
+    await widget.evaluate(async element => {
+      const host = element as HTMLElement & { configure(options: {textarea: HTMLTextAreaElement | null}): void };
+      const parent = host.parentElement!;
+      const next = host.nextSibling;
+      const textarea = host.closest('form')!.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
+      host.remove();
+      // Cross Vue's deferred disconnect boundary, not just a synchronous DOM move.
+      const {promise, resolve} = Promise.withResolvers<void>();
+      setTimeout(resolve, 0);
+      await promise;
+      host.configure({ textarea });
+      parent.insertBefore(host, next);
+    });
+    await expect(widget.locator('.attached-file.temporary')).toHaveCount(1);
+    releaseResponse();
+    const item = widget.locator('.attached-file.complete', { hasText: 'pending-reconnect.png' });
+    await expect(item).toBeVisible({ timeout: 15_000 });
+    const id = await item.getAttribute('data-id');
+    await expect(textarea).toHaveValue(`![pending-reconnect.png](/files/${id}) `);
+    expect(await widget.evaluate(host => new FormData(host.closest('form')!).get('temporaryUploadFiles'))).toContain(id!);
+    await dispatch(page, 'paste', { png: 'after-reconnect.png' });
+    await expect(widget.locator('.attached-file.complete')).toHaveCount(2);
+    expect(uploads).toBe(2);
+    await expect(widget.locator('input[name="temporaryUploadFiles"]')).toHaveCount(1);
+    await widget.locator('.btn-delete').first().click();
+    await expect(widget.locator('.attached-file.complete')).toHaveCount(1);
+    await widget.locator('.btn-delete').click();
+    await expect(widget.locator('.attached-file')).toHaveCount(0);
+    await expect(textarea).toHaveValue('');
+  } finally {
+    releaseResponse();
+    await page.unroute('**/files');
+  }
+});

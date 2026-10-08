@@ -917,8 +917,8 @@
         <span class="pull-right nbtn small white btn-insert">[[#{common.attach.clickToPost}]]</span>
     </li>
   </script>
-  <!-- <yona-attachments> clones this localized shell into its shadow root; Vue renders the
-       file list. The hidden input is moved to light DOM for native form submission. -->
+  <!-- <yona-attachments> reads these localized labels; its Vue SFC renders the uploader
+       in Shadow DOM and maintains a light-DOM hidden input for native form submission. -->
   <template id="yona-attachments-template">
     <div class="upload-wrap content-footer" th:attr="data-insert-label=#{common.attach.clickToPost},data-delete-label=#{button.delete}">
       <input type="hidden" name="temporaryUploadFiles" value="">
