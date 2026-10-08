@@ -219,13 +219,23 @@ class GitMirrorEngine(
             val handled = walk.newFlag("HANDLED")
 
             // Stored positions of any ref (even a deleted or rewritten one) are indexed, with all ancestors.
-            for (position in known.values.toSet()) {
+            // Repository maintenance may prune history no ref reaches anymore: a retired or pending position
+            // whose commit is gone is dropped (no ref can reach it without fetching it again). A missing live
+            // ref position means the repository lost data.
+            val vanished = ArrayList<String>()
+            for ((name, position) in known.entries.sortedBy { it.key }) {
                 val commit = try {
                     walk.parseCommit(ObjectId.fromString(position))
                 } catch (_: MissingObjectException) {
+                    if (name.startsWith(RETIRED_PREFIX) || name.startsWith(PENDING_PREFIX)) { vanished.add(name); continue }
                     throw MirrorFailure("TARGET_INCOMPLETE", attention = true)
                 }
                 walk.markUninteresting(commit)
+            }
+            if (vanished.isNotEmpty()) {
+                context.checkActive()
+                indexer.index(context.id, context.owner, context.fence, emptyList(), emptyList(), emptyMap(), vanished)
+                known.keys.removeAll(vanished.toSet())
             }
             val tips = LinkedHashMap<String, RevCommit>()
             val skippedNames = HashSet<String>()

@@ -421,6 +421,29 @@ class GitMirrorEngineSpec @Autowired constructor(
                 local.list()!!.size shouldBe 0
             }
 
+            it("drops retired or pending positions whose commits maintenance pruned, but stops on a missing live position") {
+                val engine = localSeam(engineOf(5))
+                source.commit("c1 #1")
+                sync(engine)
+                val pruned = "0123456789abcdef0123456789abcdef01234567"
+                transaction.executeWithoutResult {
+                    val row = mirrors.findById(mirror.id!!).orElseThrow()
+                    refRows.save(RepositoryMirrorRef(mirror = row, refName = "mirror-retired/$pruned", commitId = pruned))
+                    refRows.save(RepositoryMirrorRef(mirror = row, refName = "mirror-pending/$pruned", commitId = pruned))
+                }
+                source.commit("c2 #1")
+                sync(engine)
+                allRows().keys.none { it.endsWith(pruned) } shouldBe true
+                referenced().size shouldBe 2
+
+                transaction.executeWithoutResult {
+                    refRows.findAllByMirrorId(mirror.id!!).single { it.refName == "refs/heads/main" }.commitId = pruned
+                }
+                val failure = shouldThrow<MirrorFailure> { engine.sync(context()) }
+                failure.code shouldBe "TARGET_INCOMPLETE"
+                failure.attention shouldBe true
+            }
+
             it("completes against an empty source and notifies its first later commit") {
                 val engine = localSeam(engineOf(5))
                 sync(engine)

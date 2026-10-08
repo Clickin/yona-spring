@@ -161,7 +161,8 @@ JGit의 trust manager·hostname verifier 변경은 무시한다. 3xx 응답은 `
 커밋으로의 fast-forward나 강제 갱신)도 행은 옮기고, 사라진 ref의 행은 실행 끝에서 지운다. ref가 이전
 위치의 후손이 아닌 곳으로 옮겨졌거나 사라지면, 이전 위치는 먼저 `mirror-retired/<id>` 행으로 남긴다.
 그래서 다른 ref가 나중에 그 기록에 닿아도 다시 색인하지 않는다. 이미 만든 이슈 참조는 기록을 다시 써도
-지우지 않는다. 저장소 정리(gc)를 도입할 때는 이 위치의 커밋이 남아 있어야 한다. 첫 가져오기 동안에는 알림이 없고 `initialImportDone`은
+지우지 않는다. 저장소 정리(gc)가 어느 ref에서도 닿지 않는 커밋을 지워 은퇴·임시 위치의 커밋이 없으면
+그 행만 지우고 계속한다. 살아 있는 ref 위치의 커밋이 없으면 `TARGET_INCOMPLETE`(attention)다. 첫 가져오기 동안에는 알림이 없고 `initialImportDone`은
 `store.complete`가 첫 완료 실행 뒤 켠다. 작성자 키는 커밋 author 이메일이다(빈 값이면 없음).
 
 ### 이슈 참조와 알림
