@@ -44,8 +44,7 @@ class SvnAuthorizationFilter(
             return
         }
 
-        // vcs 종류 검증은 RepoAccessPolicy에 없는 SVN 전용 로직 — Git/SSH 경로는 project.vcs를
-        // 아예 확인하지 않으므로 이 필터에 남겨둔다.
+        // SVN HTTP 경로는 Subversion 프로젝트만 처리한다.
         val vcs = project.vcs?.lowercase()
         if (vcs != "subversion" && vcs != "svn") {
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Not a Subversion project")

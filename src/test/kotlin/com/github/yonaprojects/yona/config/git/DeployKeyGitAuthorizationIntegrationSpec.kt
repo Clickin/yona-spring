@@ -12,9 +12,11 @@ import io.kotest.matchers.shouldNotBe
 import jakarta.servlet.Filter
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
@@ -40,12 +42,16 @@ class DeployKeyGitAuthorizationIntegrationSpec @Autowired constructor(
     override fun extensions() = listOf(SpringExtension)
 
     private lateinit var mockMvc: MockMvc
+    private var reachedApplication = false
 
     init {
         beforeSpec {
             val securityFilter = wac.getBean("springSecurityFilterChain", Filter::class.java)
             mockMvc = MockMvcBuilders.webAppContextSetup(wac)
-                .addFilters<DefaultMockMvcBuilder>(securityFilter)
+                .addFilters<DefaultMockMvcBuilder>(securityFilter, Filter { request, response, chain ->
+                    reachedApplication = true
+                    chain.doFilter(request, response)
+                })
                 .build()
         }
 
@@ -64,6 +70,55 @@ class DeployKeyGitAuthorizationIntegrationSpec @Autowired constructor(
                 "Basic " + Base64.getEncoder().encodeToString(
                     "${DeployKeyAuthenticationProvider.DEPLOY_KEY_USERNAME}:$rawToken".toByteArray()
                 )
+
+            listOf("GIT", "SVN", "SUBVERSION", "HG", "MERCURIAL").forEachIndexed { index, vcs ->
+                it("repository access validation case ${index + 1}") {
+                    val project = projectRepository.save(Project(owner = "owner", name = "repo", vcs = vcs, projectScope = ProjectScope.PRIVATE))
+                    projectRepository.save(Project(owner = "owner", name = "other", vcs = vcs, projectScope = ProjectScope.PRIVATE))
+                    val readOnly = deployKeyService.create(project, "reader", TEST_PUBLIC_KEY_1, readOnly = true)
+                    val writable = deployKeyService.create(project, "writer", TEST_PUBLIC_KEY_2, readOnly = false)
+
+                    reachedApplication = false
+                    mockMvc.perform(
+                        get("/git/owner/repo.wiki.git/info/refs").param("service", "git-upload-pack")
+                            .header(HttpHeaders.AUTHORIZATION, basicHeader(readOnly.rawHttpsToken))
+                    )
+                    reachedApplication shouldBe true
+                    reachedApplication = false
+                    mockMvc.perform(
+                        post("/git/owner/repo.wiki.git/git-receive-pack")
+                            .header(HttpHeaders.AUTHORIZATION, basicHeader(writable.rawHttpsToken))
+                    )
+                    reachedApplication shouldBe true
+
+                    listOf(
+                        post("/git/owner/repo.wiki.git/git-receive-pack"),
+                        put("/git-lfs/owner/repo.wiki.git/objects/abcd").with(csrf()).content("content"),
+                        get("/git/owner/other.wiki.git/info/refs").param("service", "git-upload-pack"),
+                        post("/git/owner/other.wiki.git/git-receive-pack")
+                    ).forEach { request ->
+                        reachedApplication = false
+                        mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, basicHeader(readOnly.rawHttpsToken)))
+                            .andReturn().response.status shouldBe 403
+                        reachedApplication shouldBe false
+                    }
+
+                    if (vcs != "GIT") {
+                        listOf(
+                            get("/git/owner/repo.git/info/refs").param("service", "git-upload-pack"),
+                            post("/git/owner/repo.git/git-receive-pack"),
+                            post("/git/owner/repo.git/info/lfs/objects/batch"),
+                            get("/git-lfs/owner/repo.git/objects/abcd"),
+                            put("/git-lfs/owner/repo.git/objects/abcd").with(csrf()).content("content")
+                        ).forEach { request ->
+                            reachedApplication = false
+                            mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, basicHeader(writable.rawHttpsToken)))
+                                .andReturn().response.status shouldBe 404
+                            reachedApplication shouldBe false
+                        }
+                    }
+                }
+            }
 
             it("스코프 내 PRIVATE 프로젝트는 Deploy Key로 clone(GET)이 허용되어야 한다") {
                 val project = projectRepository.save(

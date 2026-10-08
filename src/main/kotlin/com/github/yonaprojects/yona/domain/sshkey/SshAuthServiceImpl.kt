@@ -114,6 +114,9 @@ class SshAuthServiceImpl(
 
         val project = resolveProject(owner, projectName)
             ?: return SshCommandAuthorization.denied("존재하지 않는 저장소입니다: $owner/$projectName")
+        if (!repoAccessPolicy.isGitProject(project)) {
+            return SshCommandAuthorization.denied("존재하지 않는 저장소입니다: $owner/$projectName")
+        }
 
         return when (principal) {
             is SshAuthPrincipal.DeployKeyPrincipal -> authorizeForDeployKey(principal.deployKey.let { it }, project, isWrite, service)

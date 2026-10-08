@@ -56,6 +56,70 @@ class SshAuthServiceImplSpec @Autowired constructor(
                 roleRepository.deleteAll()
             }
 
+            it("repository access validation case 01") {
+                val role = roleRepository.save(Role(id = 1L, name = "manager", active = true))
+                val member = userRepository.save(User(loginId = "member", email = "member@example.com"))
+                val key = sshKeyService.create(member, "member", USER_PUBLIC_KEY)
+                val project = projectRepository.save(Project(owner = "owner", name = "repo", projectScope = ProjectScope.PRIVATE))
+                projectUserRepository.save(ProjectUser(user = member, project = project, role = role))
+                val issued = deployKeyService.create(project, "deploy", DEPLOY_PUBLIC_KEY, readOnly = false)
+                val principals = listOf(
+                    SshAuthPrincipal.SshKeyPrincipal(member, key),
+                    SshAuthPrincipal.DeployKeyPrincipal(issued.deployKey)
+                )
+                listOf("SVN", "subversion", "sVn", "SUBVERSION", "HG", "mercurial", "hG", "MERCURIAL").forEach { vcs ->
+                    project.vcs = vcs
+                    projectRepository.saveAndFlush(project)
+                    principals.forEach { principal ->
+                        listOf("git-upload-pack", "git-receive-pack", "git-upload-archive").forEach { command ->
+                            listOf("owner/repo", "/owner/repo.git", "owner/repo.git/").forEach { path ->
+                                val result = sshAuthService.authorizeGitCommand(principal, "$command '$path'")
+                                result.allowed shouldBe false
+                                result.repoDir shouldBe null
+                                result.service shouldBe null
+                            }
+                        }
+                    }
+                }
+            }
+
+            it("repository access validation case 02") {
+                val role = roleRepository.save(Role(id = 1L, name = "manager", active = true))
+                val member = userRepository.save(User(loginId = "member", email = "member@example.com"))
+                val key = sshKeyService.create(member, "member", USER_PUBLIC_KEY)
+                val project = projectRepository.save(Project(
+                    owner = "owner", name = "repo", previousOwnerLoginId = "old-owner", previousName = "old-repo"
+                ))
+                projectUserRepository.save(ProjectUser(user = member, project = project, role = role))
+                val issued = deployKeyService.create(project, "deploy", DEPLOY_PUBLIC_KEY, readOnly = false)
+                val principals = listOf(
+                    SshAuthPrincipal.SshKeyPrincipal(member, key),
+                    SshAuthPrincipal.DeployKeyPrincipal(issued.deployKey)
+                )
+                listOf(null, "GIT", "git", "gIt", "", "legacy", " svn ", "MERCURİAL", "SUBVERSİON").forEach { vcs ->
+                    project.vcs = vcs
+                    projectRepository.saveAndFlush(project)
+                    principals.forEach { principal ->
+                        listOf("git-upload-pack", "git-receive-pack").forEach { command ->
+                            listOf("owner/repo", "owner/repo.git", "old-owner/old-repo.git").forEach { path ->
+                                val result = sshAuthService.authorizeGitCommand(principal, "$command '$path'")
+                                result.allowed shouldBe true
+                                result.repoDir?.path?.endsWith("owner/repo.git") shouldBe true
+                                result.isWrite shouldBe (command == "git-receive-pack")
+                            }
+                        }
+                    }
+                }
+                project.vcs = "SVN"
+                projectRepository.saveAndFlush(project)
+                principals.forEach { principal ->
+                    sshAuthService.authorizeGitCommand(principal, "git-upload-pack 'old-owner/old-repo.git'").allowed shouldBe false
+                    val result = sshAuthService.authorizeGitCommand(principal, "git-upload-pack 'owner/repo.wiki.git'")
+                    result.allowed shouldBe false
+                    result.repoDir shouldBe null
+                }
+            }
+
             it("알 수 없는 공개키는 authenticate가 null을 반환해야 한다") {
                 sshAuthService.authenticate(USER_PUBLIC_KEY) shouldBe null
             }

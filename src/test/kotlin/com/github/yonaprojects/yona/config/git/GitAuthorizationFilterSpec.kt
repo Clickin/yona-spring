@@ -33,6 +33,7 @@ import com.github.yonaprojects.yona.domain.board.PostingRepository
 import com.github.yonaprojects.yona.domain.pullrequest.ReviewCommentRepository
 import com.github.yonaprojects.yona.domain.pullrequest.CommitCommentRepository
 import com.github.yonaprojects.yona.domain.milestone.MilestoneRepository
+import com.github.yonaprojects.yona.domain.deploykey.DeployKey
 
 // yona git 스마트 HTTP 경로도 SvnApp.java와 동일한 AccessControl.isAllowed 규칙을 쓴다는 전제로,
 // SvnAuthorizationFilter(P1-23)와 동일한 두 가지 축소를 여기서도 수정한다 (P1-45):
@@ -71,6 +72,105 @@ class GitAuthorizationFilterSpec : DescribeSpec({
     }
 
     describe("GitAuthorizationFilter") {
+        it("repository access validation case 01") {
+            val variants = listOf("SVN", "subversion", "sVn", "SUBVERSION", "HG", "mercurial", "hG", "MERCURIAL")
+            val requests = listOf(
+                "GET" to "/git/owner/repo.git/info/refs",
+                "POST" to "/git/owner/repo/git-upload-pack",
+                "POST" to "/git/owner/repo.git/git-receive-pack",
+                "POST" to "/git/owner/repo.git/info/lfs/objects/batch",
+                "GET" to "/git-lfs/owner/repo.git/objects/abcd",
+                "PUT" to "/git-lfs/owner/repo/objects/abcd"
+            )
+            variants.forEach { vcs ->
+                val project = Project(id = 1L, owner = "owner", name = "repo", vcs = vcs)
+                every { projectService.findByOwnerAndName("owner", "repo") } returns project
+                val member = UsernamePasswordAuthenticationToken("member", "password", AuthorityUtils.createAuthorityList("ROLE_ACTIVE"))
+                val deployKey = DeployKeyAuthenticationToken.authenticated(DeployKey(project = project, readOnly = false))
+                listOf(null, member, deployKey).forEach { authentication ->
+                    SecurityContextHolder.setContext(
+                        if (authentication == null) SecurityContextImpl() else SecurityContextImpl(authentication)
+                    )
+                    requests.forEach { (method, path) ->
+                        val request = MockHttpServletRequest(method, path)
+                        val response = MockHttpServletResponse()
+                        filter.doFilter(request, response, filterChain)
+                        response.status shouldBe 404
+                    }
+                }
+            }
+            verify(exactly = 0) { filterChain.doFilter(any(), any()) }
+            verify(exactly = 0) { projectService.isMember(any(), any()) }
+        }
+
+        it("repository access validation case 02") {
+            listOf(null, "GIT", "git", "gIt", "", "legacy", " svn ", "MERCURİAL", "SUBVERSİON").forEach { vcs ->
+                val project = Project(id = 1L, owner = "owner", name = "repo", vcs = vcs, projectScope = ProjectScope.PUBLIC)
+                every { projectService.findByOwnerAndName("owner", "repo") } returns project
+                every { projectService.isMember(1L, "member") } returns true
+                listOf("", ".git").forEach { suffix ->
+                    clearMocks(filterChain)
+                    SecurityContextHolder.clearContext()
+                    val readResponse = MockHttpServletResponse()
+                    filter.doFilter(MockHttpServletRequest("GET", "/git/owner/repo$suffix/info/refs"), readResponse, filterChain)
+                    readResponse.status shouldBe 200
+                    SecurityContextHolder.setContext(SecurityContextImpl(
+                        UsernamePasswordAuthenticationToken("member", "password", AuthorityUtils.createAuthorityList("ROLE_ACTIVE"))
+                    ))
+                    val writeResponse = MockHttpServletResponse()
+                    filter.doFilter(MockHttpServletRequest("POST", "/git/owner/repo$suffix/git-receive-pack"), writeResponse, filterChain)
+                    writeResponse.status shouldBe 200
+                    verify(exactly = 2) { filterChain.doFilter(any(), any()) }
+                }
+            }
+        }
+
+        it("repository access validation case 03") {
+            listOf("GIT", "SVN", "SUBVERSION", "HG", "MERCURIAL").forEach { vcs ->
+                val project = Project(id = 1L, owner = "owner", name = "repo", vcs = vcs, projectScope = ProjectScope.PUBLIC)
+                every { projectService.findByOwnerAndName("owner", "repo") } returns project
+                every { projectService.isMember(1L, "member") } returns true
+                listOf(".wiki", ".wiki.git").forEach { suffix ->
+                    clearMocks(filterChain)
+                    SecurityContextHolder.clearContext()
+                    filter.doFilter(MockHttpServletRequest("GET", "/git/owner/repo$suffix/info/refs"), MockHttpServletResponse(), filterChain)
+                    SecurityContextHolder.setContext(SecurityContextImpl(
+                        UsernamePasswordAuthenticationToken("member", "password", AuthorityUtils.createAuthorityList("ROLE_ACTIVE"))
+                    ))
+                    filter.doFilter(MockHttpServletRequest("POST", "/git/owner/repo$suffix/git-receive-pack"), MockHttpServletResponse(), filterChain)
+                    verify(exactly = 2) { filterChain.doFilter(any(), any()) }
+                }
+            }
+        }
+
+        it("repository access validation case 04") {
+            every { projectService.isMember(1L, "outsider") } returns false
+            every { userRepository.findByLoginId("outsider") } returns Optional.of(User(id = 2L, loginId = "outsider"))
+            every { userRepository.findByLoginId("guest") } returns Optional.of(User(id = 3L, loginId = "guest", isGuest = true))
+            listOf("GIT", "SVN", "SUBVERSION", "HG", "MERCURIAL").forEach { vcs ->
+                val project = Project(id = 1L, owner = "owner", name = "repo", vcs = vcs)
+                every { projectService.findByOwnerAndName("owner", "repo") } returns project
+                listOf(ProjectScope.PRIVATE, ProjectScope.PROTECTED, ProjectScope.PUBLIC).forEach { scope ->
+                    project.projectScope = scope
+                    project.isCodeAccessibleMemberOnly = scope == ProjectScope.PUBLIC
+                    SecurityContextHolder.setContext(SecurityContextImpl(
+                        UsernamePasswordAuthenticationToken("outsider", "password", AuthorityUtils.createAuthorityList("ROLE_ACTIVE"))
+                    ))
+                    val response = MockHttpServletResponse()
+                    filter.doFilter(MockHttpServletRequest("GET", "/git/owner/repo.wiki.git/info/refs"), response, filterChain)
+                    response.status shouldBe 403
+                }
+                project.isCodeAccessibleMemberOnly = false
+                SecurityContextHolder.setContext(SecurityContextImpl(
+                    UsernamePasswordAuthenticationToken("guest", "password", AuthorityUtils.createAuthorityList("ROLE_ACTIVE"))
+                ))
+                val response = MockHttpServletResponse()
+                filter.doFilter(MockHttpServletRequest("GET", "/git/owner/repo.wiki.git/info/refs"), response, filterChain)
+                response.status shouldBe 403
+            }
+            verify(exactly = 0) { filterChain.doFilter(any(), any()) }
+        }
+
         it("존재하지 않는 프로젝트 요청 시 404를 응답해야 한다") {
             // Given
             val request = MockHttpServletRequest("GET", "/git/gildong/non-exist.git")

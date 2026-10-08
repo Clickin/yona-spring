@@ -15,12 +15,17 @@ import com.github.yonaprojects.yona.domain.vcs.RepositoryService
 import io.kotest.assertions.withClue
 import io.kotest.extensions.spring.SpringExtension
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import java.io.File
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -69,15 +74,141 @@ class GitSmartHttpProtocolIntegrationSpec @Autowired constructor(
 
     companion object {
         private val gitBaseDirHolder = Files.createTempDirectory("git-smart-http-it-").toFile()
+        private val lfsBaseDirHolder = Files.createTempDirectory("repository-access-lfs-it-").toFile()
 
         @JvmStatic
         @DynamicPropertySource
         fun overrideGitBaseDir(registry: DynamicPropertyRegistry) {
             registry.add("yona.git.base-dir") { gitBaseDirHolder.absolutePath }
+            registry.add("yona.lfs.base-dir") { lfsBaseDirHolder.absolutePath }
         }
     }
 
+    private fun runGit(directory: File, vararg args: String): Pair<Int, String> {
+        val process = ProcessBuilder("git", "-c", "credential.helper=", *args)
+            .directory(directory)
+            .redirectErrorStream(true)
+            .also { it.environment()["GIT_TERMINAL_PROMPT"] = "0" }
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        return process.waitFor() to output
+    }
+
+    private fun request(path: String, method: String = "GET", auth: String? = null, body: String = ""): Int {
+        val builder = HttpRequest.newBuilder(URI("http://127.0.0.1:$port$path"))
+            .method(method, HttpRequest.BodyPublishers.ofString(body))
+        if (auth != null) builder.header("Authorization", auth)
+        if (path.contains("/info/lfs/")) builder.header("Content-Type", "application/vnd.git-lfs+json")
+        return HttpClient.newHttpClient().use { client ->
+            client.send(builder.build(), HttpResponse.BodyHandlers.discarding()).statusCode()
+        }
+    }
+
+    private fun repositoryFiles(directory: File): Map<String, String> =
+        directory.walkTopDown().filter { it.isFile }.associate {
+            it.relativeTo(directory).path to Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(it.readBytes()))
+        }
+
     init {
+        afterSpec {
+            gitBaseDirHolder.deleteRecursively()
+            lfsBaseDirHolder.deleteRecursively()
+        }
+
+        describe("repository access validation") {
+            listOf("GIT", "SVN", "SUBVERSION", "HG", "MERCURIAL").forEachIndexed { index, vcs ->
+                it("case ${index + 1}") {
+                    val owner = userRepository.save(User(
+                        loginId = "access-owner-$index", email = "access-owner-$index@example.com",
+                        password = hashPassword("pass123", "saltsalt"), passwordSalt = "saltsalt"
+                    ))
+                    val project = projectRepository.save(Project(
+                        owner = owner.loginId, name = "access-$index", vcs = vcs, projectScope = ProjectScope.PRIVATE
+                    ))
+                    val role = roleRepository.findById(1L).orElseGet { roleRepository.save(Role(id = 1L, name = "manager", active = true)) }
+                    projectUserRepository.save(ProjectUser(user = owner, project = project, role = role))
+                    val path = "/git/${project.owner}/${project.name}.wiki.git"
+                    val wikiDir = File(gitBaseDirHolder, "${project.owner}/${project.name}.wiki.git")
+                    val workspace = Files.createTempDirectory("repository-access-work-").toFile()
+                    val auth = "Basic " + Base64.getEncoder().encodeToString("${owner.loginId}:pass123".toByteArray())
+                    try {
+                        request("$path/info/refs?service=git-upload-pack") shouldBe 401
+                        wikiDir.exists() shouldBe false
+                        project.projectScope = ProjectScope.PUBLIC
+                        projectRepository.saveAndFlush(project)
+                        val url = "http://127.0.0.1:$port$path"
+                        fun git(directory: File, vararg args: String) {
+                            val (exit, output) = runGit(directory, *args)
+                            withClue(output) { exit shouldBe 0 }
+                        }
+                        git(workspace, "clone", url, "first")
+                        wikiDir.exists() shouldBe true
+                        val first = File(workspace, "first")
+                        File(first, "Home.md").writeText("# repository access")
+                        git(first, "add", "Home.md")
+                        git(first, "-c", "user.name=member", "-c", "user.email=member@example.com", "commit", "-m", "Update page")
+                        git(first, "branch", "-M", "main")
+                        git(first, "-c", "http.extraHeader=Authorization: $auth", "push", url, "main")
+                        git(workspace, "clone", url, "second")
+                        File(workspace, "second/Home.md").readText() shouldBe "# repository access"
+                        request(
+                            "$path/info/lfs/objects/batch", "POST", auth,
+                            """{"operation":"upload","objects":[{"oid":"${"a".repeat(64)}","size":4}]}"""
+                        ) shouldBe 200
+                        File(lfsBaseDirHolder, "${project.owner}/${project.name}.wiki.git").exists() shouldBe true
+                        File(gitBaseDirHolder, "${project.owner}/${project.name}.git").exists() shouldBe false
+                    } finally {
+                        workspace.deleteRecursively()
+                    }
+                }
+            }
+
+            listOf("SVN", "SUBVERSION", "HG", "MERCURIAL").forEachIndexed { index, vcs ->
+                it("case ${index + 6}") {
+                    val owner = userRepository.save(User(
+                        loginId = "access-reader-$index", email = "access-reader-$index@example.com",
+                        password = hashPassword("pass123", "saltsalt"), passwordSalt = "saltsalt"
+                    ))
+                    val project = projectRepository.save(Project(
+                        owner = owner.loginId, name = "access-main-$index", vcs = "GIT", projectScope = ProjectScope.PUBLIC
+                    ))
+                    val role = roleRepository.findById(1L).orElseGet { roleRepository.save(Role(id = 1L, name = "manager", active = true)) }
+                    projectUserRepository.save(ProjectUser(user = owner, project = project, role = role))
+                    repositoryService.getRepository(project).create()
+                    BareCommit(project, owner, gitBaseDirHolder.absolutePath).commitTextFile("README.md", "content", "Initial commit")
+                    val directory = File(gitBaseDirHolder, "${project.owner}/${project.name}.git")
+                    val workspace = Files.createTempDirectory("repository-access-work-").toFile()
+                    val path = "/git/${project.owner}/${project.name}.git"
+                    val url = "http://127.0.0.1:$port$path"
+                    val auth = "Basic " + Base64.getEncoder().encodeToString("${owner.loginId}:pass123".toByteArray())
+                    try {
+                        val (cloneExit, cloneOutput) = runGit(workspace, "clone", url, "first")
+                        withClue(cloneOutput) { cloneExit shouldBe 0 }
+                        project.vcs = vcs
+                        projectRepository.saveAndFlush(project)
+                        val before = repositoryFiles(directory)
+                        request("$path/info/refs?service=git-upload-pack") shouldBe 404
+                        request("$path/info/refs?service=git-receive-pack", auth = auth) shouldBe 404
+                        request("$path/git-receive-pack", "POST", auth) shouldBe 404
+                        listOf("download", "upload").forEach { operation ->
+                            request(
+                                "$path/info/lfs/objects/batch", "POST", auth,
+                                """{"operation":"$operation","objects":[{"oid":"${"a".repeat(64)}","size":4}]}"""
+                            ) shouldBe 404
+                        }
+                        val (readExit, _) = runGit(workspace, "clone", url, "second")
+                        readExit shouldNotBe 0
+                        val (writeExit, _) = runGit(File(workspace, "first"), "-c", "http.extraHeader=Authorization: $auth", "push", url, "HEAD:refs/heads/access")
+                        writeExit shouldNotBe 0
+                        repositoryFiles(directory) shouldBe before
+                        File(lfsBaseDirHolder, "${project.owner}/${project.name}.git").exists() shouldBe false
+                    } finally {
+                        workspace.deleteRecursively()
+                    }
+                }
+            }
+        }
+
         describe("실제 git clone 커맨드로 검증하는 스마트 HTTP 프로토콜 (TASK-0416)") {
             it("PUBLIC 프로젝트를 실제 git clone 바이너리로 clone하면 성공하고 커밋된 파일이 있어야 한다") {
                 val owner = userRepository.findByLoginId("git-proto-owner").orElseGet {
