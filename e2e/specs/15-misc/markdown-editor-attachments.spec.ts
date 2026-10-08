@@ -5,6 +5,8 @@ import { requireSeed } from '../../support/seed-store';
  * Attachment input through the native Markdown editor textarea, following the legacy
  * yona.Files/yona.Attachments behavior: a pasted image inserts a temporary `<!--_id_-->` marker
  * that becomes a Markdown link after upload, and clicking an uploaded file inserts its link.
+ * A file dropped on the textarea gets the same marker, and a tab-separated text+image clipboard
+ * (spreadsheet copy) is pasted as a Markdown table instead of an image.
  */
 test.skip(({ browserName }) => browserName !== 'chromium', 'synthetic clipboard/drag data is Chromium-only');
 
@@ -65,6 +67,21 @@ test('pasting an image into an issue comment inserts exactly one link and one up
   await dispatch(page, 'paste', { png: 'comment.png' }, selector);
   await expect(textarea).toHaveValue(/^!\[[^\]]+\.png\]\(\/files\/\d+\) ?$/, { timeout: 15_000 });
   await expect(page.locator('#comment-form .attached-file.complete')).toHaveCount(1);
+});
+
+test('dropping an image onto the editor uploads it and inserts its Markdown image link', async ({ page }) => {
+  const textarea = await openIssueForm(page);
+  await dispatch(page, 'drop', { png: 'dropped.png' });
+  await expect(page.locator('yona-attachments#upload .attached-file.complete', { hasText: 'dropped.png' }))
+    .toBeVisible({ timeout: 15_000 });
+  await expect(textarea).toHaveValue(/^!\[dropped\.png\]\(\/files\/\d+\) ?$/);
+});
+
+test('pasting spreadsheet cells (text plus image) inserts a Markdown table, not an image', async ({ page }) => {
+  const textarea = await openIssueForm(page);
+  await dispatch(page, 'paste', { text: 'Name\tTitle\r\nJane\tCEO', png: 'cells.png' });
+  await expect(textarea).toHaveValue('| Name | Title |\n|------|-------|\n| Jane | CEO   |');
+  await expect(page.locator('yona-attachments#upload .attached-file')).toHaveCount(0);
 });
 
 test('Markdown help switches panels, closes them and survives a cached form', async ({ page }) => {
@@ -168,4 +185,52 @@ test('Markdown help works without the editor, scopes cloned roots and preserves 
   await header.click();
   await expect(help.locator('.markdownHeaders')).toBeHidden();
   await expect(clone.locator('.markdown-help-item:not([hidden])')).toHaveCount(0);
+});
+
+test('attachment shadow UI preserves native form data and completed files across a Turbo snapshot', async ({ page }) => {
+  const textarea = await openIssueForm(page);
+  const widget = page.locator('yona-attachments#upload');
+  expect(await widget.evaluate(host => ({
+    shadow: host.shadowRoot?.mode,
+    lightFileInput: !!host.querySelector('input[type="file"]'),
+    hiddenInputInDocument: host.querySelector('input[name="temporaryUploadFiles"]')?.getRootNode() === document,
+  }))).toEqual({ shadow: 'open', lightFileInput: false, hiddenInputInDocument: true });
+
+  // Page-wide CSS must not reach uploader internals.
+  await page.addStyleTag({ content: 'yona-attachments .attached-file { display: none !important; }' });
+  await widget.locator('input[type="file"]').setInputFiles({
+    name: 'shadow-cache.png', mimeType: 'image/png', buffer: Buffer.from(PNG, 'base64'),
+  });
+  const item = widget.locator('.attached-file.complete', { hasText: 'shadow-cache.png' });
+  await expect(item).toBeVisible({ timeout: 15_000 });
+  await expect(textarea).toHaveValue('');
+  const id = await item.getAttribute('data-id');
+  expect(id).toBeTruthy();
+  expect(await widget.evaluate(host => new FormData(host.closest('form')!).get('temporaryUploadFiles'))).toContain(id!);
+
+  await widget.evaluate(host => {
+    const form = host.closest('form')!;
+    const clone = form.cloneNode(true) as HTMLFormElement;
+    form.replaceWith(clone);
+    const restored = clone.querySelector<HTMLElement & { configure(options: {textarea: HTMLTextAreaElement | null}): void }>('yona-attachments#upload')!;
+    restored.configure({ textarea: clone.querySelector('textarea[name="body"]') });
+    // Reconnecting the same instance must remount Vue without duplicating its textarea listeners.
+    const parent = restored.parentElement!;
+    const next = restored.nextSibling;
+    restored.remove();
+    parent.insertBefore(restored, next);
+  });
+  await expect(item).toHaveCount(1);
+  await expect(item).toBeVisible();
+  await expect(widget.locator('input[name="temporaryUploadFiles"]')).toHaveCount(1);
+  expect(await widget.evaluate(host => new FormData(host.closest('form')!).get('temporaryUploadFiles'))).toContain(id!);
+  await item.locator('.btn-insert').focus();
+  await item.locator('.btn-insert').press('Enter');
+  await expect(page.locator(BODY)).toHaveValue(`![shadow-cache.png](/files/${id}) `);
+  await expect(item.locator('.btn-delete')).toHaveAccessibleName(/.+: shadow-cache\.png/);
+  await item.locator('.btn-delete').click();
+  await expect(item).toHaveCount(0);
+  await expect(page.locator(BODY)).toHaveValue('');
+  expect(await widget.evaluate(host => new FormData(host.closest('form')!).get('temporaryUploadFiles'))).toBe('');
+  await expect(widget.locator('.attached-file-marker')).toHaveCount(0);
 });

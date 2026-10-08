@@ -66,11 +66,11 @@ Vue는 shadow toolbar와 preview를 소유하고 slot의 도움말·임시저장
 
 ## 빌드와 검증
 
-Gradle `processResources`/`bootJar`는 `pnpmInstall`의 `pnpm install --frozen-lockfile --ignore-scripts`와 esbuild를 실행한다. ESM/chunk 결과물은 `build/generated/frontend/markdown`에 생성하며 Git에 vendoring하지 않는다. 기존 Turbo build는 별도로 유지하고 Windows에서는 `pnpm.cmd`를 선택한다.
+Gradle `processResources`/`bootJar`는 `pnpmInstall`의 `pnpm install --frozen-lockfile --ignore-scripts`와 esbuild를 실행한다. ESM/chunk 결과물은 `build/generated/frontend/web`에 생성하며 Git에 vendoring하지 않는다. 기존 Turbo build는 별도로 유지하고 Windows에서는 `pnpm.cmd`를 선택한다.
 
 실행 명령, 상세 정책, 이전 CM6/Marked/highlight gzip·Brotli baseline은 [영문 기술 문서](../../technical/markdown.md)를 참고한다. `frontend/scripts/check-markdown-{structure,enhancements}.mjs`는 기존 E2E Playwright로 Chromium/Firefox/WebKit을 검증한다.
 
-Vue/Shadow DOM 전환(2026-10-08): frontend build·strict TypeScript·단위 테스트 9개·Gradle `buildMarkdown testMarkdown`, Chromium component 7개 및 첨부/도움말/지연 editor 초기화 6개를 통과했다. structure/enhancement는 Chromium·Firefox·WebKit에서 통과했다. 1366px·390px에서 320px textarea의 미리보기 왕복 크기와 native FormData를 확인했다. demo 저장소에 HEAD/corpus가 없어 문서 loading 검사 4개는 통과로 기록하지 않는다.
+Vue/Shadow DOM 전환(2026-10-08): 통합 브랜치의 Gradle `processResources testFrontend`·strict TypeScript·단위 테스트 15개를 통과했다. 이 브랜치의 템플릿과 빌드 자산을 사용하는 격리 H2 앱에서 Chromium component/editor/attachment 검사 17개가 통과했다. Shadow DOM 격리, native FormData, 업로드·삭제, paste/drop, 표 붙여넣기와 Turbo 복원을 포함한다. 실제 브라우저에서도 이미지 업로드 → 미리보기 → 이슈 폼 제출 → 저장된 이미지 조회를 확인했다. Markdown 단독 브랜치의 지연 초기화 및 Chromium·Firefox·WebKit structure/enhancement 검사도 통과했다. 단독 브랜치 demo의 HEAD/corpus 부재로 실패한 문서 loading 검사 4개는 통과로 기록하지 않는다.
 
 `e2e/specs/05-code/markdown-documents.spec.ts`는 실제 로컬 Git endpoint로 대표 원문 corpus를 넣고 README → 하위 `.md` → README 이동과 상대 이미지 로딩을 검증한다. 한글/중복 heading, GFM, safe HTML, Kotlin code, 200개 문단을 세 브라우저에서 확인했다. 저장소 ref는 Thymeleaf 예약 속성인 `th:ref`가 아니라 `th:attr`로 전달한다.
 

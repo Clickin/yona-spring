@@ -29,7 +29,7 @@ Markdown help is the native `help/markdown :: markdown` Thymeleaf fragment. Its 
 
 The restored-draft clear button occupies the next toolbar `<li>` after the checklist, matching `v1.16.0`'s `app/views/common/editor.scala.html`, both before upgrade and through the `clear-draft` slot. Its original light-DOM node keeps draft visibility and delegated deletion working. At 1430px, comparison against the legacy toolbar markup found the same 10px gap, button size and paint, with a 1px vertical-offset difference; Edit/Preview/Turbo-clone regression checks and actual clear-from-preview reload passed.
 
-GitHub's text expander provides completion. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea. `<yona-attachments>` binds paste/drop to that textarea: a pasted image inserts a temporary `<!--_id_-->` marker replaced by its link after upload (`e2e/specs/15-misc/markdown-editor-attachments.spec.ts`).
+GitHub's text expander provides completion. `@` and `#` adapt the existing permission-aware `mentionList` endpoint with abortable requests; `:` searches the 65 existing local emoji entries without a request. Suggestion labels are text, not HTML. Tab/Shift+Tab, attachments, draft restore/clear and the existing `.value` getter/setter use the same textarea. `<yona-attachments>` (see `docs/technical/attachments.md`) binds paste/drop to that textarea.
 
 Preview is explicit: entering Preview mounts a new renderer with the textarea as `sourceElement`; Edit removes it. Typing does not parse Markdown. Setting editor `.value` or resetting its form exits a stale preview. Wiki previews use document mode. Inline code reviews use the existing vanilla CodeCommentBox with a server-rendered form, rather than a second Vue editor.
 
@@ -84,19 +84,20 @@ Mermaid loads only for Mermaid fences. A shared 24 ms queue renders sequentially
 
 ## Build and checks
 
-`./gradlew processResources` and `bootJar` depend on `pnpmInstall` and `buildMarkdown`. The pinned `pnpm-lock.yaml` is installed with `--frozen-lockfile --ignore-scripts`. esbuild emits ESM and lazy chunks into `build/generated/frontend/markdown`; generated Markdown bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `pnpm.cmd` on Windows.
+`./gradlew processResources` and `bootJar` depend on `pnpmInstall` and `buildFrontend`. The pinned `pnpm-lock.yaml` is installed with `--frozen-lockfile --ignore-scripts`. esbuild emits ESM entries for each `frontend/src/<area>/yona-*.ts` and shared lazy chunks into `build/generated/frontend/web`, served under `/javascripts/<area>/`; generated bundles are not committed. Existing Turbo assets retain their separate build path. Gradle selects `pnpm.cmd` on Windows.
 
 ```sh
 cd frontend
 pnpm install --frozen-lockfile --ignore-scripts
-pnpm run build:markdown
+pnpm run build
+pnpm test
 pnpm exec tsc --noEmit
 # From the repository root, against a running application:
 node frontend/scripts/check-markdown-structure.mjs http://localhost:8080
 node frontend/scripts/check-markdown-enhancements.mjs http://localhost:8080
 ```
 
-Vue/Shadow DOM cutover checks (2026-10-08): frontend build, strict TypeScript, all 9 unit tests and Gradle `buildMarkdown testMarkdown` passed. Chromium passed 7 component checks plus native attachment paste/link insertion, comment paste, 2 help checks and delayed editor upgrade. Structure and enhancement scripts passed Chromium/Firefox/WebKit (162 language identifiers, 66 grammars, 10 diagrams each). At 1366px and 390px viewports, a 320px textarea retained exactly the same editor/textarea bounds through overflowing Preview and back, with native FormData ownership. Four repository-document loading checks could not run against the demo project because it has no HEAD branch/corpus; this is not reported as a pass.
+Vue/Shadow DOM cutover checks (2026-10-08): integrated Gradle `processResources testFrontend`, strict TypeScript and all 15 unit tests passed. On an isolated H2 application using this branch's templates and built assets, all 17 Chromium component/editor/attachment checks passed, including shadow isolation, native FormData, upload/delete, paste/drop, spreadsheet tables and Turbo snapshots. A manual browser run uploaded an image, previewed it, submitted the native issue form and loaded the persisted image inside the renderer's shadow root. The Markdown-only branch also passed delayed editor upgrade and structure/enhancement scripts in Chromium/Firefox/WebKit (162 language identifiers, 66 grammars, 10 diagrams each). Its four repository-document loading checks lacked the demo HEAD/corpus and are not reported as passes.
 
 Both browser scripts use the existing E2E Playwright dependency and exercise Chromium, Firefox and WebKit. Application fixtures live in `e2e/specs/15-misc/markdown-components.spec.ts`.
 

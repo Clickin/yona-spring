@@ -2,7 +2,7 @@
   "name": "yona-frontend",
   "private": true,
   "scripts": {
-    "build:markdown": "node scripts/build-markdown.mjs",
+    "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {
