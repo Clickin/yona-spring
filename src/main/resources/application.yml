@@ -65,6 +65,8 @@ yona:
     writer-node-id: ""
     workers: 2
     batch-size: 50
+    # Largest Mercurial pull applied in memory (bytes); raise together with the JVM heap.
+    max-bundle-bytes: 104857600
     lease-seconds: 60
     sync-seconds: 60
     allowed-origins: []

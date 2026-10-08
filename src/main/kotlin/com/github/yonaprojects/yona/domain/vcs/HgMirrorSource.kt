@@ -54,7 +54,7 @@ class HgMirrorTransport(
 ) {
     fun open(sourceUrl: String, credentialRef: String?): HgMirrorSource {
         settings.requireActivation() // Must precede DNS, secret reads, and any source connection.
-        return HgHttpsMirrorSource(policy, sourceUrl, credentialRef)
+        return HgHttpsMirrorSource(policy, sourceUrl, credentialRef, bundleLimit = settings.maxBundleBytes)
     }
 }
 
@@ -84,7 +84,9 @@ internal class HgHttpsMirrorSource(
     private val policy: MirrorSourcePolicy,
     sourceUrl: String,
     private val credentialRef: String?,
-    private val connector: HgConnector = HgConnector.https(policy)
+    private val connector: HgConnector = HgConnector.https(policy),
+    // hg4j parses a whole changegroup in memory, so a pull is bounded by heap; operators raise it with the heap.
+    private val bundleLimit: Long = DEFAULT_BUNDLE_LIMIT
 ) : HgMirrorSource {
     private val base = policy.normalize(sourceUrl)
     private val host = URI(base).host.lowercase()
@@ -113,7 +115,7 @@ internal class HgHttpsMirrorSource(
     override fun bundle(common: List<String>, heads: List<String>): ByteArray = request(
         "getbundle",
         mapOf("heads" to heads.joinToString(" "), "common" to common.ifEmpty { listOf(NULL_NODE) }.joinToString(" ")),
-        BUNDLE_LIMIT
+        bundleLimit
     )
 
     override fun bookmarks(): Map<String, String> {
@@ -152,6 +154,8 @@ internal class HgHttpsMirrorSource(
             connection.connectTimeout = CONNECT_TIMEOUT_MILLIS
             connection.readTimeout = READ_TIMEOUT_MILLIS
             connection.useCaches = false
+            // A JVM-wide default Authenticator must not answer 401/407 for this connection.
+            connection.setAuthenticator(NO_AUTHENTICATOR)
             connection.requestMethod = "GET"
             connection.setRequestProperty("Accept", "application/mercurial-0.1")
             connection.setRequestProperty("User-Agent", "yona-mirror")
@@ -234,7 +238,8 @@ internal class HgHttpsMirrorSource(
         internal const val CONNECT_TIMEOUT_MILLIS = 10_000
         internal const val READ_TIMEOUT_MILLIS = 30_000
         private const val SMALL_LIMIT = 4L * 1024 * 1024
-        private const val BUNDLE_LIMIT = 100L * 1024 * 1024
+        internal const val DEFAULT_BUNDLE_LIMIT = 100L * 1024 * 1024
+        private val NO_AUTHENTICATOR = object : java.net.Authenticator() {}
         private const val ARGUMENT_CHUNK = 900
         internal const val NULL_NODE = "0000000000000000000000000000000000000000"
         private val NODE = Regex("[0-9a-f]{40}")

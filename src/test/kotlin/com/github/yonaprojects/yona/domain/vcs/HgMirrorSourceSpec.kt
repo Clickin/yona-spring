@@ -148,6 +148,41 @@ class HgMirrorSourceSpec : DescribeSpec({
             }
         }
 
+        it("never lets a JVM default Authenticator answer a 401 and bounds bundles by the configured size") {
+            Fixture { request, response ->
+                if (request.getParameter("cmd") == "getbundle") {
+                    response.status = 200
+                    response.outputStream.write(ByteArray(4096))
+                } else {
+                    response.status = 401
+                    response.setHeader("WWW-Authenticate", "Basic realm=\"hg\"")
+                }
+            }.use { fixture ->
+                val policy = spyk(MirrorSourcePolicy(settings(fixture.port)))
+                every { policy.checkHost(any()) } just runs
+                var asked = 0
+                val previous = java.net.Authenticator.getDefault()
+                java.net.Authenticator.setDefault(object : java.net.Authenticator() {
+                    override fun getPasswordAuthentication(): java.net.PasswordAuthentication {
+                        asked++
+                        return java.net.PasswordAuthentication("jvm-wide", "secret".toCharArray())
+                    }
+                })
+                try {
+                    val source = source(policy, fixture.port, RecordingConnector(fixture.port))
+                    shouldThrow<MirrorFailure> { source.heads() }.code shouldBe "SOURCE_AUTH_REJECTED"
+                    asked shouldBe 0
+                    fixture.requests.none { it.second.keys.any { key -> key.equals("Authorization", ignoreCase = true) } } shouldBe true
+                } finally {
+                    java.net.Authenticator.setDefault(previous)
+                }
+                val small = HgHttpsMirrorSource(policy, "https://localhost:${fixture.port}/repo", null, RecordingConnector(fixture.port), bundleLimit = 1024)
+                shouldThrow<MirrorFailure> { small.bundle(emptyList(), listOf("1".repeat(40))) }.code shouldBe "SOURCE_RESPONSE_TOO_LARGE"
+                HgHttpsMirrorSource(policy, "https://localhost:${fixture.port}/repo", null, RecordingConnector(fixture.port), bundleLimit = 8192)
+                    .bundle(emptyList(), listOf("1".repeat(40))).size shouldBe 4096
+            }
+        }
+
         it("refuses every redirect without following it or forwarding credentials") {
             val directory = Files.createTempDirectory("hg-redirect-credential").toRealPath()
             val credential = directory.resolve("source.properties")

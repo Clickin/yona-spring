@@ -162,7 +162,8 @@ JGit의 trust manager·hostname verifier 변경은 무시한다. 3xx 응답은 `
 위치의 후손이 아닌 곳으로 옮겨졌거나 사라지면, 이전 위치는 먼저 `mirror-retired/<id>` 행으로 남긴다.
 그래서 다른 ref가 나중에 그 기록에 닿아도 다시 색인하지 않는다. 이미 만든 이슈 참조는 기록을 다시 써도
 지우지 않는다. 저장소 정리(gc)가 어느 ref에서도 닿지 않는 커밋을 지워 은퇴·임시 위치의 커밋이 없으면
-그 행만 지우고 계속한다. 살아 있는 ref 위치의 커밋이 없으면 `TARGET_INCOMPLETE`(attention)다. 첫 가져오기 동안에는 알림이 없고 `initialImportDone`은
+그 행만 지우고 계속한다. 살아 있는 ref 위치의 커밋이 없으면 `TARGET_INCOMPLETE`(attention)다.
+첫 가져오기 동안에는 알림이 없고 `initialImportDone`은
 `store.complete`가 첫 완료 실행 뒤 켠다. 작성자 키는 커밋 author 이메일이다(빈 값이면 없음).
 
 ### Mercurial 미러
@@ -178,8 +179,9 @@ e-mail이 없으면 키도 없다.
   (`heads`, `lookup`, `known`, `getbundle`, `listkeys`)을 `HgHttpsMirrorSource`가 연결마다 직접
   보내고, 받은 bundle만 hg4j `PullCommand.applyBundle`로 반영한다. 모든 요청은 `checkHost` 뒤
   정규화한 origin으로 `policy.proxy()`를 거쳐 나가고, TLS는 그 요청의 `SSLContext`에 `trustManager(host)`를
-  넣어 검증한다. redirect는 따르지 않고 `SOURCE_REDIRECT`로 실패한다. 연결 10초·읽기 30초, 응답은 100MB
-  상한이며 bundle 외 응답은 4MB다. JVM 전역 기본값이나 hg4j 전역 등록은 바꾸지 않는다.
+  넣어 검증한다. redirect는 따르지 않고 `SOURCE_REDIRECT`로 실패한다. 연결 10초·읽기 30초, bundle은
+  `max-bundle-bytes`(기본 100MB), 그 외 응답은 4MB가 상한이다. JVM 기본 `Authenticator`는 401/407에
+  응답하지 못하게 막는다. JVM 전역 기본값이나 hg4j 전역 등록은 바꾸지 않는다.
   인증 정보는 요청마다 `credential(ref)`로 읽어 Basic 헤더를 만든 직후 비밀번호 배열을 지운다.
 - 실행: 원본 head와 루트를 읽고, 로컬 저장소가 없으면(디렉터리가 비어 있을 때만) hg4j로 만든다. 비어 있지
   않은데 저장소가 아니면 `TARGET_INCOMPLETE`다. 기록된 루트와 원본 루트가 다르거나 로컬 루트와 다르면
@@ -196,8 +198,9 @@ e-mail이 없으면 키도 없다.
   있으므로 알림을 보낸다. 반대로 changeset이 있던 원본이 다시 비면 history가 바뀐 것으로 본다.
 - 북마크: 실행마다 원본의 `bookmarks`를 따라 로컬 북마크를 만들고 옮기고 지운다(Git ref처럼 강제 이동과
   삭제를 따른다). 로컬에 없는 node를 가리키거나 저장할 수 없는 이름은 건너뛴다.
-- 한계: bundle은 메모리에 받으므로 한 번에 받을 수 있는 양은 100MB다. 더 큰 첫 가져오기는
-  `SOURCE_RESPONSE_TOO_LARGE`로 실패한다.
+- 한계: hg4j가 changegroup 전체를 메모리에서 반영하므로 한 번의 pull은 `max-bundle-bytes`(기본 100MB,
+  최대 16GiB)를 넘을 수 없다. 넘으면 `SOURCE_RESPONSE_TOO_LARGE`(FAILED)이며, 운영자가 JVM 힙과 함께
+  값을 올린 뒤 재시도한다.
 
 ### 이슈 참조와 알림
 
