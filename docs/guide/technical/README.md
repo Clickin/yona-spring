@@ -135,3 +135,23 @@ SVN 웹훅은 DB commit 뒤 기존 `gitPush` 설정에 따라 best-effort로 보
 응답 유실에 따른 유실/중복 가능성이 있으며, 색인 커서는 원격 수신 완료를 뜻하지 않는다.
 웹훅 실패 때문에 복제나 색인을 되돌리지 않는다.
 
+### 실행 제한과 물리 배타성
+
+짧은 dispatcher가 due 행을 찾고 slot 확보 → 조건부 claim → 전용 executor 제출 순서로
+동작한다. 기본 worker 2개(최대 8), revision batch 50개, 임대 60초, 성공 후 재동기화 간격
+60초다. 긴 SVN I/O는 공용 scheduler나 DB transaction 안에서 실행하지 않는다.
+claim/heartbeat/checkpoint/완료는 DB 시각, owner, 증가하는 fence로 확인한다.
+
+파일 writer는 `.mirror-locks/<projectId>.lock`을 작업 전체 동안 보유한다. 임대 상실은
+기존 스레드가 멈췄다는 증거가 아니므로, 취소를 요청해도 스레드가 반환하기 전에는 잠금을
+해제하지 않는다. 종료도 새 작업을 막고 실제 writer 종료를 기다린다. 이름 잠금은
+`yona.data/repository-names/`를 사용한다. 두 종류의 잠금 파일은 실행 중 rename/delete/recreate하지 않는다.
+
+기본 운영 형태는 지정된 단일 writer와 로컬 파일시스템이다. 여러 노드가 같은 canonical
+저장소·예약 표식·잠금 inode를 공유하고 OS locking을 보장하는지 검증하지 않은 상태에서
+자동 failover를 활성화하지 않는다. 독립 디스크의 다중 노드를 DB 임대만으로 지원하지 않는다.
+
+일시적 네트워크 오류는 5초부터 지수 backoff(상한 15분), 연속 5회 후 FAILED다.
+인증/TLS/원본 정책 오류는 즉시 FAILED, 정합성이나 물리 배타성 문제는 NEEDS_ATTENTION이다.
+오류에는 원격 예외 원문이나 secret을 기록하지 않는다.
+
