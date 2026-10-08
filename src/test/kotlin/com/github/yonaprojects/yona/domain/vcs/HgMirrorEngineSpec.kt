@@ -234,6 +234,26 @@ class HgMirrorEngineSpec @Autowired constructor(
                 notices().size shouldBe 1
             }
 
+            it("follows bookmarks with unusual names on every run and skips ones Mercurial cannot store") {
+                val first = commit("a.txt", "one")
+                val names = listOf("기능/50% off", "a+b", "back\\slash", "with space")
+                for (name in names) HgMirrorTestSupport.bookmark(origin, name, first)
+                run()
+                HgMirrorTestSupport.bookmarks(local).keys shouldBe HgMirrorTestSupport.bookmarks(origin).keys
+                run()
+                run()
+                HgMirrorTestSupport.bookmarks(local) shouldBe HgMirrorTestSupport.bookmarks(origin)
+                // A source bookmark whose node the mirror lacks, and a control character name, are skipped without failing.
+                source = {
+                    val inner = HgMirrorTestSupport.localSource(origin)
+                    object : HgMirrorSource by inner {
+                        override fun bookmarks() = inner.bookmarks() + mapOf("ghost" to "9".repeat(40), "bad\u0007name" to first)
+                    }
+                }
+                run()
+                HgMirrorTestSupport.bookmarks(local).keys shouldBe names.toSet()
+            }
+
             it("completes an empty source without cursors and notifies its first later changeset") {
                 run()
                 snapshot().apply {

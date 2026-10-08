@@ -104,7 +104,11 @@ class HgMirrorEngine(
         try {
             val current = HgLocalClient(repository).listKeys("bookmarks")
             for (name in current.keys - remote.keys) {
-                BookmarkCommand(repository).setBookmarkName(name).setDelete(true).setForce(true).call()
+                try {
+                    BookmarkCommand(repository).setBookmarkName(name).setDelete(true).setForce(true).call()
+                } catch (e: Exception) {
+                    logger.warn("A local bookmark could not be removed: {}", e.javaClass.simpleName)
+                }
             }
             for ((name, node) in remote) {
                 if (current[name] == node) continue
@@ -112,7 +116,12 @@ class HgMirrorEngine(
                     logger.warn("Skipping a source bookmark that cannot be mirrored")
                     continue
                 }
-                BookmarkCommand(repository).setBookmarkName(name).setNodeId(NodeIdUtil.fromHex(node)).setForce(true).call()
+                try {
+                    BookmarkCommand(repository).setBookmarkName(name).setNodeId(NodeIdUtil.fromHex(node)).setForce(true).call()
+                } catch (e: Exception) {
+                    // A name Mercurial cannot store must not stop the mirror; never log the remote message.
+                    logger.warn("A source bookmark could not be mirrored: {}", e.javaClass.simpleName)
+                }
             }
         } finally {
             repository.close()
