@@ -73,7 +73,7 @@ class GitAuthorizationFilterIntegrationSpec @Autowired constructor(
                 roleRepository.deleteAll()
             }
 
-            it("repository access validation case 01") {
+            it("rejects Git and LFS requests to a code repository whose project is now SVN or Mercurial without touching objects") {
                 val member = userRepository.save(User(
                     loginId = "member", email = "member@example.com",
                     password = hashPassword("pass123", "saltsalt"), passwordSalt = "saltsalt"
@@ -130,7 +130,7 @@ class GitAuthorizationFilterIntegrationSpec @Autowired constructor(
                 objectFile.readText() shouldBe "updated object"
             }
 
-            it("repository access validation case 02") {
+            it("keeps previous-path resolution and wiki access for projects of every VCS") {
                 projectRepository.save(Project(owner = "owner", name = "repo", vcs = "GIT", projectScope = ProjectScope.PUBLIC))
                 val project = projectRepository.save(Project(
                     owner = "new-owner", name = "new-repo", previousOwnerLoginId = "old-owner", previousName = "old-repo",

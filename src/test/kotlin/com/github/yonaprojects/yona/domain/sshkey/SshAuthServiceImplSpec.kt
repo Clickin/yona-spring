@@ -56,7 +56,7 @@ class SshAuthServiceImplSpec @Autowired constructor(
                 roleRepository.deleteAll()
             }
 
-            it("repository access validation case 01") {
+            it("denies Git SSH commands for SVN and Mercurial projects without resolving a repository directory") {
                 val role = roleRepository.save(Role(id = 1L, name = "manager", active = true))
                 val member = userRepository.save(User(loginId = "member", email = "member@example.com"))
                 val key = sshKeyService.create(member, "member", USER_PUBLIC_KEY)
@@ -83,7 +83,7 @@ class SshAuthServiceImplSpec @Autowired constructor(
                 }
             }
 
-            it("repository access validation case 02") {
+            it("keeps Git SSH access for null, Git and unrecognized VCS values including previous paths") {
                 val role = roleRepository.save(Role(id = 1L, name = "manager", active = true))
                 val member = userRepository.save(User(loginId = "member", email = "member@example.com"))
                 val key = sshKeyService.create(member, "member", USER_PUBLIC_KEY)

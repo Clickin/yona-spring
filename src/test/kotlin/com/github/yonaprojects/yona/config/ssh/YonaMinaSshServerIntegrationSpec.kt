@@ -200,7 +200,7 @@ class YonaMinaSshServerIntegrationSpec @Autowired constructor(
             }
 
             listOf("SVN", "SUBVERSION", "HG", "MERCURIAL").forEachIndexed { index, vcs ->
-                it("repository access validation case ${index + 1}") {
+                it("rejects SSH clone and push of a code repository whose project changed to $vcs") {
                     val owner = userRepository.save(User(loginId = "access-owner", email = "access-owner@example.com"))
                     val project = projectRepository.save(Project(
                         owner = owner.loginId, name = "access-$index", vcs = "GIT", projectScope = ProjectScope.PRIVATE
