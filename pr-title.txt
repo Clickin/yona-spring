@@ -1,0 +1,1 @@
+Archive repositories privately during reset and compensate confirmed rollbacks
