@@ -68,6 +68,12 @@ yona:
     # 이 값을 지정하지 않으면 JGit이 서버가 돌아가는 머신의 전역 git 설정(init.defaultBranch)을
     # 그대로 따르게 되어 배포 환경마다 다른 이름으로 생성될 수 있다(사용자 요청으로 결정론적으로 고정).
     default-branch: "${YONA_GIT_DEFAULT_BRANCH:main}"
+    maintenance:
+      enabled: "${YONA_GIT_MAINTENANCE_ENABLED:true}"
+      idle-millis: "${YONA_GIT_MAINTENANCE_IDLE_MILLIS:3600000}"
+      cadence-millis: "${YONA_GIT_MAINTENANCE_CADENCE_MILLIS:86400000}"
+      scan-millis: "${YONA_GIT_MAINTENANCE_SCAN_MILLIS:60000}"
+      scan-batch: "${YONA_GIT_MAINTENANCE_SCAN_BATCH:64}"
   signup:
     allowed-email-domains: "${YONA_SIGNUP_ALLOWED_EMAIL_DOMAINS:}"
   notification:

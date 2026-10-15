@@ -1,6 +1,26 @@
 # Durable queue: store, executor and administration
 
-enqueue/query, 순수 상태 전이 모델, 애플리케이션 내부 실행기와 관리자 REST/SSE API 및 Thymeleaf 관리 UI를 제공한다. 사이트/프로젝트 archive exporter/importer도 이 큐의 handler로 실행한다. 기존 메일·웹훅 등 callback 호출 경로는 변경하지 않는다. Queue는 항상 켜지는 핵심 인프라이며 별도 활성화 스위치는 없다. 실행할 수 있는 작업은 애플리케이션이 명시적으로 등록한 handler뿐이다.
+enqueue/query, 순수 상태 전이 모델, 애플리케이션 내부 실행기와 관리자 REST/SSE API 및 Thymeleaf 관리 UI를 제공한다. 사이트/프로젝트 archive exporter/importer와 Git GC도 이 큐의 handler로 실행한다. 기존 메일·웹훅 등 callback 호출 경로는 변경하지 않는다. Queue는 항상 켜지는 핵심 인프라이며 별도 활성화 스위치는 없다. 실행할 수 있는 작업은 애플리케이션이 명시적으로 등록한 handler뿐이다.
+
+## Git 저장소 유지보수
+
+프로젝트 관리자는 **프로젝트 설정 → Git 저장소 유지보수**에서 GC를 요청하고 최근 작업 ID·상태를 확인한다. 요청은 CSRF 보호를 받는 POST이며 프로젝트 MANAGER만 허용한다. 사이트 관리자는 기존 큐 관리 화면에서 `git.gc`의 상세 진행·실패 원인·재시도·취소를 관리한다. SVN/Hg에는 표시하거나 실행하지 않는다. 수동 실행은 유휴 조건을 기다리지 않는다.
+
+자동 실행의 유휴 기준은 **저장소 쓰기 활동**이다. 서버 전체 HTTP 요청이나 CPU 사용률을 측정하지 않는다. `lastPushedDate`(없으면 `createdDate`)가 유휴 기준보다 오래된 Git 프로젝트를 ID keyset으로 제한 조회하고 작업만 enqueue한다. Worker는 실행 직전에 DB 시각 필드와 HEAD·packed-refs·refs 파일 및 objects/pack·객체 하위 디렉터리의 수정 시각을 다시 확인한다. 최근 쓰기가 발견되면 GC 없이 `git.gc.skipped-active` 단계로 성공 종결하며, 다음 주기에 다시 후보가 된다. 실제 수집 성공은 `git.gc.complete`로 구분한다.
+
+| `yona.git.maintenance` 설정 | 기본값 | 환경변수 |
+|---|---:|---|
+| `enabled` | `true` | `YONA_GIT_MAINTENANCE_ENABLED` |
+| `idle-millis` | `3600000` (1시간) | `YONA_GIT_MAINTENANCE_IDLE_MILLIS` |
+| `cadence-millis` | `86400000` (24시간) | `YONA_GIT_MAINTENANCE_CADENCE_MILLIS` |
+| `scan-millis` | `60000` (1분) | `YONA_GIT_MAINTENANCE_SCAN_MILLIS` |
+| `scan-batch` | `64` (1–1000) | `YONA_GIT_MAINTENANCE_SCAN_BATCH` |
+
+`enabled=false`는 자동 스캔만 끈다. 수동 GC는 계속 사용할 수 있다. 주기는 프로젝트별 최근 **요청 시각** 기준이며 미완료/복구 필요 작업이 있으면 추가 자동 작업을 만들지 않는다. 스캔 batch는 한 번에 조회할 프로젝트 수이지 동시 GC 수가 아니다.
+
+설치된 JGit으로 일반 객체 packing을 수행한다. `git:<project-id>`·`site:archive` 큐 자원 guard, 저장소의 지속적인 `yona-gc.lock` 파일 잠금, JGit 자체 GC 잠금으로 중복 GC와 archive 작업을 조정한다. Push/웹 쓰기는 이 새 잠금을 획득하지 않으므로 유휴 판단을 배타적인 쓰기 중지로 간주하면 안 된다. 동시 쓰기 보호를 위해 reflog 만료·unreachable 객체 prune·ref packing·aggressive 옵션은 사용하지 않는다. 오래된 pack은 1시간 유예를 적용하고 교체 전에 unmatched 객체를 loose object로 보존한다. 저장소 config는 디스크에 변경하지 않는다. **도달 불가능 객체의 디스크 회수나 손상 복구는 이 기능의 범위가 아니다.**
+
+GC의 mention 처리 성능 개선 폭은 운영 저장소에서 별도로 측정해야 한다. Forgejo 기능 비교와 후속 후보는 [프로젝트 관리 비교](../../technical/forgejo-project-administration-2026-10-07.md)에 정리했다.
 
 ## 애플리케이션 인터페이스
 

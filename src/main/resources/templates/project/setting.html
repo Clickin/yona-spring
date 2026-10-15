@@ -152,6 +152,13 @@
                     <button id="save" type="submit" class="ybtn ybtn-success" th:text="#{button.save}">Save</button>
                 </div>
             </form>
+            <div th:if="${(project.vcs ?: 'GIT').toUpperCase() == 'GIT'}" class="bubble-wrap gray">
+                <div class="box-wrap top">
+                    <h3>Git GC</h3>
+                    <p>저장소 객체 정리 작업을 요청하고 최근 실행 상태를 확인합니다.</p>
+                    <a class="ybtn" th:href="@{/{owner}/{name}/setting/git-maintenance(owner=${project.owner},name=${project.name})}">Git 저장소 유지보수</a>
+                </div>
+            </div>
         </div>
     </div>
 
