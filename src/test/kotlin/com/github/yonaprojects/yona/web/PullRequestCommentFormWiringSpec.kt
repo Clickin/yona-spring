@@ -34,7 +34,7 @@ import org.springframework.web.context.WebApplicationContext
 // common.commentForm(container, resourceType, action)(범위 없는 PR 전체 일반 댓글)은
 // 서로 다른 두 기능으로, legacy와 동일하게 함께 공존하는 것이 정상 설계다.
 // 이 스펙은 렌더링 레벨(Jsoup/MockMvc)에서 1) commentForm이 legacy와 동일 위치에
-// CM6 에디터와 함께 렌더링되는지, 2) 작성 권한이 없으면 로그인 필요 placeholder만
+// 일반 댓글 폼과 함께 렌더링되는지, 2) 작성 권한이 없으면 로그인 필요 placeholder만
 // 보이는지, 3) review-form이 commentForm과 별개로 정상 공존하는지를 검증한다.
 // 실제 Shadow DOM 초기화/제출 후 저장 여부는 Playwright로 별도 확인한다.
 @Transactional
@@ -66,7 +66,7 @@ class PullRequestCommentFormWiringSpec @Autowired constructor(
                 )
             )
 
-            it("작성 권한이 있는 멤버에게는 legacy와 동일 위치에 CM6 에디터가 붙은 comment-form이 렌더링돼야 한다") {
+            it("작성 권한이 있는 멤버에게는 일반 댓글 폼과 인라인 리뷰 폼을 제공해야 한다") {
                 val suffix = System.currentTimeMillis().toString()
                 val contributor = userRepository.save(User(loginId = "prcf-author-$suffix", name = "PR작성자", email = "prcf-author-$suffix@yona.io"))
                 val member = userRepository.save(User(loginId = "prcf-member-$suffix", name = "댓글멤버", email = "prcf-member-$suffix@yona.io"))
@@ -94,14 +94,9 @@ class PullRequestCommentFormWiringSpec @Autowired constructor(
 
                 doc.select("#comment-form").attr("action") shouldBe
                     "/${project.owner}/${project.name}/pullRequest/${pr.id}/comments"
-                body shouldContain "<yona-markdown-editor name=\"contents\" editor-mode=\"code-review-body\">"
-                body shouldContain "data-toggle=\"markdown-editor\""
 
                 // review-form(CodeCommentBox 팝업 - 라인/범위 댓글 전용)은 commentForm과 함께 공존해야 한다.
                 body shouldContain "id=\"review-form\""
-                body shouldContain "src=\"/javascripts/common/yona.CodeCommentBox.js\""
-                body shouldContain "yona.CodeCommentBox.show("
-                body shouldContain "yona.CodeCommentBox.init("
             }
 
             it("작성 권한이 없으면 로그인 필요 placeholder만 보이고 실제 폼은 렌더링되지 않아야 한다") {

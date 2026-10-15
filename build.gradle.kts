@@ -205,29 +205,64 @@ allOpen {
 	annotation("jakarta.persistence.Embeddable")
 }
 
-val npmCi = tasks.register<Exec>("npmCi") {
+val pnpmInstall = tasks.register<Exec>("pnpmInstall") {
 	workingDir("frontend")
-	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "npm.cmd" else "npm",
-		"ci", "--ignore-scripts", "--no-audit", "--no-fund")
-	inputs.files("frontend/package.json", "frontend/package-lock.json")
+	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "pnpm.cmd" else "pnpm",
+		"install", "--frozen-lockfile", "--ignore-scripts")
+	inputs.files("frontend/package.json", "frontend/pnpm-lock.yaml")
 	outputs.dir("frontend/node_modules")
 }
 
 val turboResources = layout.buildDirectory.dir("generated/turbo")
 val copyTurbo = tasks.register<Copy>("copyTurbo") {
-	dependsOn(npmCi)
+	dependsOn(pnpmInstall)
 	from("frontend/node_modules/@hotwired/turbo/dist/turbo.es2017-esm.js")
 	into(turboResources)
 }
 
+val typecheckFrontend = tasks.register<Exec>("typecheckFrontend") {
+	dependsOn(pnpmInstall)
+	workingDir("frontend")
+	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "pnpm.cmd" else "pnpm",
+		"run", "typecheck")
+	inputs.files("frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/tsconfig.json")
+	inputs.dir("frontend/src")
+}
+
+val frontendResources = layout.buildDirectory.dir("generated/frontend/web")
+val buildFrontend = tasks.register<Exec>("buildFrontend") {
+	dependsOn(typecheckFrontend)
+	workingDir("frontend")
+	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "pnpm.cmd" else "pnpm",
+		"run", "build")
+	inputs.files("frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/tsconfig.json")
+	inputs.dir("frontend/src")
+	inputs.dir("frontend/scripts")
+	outputs.dir(frontendResources)
+	outputs.file(layout.buildDirectory.file("generated/frontend/meta.json"))
+}
+
+val testFrontend = tasks.register<Exec>("testFrontend") {
+	dependsOn(pnpmInstall)
+	workingDir("frontend")
+	commandLine(if (System.getProperty("os.name").startsWith("Windows")) "pnpm.cmd" else "pnpm", "test")
+}
+
+tasks.test {
+	dependsOn(testFrontend, typecheckFrontend)
+}
+
 tasks.processResources {
-	dependsOn(copyTurbo)
+	dependsOn(copyTurbo, buildFrontend)
+	from(frontendResources) {
+		into("static/javascripts")
+	}
 	from(turboResources) {
 		into("static/javascripts/turbo")
 	}
 	doFirst {
 		check(turboResources.get().file("turbo.es2017-esm.js").asFile.isFile) {
-			"Turbo distribution missing; npmCi and copyTurbo must provide turbo.es2017-esm.js"
+			"Turbo distribution missing; pnpmInstall and copyTurbo must provide turbo.es2017-esm.js"
 		}
 	}
 }

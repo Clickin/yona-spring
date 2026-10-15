@@ -447,8 +447,11 @@
               var session = editor.getSession();
               session.setMode("ace/mode/" + sMode);
               session.setValue(sourceText);
-          } else if (typeof hljs !== "undefined") {
-              hljs.highlightElement(showCodeCodeEl);
+          } else {
+              var language = (showCodeCodeEl.parentElement.dataset.path || "").split(".").pop();
+              import("/javascripts/markdown/yona-markdown-enhance.js").then(function (module) {
+                  return module.highlightCode(showCodeCodeEl, language);
+              });
           }
       }
   });

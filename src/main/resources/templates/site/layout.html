@@ -359,64 +359,30 @@
 
 
     <!-- Markdown Editor fragment -->
-    <!-- CodeMirror5 기반 구현을 CM6 기반 Web Component(<yona-markdown-editor>,
-         javascripts/lib/yona-markdown-editor/에 vendoring, 소스는 별도 저장소
-         yona-projects/components/editor)로 교체. 이 커스텀 엘리먼트가 connectedCallback에서
-         스스로 light DOM <textarea>를 만들어 채우고(name/data-editor-mode/markdown="true"/
-         id(editor- 접두어) 계약은 유지 - 기존 폼 제출 코드가 이 textarea의 DOM value를 그대로
-         읽는다) Shadow DOM 안에 CM6 EditorView를 마운트하므로, 여기서는 <textarea>를 직접
-         렌더링하지 않고 초기값/이름/editorMode를 커스텀 엘리먼트 속성으로만 전달한다.
-
-         board/create·issue/create·issue/edit는 `common/yona.TitleHeadAutoCompletion.js`(`[`
-         라벨 트리거, CodeMirror와 무관한 별도 Tribute 인스턴스)가 전역 `Tribute` 생성자에
-         의존하므로 tribute.min.{js,css}를 그대로 유지한다.
-
-         제거한 것: 탭 UI, .task-list-button, .markdown-preview 미리보기 div(죽은 코드였음),
-         CodeMirror5 에디터 및 초기화 스크립트(yona.ui.MarkdownEditor.js). 유지한 것:
-         help/markdown 프래그먼트, .editor-notice-label(임시저장 "Draft saved" 표시 - 위치/
-         스타일만 재조정).
-
-         data-markdown-render-url/data-mention-url은 project != null로 게이트한다. `project`는
-         이 프래그먼트의 명시적 파라미터가 아니지만 Thymeleaf 프래그먼트는 호출 측 모델
-         컨텍스트를 그대로 상속받는다 - markdownEditor를 쓰는 16개 호출부는 모두 프로젝트 스코프
-         컨트롤러가 렌더링하며 project를 채워 넣으므로 이 th:if는 방어적 가드로만 존재한다.
-         멘션은 옛 yona.Mention()이 8개 화면에서만 호출됐지만 그건 의도적 설계가 아니라 그
-         화면들만 호출 코드를 추가해뒀을 뿐이었으므로(pullrequest/create·edit는 tribute.min.js
-         자체를 로드하지 않아 실제로는 이미 깨져 있었음), 미리보기와 동일하게 project 컨텍스트가
-         있는 16개 전부로 넓혔다 - 8개 템플릿에 흩어져 있던 하드코딩 URL 중 pullrequest 두 곳의
-         "/api" 접두어 누락 버그도 이 중앙화로 함께 해소된다. -->
     <div th:fragment="markdownEditor(name, value, editorMode)" data-toggle="markdown-editor" class="mt10"
-         th:data-markdown-render-url="${project != null} ? (@{/markdown/{owner}/{name}(owner=${project.owner}, name=${project.name})}) : null"
+         th:data-markdown-preview-url="${project != null} ? (@{/markdown/{owner}/{name}/preview(owner=${project.owner}, name=${project.name})}) : @{/markdown/preview}"
          th:data-mention-url="${project != null} ? (@{/api/{owner}/{name}/mentionList(owner=${project.owner}, name=${project.name})}) : null">
-        <div class="editor-notice-label"></div>
-        <!-- .editor-notice-label "안"이 아니라 형제로 둔다 - temporarySaveHandler가 초안을 저장할
-             때마다 noticePanel.html(...)로 .editor-notice-label의 내용을 통째로 갈아치우므로,
-             안에 두면 버튼이 주기적으로 사라진다. 기본은 숨김(CSS는 yona.css의
-             .editor-clear-temporary 규칙 재사용) - markdown(project) 스크립트가 localStorage에
-             이 경로의 임시저장이 있을 때만 보여준다. -->
-        <div class="editor-clear-temporary">
-            <div class="editor-clear-temporary-button">
-                <button type="button" class="ybtn ybtn-small ybtn-warning" th:text="#{button.clear.temporary}">복구된 본문 삭제</button>
+        <yona-markdown-editor th:with="editorId=${#ids.seq('editor-' + name)}"
+            th:attr="name=${name},editor-mode=${editorMode},owner=${project?.owner},project=${project?.name},
+                     data-edit-label=#{common.editor.edit},data-preview-label=#{common.editor.preview},
+                     data-checklist-label=#{button.add.checklist}">
+            <div class="editor-notice-label"></div>
+            <div class="editor-clear-temporary">
+                <div class="editor-clear-temporary-button">
+                    <button type="button" class="ybtn ybtn-small ybtn-warning" th:text="#{button.clear.temporary}">복구된 본문 삭제</button>
+                </div>
             </div>
-        </div>
-
-        <div class="textarea-box">
-            <yona-markdown-editor th:attr="name=${name},editor-mode=${editorMode}" th:text="${value}"></yona-markdown-editor>
-        </div>
-
-        <div th:replace="~{help/markdown}"></div>
+            <div th:replace="~{help/markdown :: markdown}"></div>
+            <textarea th:name="${name}" th:id="${editorId}"
+                      th:data-editor-mode="${editorMode}" th:text="${value}"
+                      rows="10" class="content" markdown="true" aria-label="Markdown"></textarea>
+        </yona-markdown-editor>
     </div>
 
   <!-- Markdown Script fragment -->
   <th:block th:fragment="markdown(project)">
-    <!-- highlight.js CSS/JS는 head와 scripts 하단(yona-markdown-editor 옆)에서 전역으로 이미
-         로드돼 있으므로 여기서는 중복 로드를 피해 <link>/<script src="highlight.pack.js">를
-         직접 싣지 않는다. -->
-    <script type="text/javascript" src="/javascripts/lib/marked.js"></script>
     <script type="text/javascript" th:inline="javascript">
     document.addEventListener("DOMContentLoaded", function(){
-        hljs.configure({languages: []});
-        hljs.highlightAll();
         var htOptions = {};
 
         /*[# th:if="${project != null}"]*/
@@ -672,16 +638,8 @@
     <script type="module" src="/lib/yona-vue-widgets/yona-dropdown-element.js"></script>
     <script type="module" src="/lib/yona-vue-widgets/yona-typeahead-element.js"></script>
     <script type="module" src="/lib/yona-vue-widgets/yona-pagination-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-attachments-element.js"></script>
-    <!-- review-form이 내부적으로 자식 컴포넌트로 조합한다. 사이트 전역 markdownEditor
-         프래그먼트는 여전히 vendor <yona-markdown-editor>를 쓴다 - textarea가 Shadow DOM에
-         완전히 캡슐화돼 있어 전역 스왑하면 직접 querySelector로 접근하는 14곳의 소비처가
-         깨지므로 보류했다. review-form 자신의 에디터 인스턴스는 별개라 이 위험이 없다. -->
-    <script type="module" src="/lib/yona-vue-widgets/yona-markdown-editor-vue-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-review-form-element.js"></script>
     <script type="module" src="/lib/yona-vue-widgets/yona-scroll-elevator-element.js"></script>
     <script type="module" src="/lib/yona-vue-widgets/yona-page-slide-element.js"></script>
-    <script type="module" src="/lib/yona-vue-widgets/yona-help-markdown-element.js"></script>
 
     <script type="text/javascript" src="/javascripts/lib/autosize/autosize.min.js"></script>
     <script type="text/javascript" src="/javascripts/common/yona.KeyControl.js"></script>
@@ -690,40 +648,15 @@
     <script type="text/javascript" src="/javascripts/common/yona.Usermenu.js"></script>
     <script type="text/javascript" src="/javascripts/common/yona.LoginDialog.js"></script>
     <script type="text/javascript" src="/javascripts/lib/viewerjs/viewer.js"></script>
-    <!-- <yona-markdown-editor>는 Custom Element이므로 이 스크립트 로드만으로 customElements.define이
-         실행되고, 브라우저가 DOM에서 이 태그를 만나는 즉시 connectedCallback으로 스스로 초기화한다 -
-         jQuery selector로 대상을 순회하던 yona.ui.MarkdownEditor.js(삭제됨)와 달리 별도 초기화
-         스크립트가 필요 없다. -->
-    <script type="text/javascript" src="/javascripts/lib/yona-markdown-editor/yona-markdown-editor.min.js"></script>
-    <!-- highlight.js를 전역으로 로드(head의 CSS 승격과 동일 이유) - markdown(project) fragment의
-         hljs.highlightAll()이 이 전역 hljs에 의존하므로 그 fragment는 <script src>를 중복 로드하지
-         않는다. -->
-    <script type="text/javascript" src="/javascripts/lib/highlight/highlight.pack.js"></script>
+    <script type="module" src="/javascripts/markdown/yona-markdown-turbo.js"></script>
+    <script type="module" src="/javascripts/markdown/yona-markdown-editor.js"></script>
+    <script type="module" src="/javascripts/markdown/yona-markdown-help.js"></script>
+    <script type="module" src="/javascripts/markdown/yona-markdown-enhance.js"></script>
+    <script type="module" src="/javascripts/attachments/yona-attachments.js"></script>
 
     <script type="text/javascript">
         document.addEventListener("DOMContentLoaded", function() {
             NProgress.configure({minimum: 0.7});
-        });
-    </script>
-    <script type="text/javascript">
-        // 컨테이너(.markdown-wrap)마다 개별 Viewer 인스턴스를 붙인다(본문 하나에 여러 댓글이 각자
-        // .markdown-wrap을 가지는 화면 - 이슈/PR 상세 등 - 에서 컨테이너별로 독립된 갤러리가 필요).
-        // mouseover 시 커서를 포인터로 바꾸는 로직은 순정 Viewer.js에 동등한 옵션/CSS가 없어
-        // (뷰어가 열리기 전 원본 <img>의 커서 처리는 라이브러리가 관여하지 않는 영역) 직접 처리한다.
-        document.addEventListener("DOMContentLoaded", function () {
-            Viewer.setDefaults({
-                transition: false
-            })
-            document.querySelectorAll(".markdown-wrap").forEach(function (el) {
-                el.querySelectorAll("img").forEach(function(img){
-                    img.addEventListener("mouseover", function () {
-                        img.style.cursor = "pointer";
-                    });
-                });
-                new Viewer(el, {
-                    transition: false
-                });
-            });
         });
     </script>
 
@@ -906,32 +839,8 @@
                 });
             });
 
-            autosize(document.querySelectorAll('textarea'));
+            autosize(document.querySelectorAll('textarea:not(yona-markdown-editor textarea)'));
 
-            addTaskListButtonListener();
-            function addTaskListButtonListener() {
-                document.querySelectorAll(".add-task-list-button").forEach(function(btn){
-                    btn.addEventListener('click', function () {
-                        var tasklistTemplate = "\n- [ ] Todo A\n- [ ] Todo B\n- [ ] Todo C";
-                        var elForm = btn.closest("form");
-                        var elTextarea = elForm ? elForm.querySelector("textarea") : null;
-                        if (!elTextarea) { return; }
-                        var cursorPos = elTextarea.selectionStart;
-                        var text = elTextarea.value;
-
-                        if(cursorPos === 0 && text && text.length > 0){
-                            cursorPos = text.length;
-                        }
-
-                        var textBefore = text.substring(0, cursorPos);
-                        var textAfter  = text.substring(cursorPos, text.length);
-
-                        elTextarea.value = textBefore + tasklistTemplate + textAfter;
-                        elTextarea.focus();
-                        elTextarea.setSelectionRange(cursorPos + tasklistTemplate.length, cursorPos + tasklistTemplate.length);
-                    });
-                });
-            }
 
             if (window.parent !== window) {
                 document.querySelectorAll("a.ago, .head-anchor, .share-link").forEach(function(el){
@@ -982,6 +891,16 @@
         <span class="pull-right nbtn small white btn-insert">[[#{common.attach.clickToPost}]]</span>
     </li>
   </script>
+  <template id="yona-attachments-template">
+    <div th:attr="data-insert-label=#{common.attach.clickToPost},data-delete-label=#{button.delete}">
+      <span class="help-droppable" th:text="#{common.attach.drophere}"></span>
+      <span class="fake-file-wrap"><span th:text="#{button.upload}"></span></span>
+      <span class="plain" th:text="#{common.attach.clickbutton}"></span>
+      <span class="help-pastable" th:text="#{common.attach.pastehere}"></span>
+      <p class="help"><span th:text="#{common.attach.attachIfYouSave}"></span></p>
+      <div class="upload-drop-here"><span class="msg" th:text="#{common.attach.dropFilesHere}"></span></div>
+    </div>
+  </template>
   <script type="text/x-jquery-tmpl" id="tplDropFilesHere" th:inline="text">
     <div class="upload-drop-here"><div class="msg-wrap"><div class="msg">[[#{common.attach.dropFilesHere}]]</div></div></div>
   </script>

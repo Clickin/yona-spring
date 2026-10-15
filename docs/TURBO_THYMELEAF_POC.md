@@ -179,3 +179,48 @@ YONA_BASE_URL=http://localhost:18080 npx playwright test specs/04-project/00-pro
 Compared with the current imperative-JS approach, this removes custom navigation ownership but not widget behavior. Unlike a full React SPA, it adds no JSON screen model or client domain store. It is consistent with server-rendered progressive enhancement, but no benchmark or code comparison of `yona-bun-temp`, Gitea or Forgejo was performed. The final architecture issue itself was not created.
 
 References: [Turbo Frames](https://turbo.hotwired.dev/handbook/frames), [Turbo lifecycle and caching](https://turbo.hotwired.dev/handbook/building), [Spring MVC HTML fragments](https://docs.spring.io/spring-framework/reference/web/webmvc-view/mvc-fragments.html).
+
+## Markdown SSR + Vue textarea PoC (2026-10-08)
+
+독립 브랜치 `poc/markdown-ssr-turbo`는 `upstream/next`의 `1b6b6e047`에서 시작한다.
+기존 Lit/Vue 클라이언트 렌더링 브랜치를 쌓지 않는다.
+
+- 본문·댓글은 기존 `MarkdownService`/commonmark-java/Thymeleaf SSR을 유지한다.
+- 편집기는 Vue 3 `script setup`과 원래 light-DOM textarea를 사용한다. 편집 UI는 Shadow DOM,
+  미리보기 Turbo Frame은 light DOM의 native slot에 둔다.
+- CM6와 클라이언트 본문 Markdown 파서는 사용하지 않는다. 교체된 CM6 편집기 번들도 제거했다.
+  Mermaid의 내부 Markdown label 처리용 `marked` 전이 의존성은 별개로 지연 청크에 남는다.
+- 자동완성, 들여쓰기, 체크리스트, 자동 저장, 파일 선택/삭제, textarea 파일 drop,
+  파일·이미지 paste, HTML 표·기존 스프레드시트 clipboard의 Markdown 표 변환을 유지한다.
+- 미리보기 탭에서 별도 외부 폼으로 원문을 POST한다. 실제 저장 폼을 제출하거나 중첩 폼을 만들지 않는다.
+  프로젝트 문맥은 `/markdown/{owner}/{projectName}/preview`, 문맥 없는 편집기는 `/markdown/preview`를 사용한다.
+  서버가 정화한 HTML과 대응 Frame ID를 반환하며, 프로젝트 조회 권한과 Frame ID를 검사한다.
+- 코드 언어 모듈과 Mermaid는 해당 코드 블록이 있을 때 비동기로 로드한다.
+  기본 본문/코드 원문은 JS 없이 읽을 수 있으며, 선택적 후처리 실패로 본문을 숨기지 않는다.
+
+### JSON POST → HTML 조각과 비교
+
+SSR, HTML 정화, 서버 Markdown 문법의 일치는 **Turbo의 고유 이점이 아니다**.
+기존 JSON POST도 같은 `MarkdownService` 결과를 반환할 수 있다. 양쪽 모두 네트워크 왕복이 필요하다.
+
+Turbo를 선택할 근거는 이미 사용하는 Frame 전송·교체 동작을 공유하는 것이다.
+클라이언트가 미리보기 `fetch`/HTML 대입과 이전 요청 취소를 직접 소유하지 않고,
+Turbo가 대상 Frame 교체와 `busy`/`aria-busy` 및 요청 수명주기를 담당한다.
+실제 느린 이전 응답이 최신 미리보기를 덮지 않는 동작을 브라우저 회귀 검사로 확인했다.
+
+비용도 있다. 외부 폼, 고유 Frame ID, CSRF 헤더 연결, 실패 안내 이벤트가 필요하다.
+기존 이슈·게시글 JS가 모든 폼에 붙이던 저장 검증/초안 삭제를 저장 폼으로 한정해야 했다.
+따라서 **단일 미리보기만 놓고 더 짧거나 빠르다고 주장하지 않는다**.
+채택 이유는 기존 Turbo 화면 갱신 방식과의 일관성이지, SSR 자체의 이득이나 검증하지 않은 성능 향상이 아니다.
+
+### 확인한 범위
+
+- clean bootJar, vue-tsc, frontend 검사 7건, preview 권한/입력 경계 검사 2건 통과.
+- Chromium 회귀 검사 2건: 제목 없이 preview, 초안 보존, 네트워크 실패 후 복구,
+  순서가 뒤집힌 응답에서 최신 결과 보존.
+- 실제 H2 서버에서 같은 718자 샘플을 저장하고 JS 비활성 상태의 SSR 본문을 확인했다.
+  Mermaid·Kotlin 강조, 사용자/이슈 자동완성, 실제 파일 업로드·삭제·이미지/파일 paste·drop,
+  HTML 표 paste를 확인했다.
+- 일반 Kotest 실행은 관련 없는 PostgreSQL 통합 Spec의 Docker 초기화 때문에 실패했다.
+  preview Spec class 파일만 포함한 임시 Gradle init 설정으로 해당 경계 검사를 실행했다.
+  전체 회귀 검사나 1.16 전 화면의 pixel parity를 주장하지 않는다.

@@ -416,7 +416,7 @@
             }
 
             document.querySelectorAll("form.review-form").forEach(function(form){
-                var container = form.querySelector(".upload-wrap");
+                var container = form.querySelector("yona-attachments, .upload-wrap");
                 var textarea = form.querySelector("textarea");
                 var uploader = yona.Files.getUploader(container, textarea);
 

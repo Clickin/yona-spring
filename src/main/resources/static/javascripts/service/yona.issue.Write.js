@@ -73,9 +73,7 @@
          * attach event handler
          */
         function _attachEvent(){
-            document.querySelectorAll("form").forEach(function(form){
-                form.addEventListener("submit", _onSubmitForm);
-            });
+            htElement.welInputTitle.form.addEventListener("submit", _onSubmitForm);
 
             // 원본 jQuery 코드는 .on("click", htElement.welMilestoneRefresh, _onReloadMilestone)로
             // 델리게이트 셀렉터 자리에 문자열이 아닌 jQuery 객체를 넘겼다 - jQuery의 .on() 오버로드

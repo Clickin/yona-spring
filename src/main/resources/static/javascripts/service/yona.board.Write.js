@@ -48,7 +48,6 @@
             htElement.welTplFileItem = document.getElementById('tplAttachedFile');
 
             // Validate
-            htElement.welForms = document.querySelectorAll("form");
             htElement.welInputTitle = document.querySelector("input#title");
         }
 
@@ -56,7 +55,7 @@
          * attach event handler : for validate form
          */
         function _attachEvent(){
-            htElement.welForms.forEach(function(form){ form.addEventListener("submit", _onSubmitForm); });
+            htElement.welInputTitle.form.addEventListener("submit", _onSubmitForm);
 
             temporarySaveHandler(htElement.welTextarea);
 

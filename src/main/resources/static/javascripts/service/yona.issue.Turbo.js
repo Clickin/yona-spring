@@ -1,7 +1,7 @@
 import * as Turbo from '/javascripts/turbo/turbo.es2017-esm.js';
 
 Turbo.session.drive = false;
-Turbo.config.forms.mode = 'off';
+Turbo.config.forms.mode = 'optin';
 
 let detailRoot;
 let disposeDetail;

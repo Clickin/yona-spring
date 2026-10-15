@@ -96,7 +96,11 @@ yona.Attachments = function(htOptions) {
         if(elContainer && elContainer.tagName.toLowerCase() === "yona-attachments"){
             htVar.bIsVueAttachments = true;
             elContainer._isYonaAttachment = true;
-            elContainer.configure({"textarea": _toElement(htOptions.elTextarea)});
+            elContainer.configure({
+                "textarea": _toElement(htOptions.elTextarea),
+                "resourceType": htOptions.sResourceType,
+                "resourceId": htOptions.sResourceId
+            });
             return;
         }
 
@@ -481,20 +485,9 @@ yona.Attachments = function(htOptions) {
        });
     }
 
-    /**
-     * <yona-markdown-editor>가 감싼 textarea는 CodeMirror -> textarea 단방향 동기화만
-     * 있어서, raw textarea.value를 직접 바꿔도 CodeMirror는 이를 인지하지 못한다 - 포커스가
-     * 빠지는 순간 CodeMirror가 자신의 버퍼로 값을 되돌려써 방금 삽입한 링크가 사라진다
-     * (Playwright로 재현). textarea.closest('yona-markdown-editor, yona-markdown-editor-vue')로
-     * 에디터를 찾아 value를 강제로 다시 밀어넣는다. 두 커스텀 엘리먼트 모두 같은 value
-     * getter/setter 계약을 제공하며, 순수 textarea 화면에서는 closest()가 null이라 조용히
-     * 스킵된다.
-     */
+    // Programmatic textarea edits must notify autocomplete and draft saving.
     function _syncMarkdownEditor(welTextarea){
-        var elEditor = welTextarea ? welTextarea.closest("yona-markdown-editor, yona-markdown-editor-vue") : null;
-        if(elEditor){
-            elEditor.value = welTextarea.value;
-        }
+        welTextarea.dispatchEvent(new Event("input", {bubbles: true}));
     }
 
     /**

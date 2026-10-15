@@ -581,7 +581,6 @@
             timelineList.innerHTML = timelineHTML;
 
             _initFileDownloader(timelineList.querySelectorAll(".attachments"));
-            yona.Markdown.enableMarkdown(timelineList.querySelectorAll("[markdown]"));
             // 새로 렌더링된(아직 Common.js의 전역 DOMContentLoaded auto-init을 거치지 않은)
             // 타임라인 조각 안의 [data-request-method] 엘리먼트(삭제 버튼)를 개별 초기화한다 -
             // $yona.requestAs는 idempotent라 이미 초기화된 엘리먼트를 다시 넘겨도 안전하다.

@@ -1,11 +1,26 @@
 {
   "name": "yona-frontend",
   "private": true,
-  "engines": {
-    "node": ">=22",
-    "npm": ">=10"
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "node --test test/*.test.mjs"
   },
+  "engines": {"node": ">=22", "pnpm": ">=10"},
   "dependencies": {
-    "@hotwired/turbo": "8.0.23"
-  }
+    "@github/text-expander-element": "2.9.4",
+    "@hotwired/stimulus": "3.2.2",
+    "@hotwired/turbo": "8.0.23",
+    "dompurify": "3.4.16",
+    "highlight.js": "11.12.0",
+    "mermaid": "12.0.0",
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "6.0.3",
+    "unplugin-vue": "8.0.0",
+    "vue-tsc": "3.3.12"
+  },
+  "packageManager": "pnpm@10.28.2"
 }
