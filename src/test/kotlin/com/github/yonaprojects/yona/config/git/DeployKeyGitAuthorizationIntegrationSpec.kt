@@ -72,7 +72,7 @@ class DeployKeyGitAuthorizationIntegrationSpec @Autowired constructor(
                 )
 
             listOf("GIT", "SVN", "SUBVERSION", "HG", "MERCURIAL").forEachIndexed { index, vcs ->
-                it("repository access validation case ${index + 1}") {
+                it("scopes deploy keys to the $vcs project wiki and rejects non-Git code repository access") {
                     val project = projectRepository.save(Project(owner = "owner", name = "repo", vcs = vcs, projectScope = ProjectScope.PRIVATE))
                     projectRepository.save(Project(owner = "owner", name = "other", vcs = vcs, projectScope = ProjectScope.PRIVATE))
                     val readOnly = deployKeyService.create(project, "reader", TEST_PUBLIC_KEY_1, readOnly = true)

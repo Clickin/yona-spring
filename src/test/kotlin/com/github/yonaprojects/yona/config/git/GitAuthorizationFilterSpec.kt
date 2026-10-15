@@ -72,7 +72,7 @@ class GitAuthorizationFilterSpec : DescribeSpec({
     }
 
     describe("GitAuthorizationFilter") {
-        it("repository access validation case 01") {
+        it("returns 404 for code repository Git and LFS requests on SVN or Mercurial projects before authorization") {
             val variants = listOf("SVN", "subversion", "sVn", "SUBVERSION", "HG", "mercurial", "hG", "MERCURIAL")
             val requests = listOf(
                 "GET" to "/git/owner/repo.git/info/refs",
@@ -103,7 +103,7 @@ class GitAuthorizationFilterSpec : DescribeSpec({
             verify(exactly = 0) { projectService.isMember(any(), any()) }
         }
 
-        it("repository access validation case 02") {
+        it("keeps code repository access for null, Git and unrecognized VCS values") {
             listOf(null, "GIT", "git", "gIt", "", "legacy", " svn ", "MERCURİAL", "SUBVERSİON").forEach { vcs ->
                 val project = Project(id = 1L, owner = "owner", name = "repo", vcs = vcs, projectScope = ProjectScope.PUBLIC)
                 every { projectService.findByOwnerAndName("owner", "repo") } returns project
@@ -125,7 +125,7 @@ class GitAuthorizationFilterSpec : DescribeSpec({
             }
         }
 
-        it("repository access validation case 03") {
+        it("keeps wiki repository access for projects of every VCS") {
             listOf("GIT", "SVN", "SUBVERSION", "HG", "MERCURIAL").forEach { vcs ->
                 val project = Project(id = 1L, owner = "owner", name = "repo", vcs = vcs, projectScope = ProjectScope.PUBLIC)
                 every { projectService.findByOwnerAndName("owner", "repo") } returns project
@@ -143,7 +143,7 @@ class GitAuthorizationFilterSpec : DescribeSpec({
             }
         }
 
-        it("repository access validation case 04") {
+        it("keeps wiki access control for outsiders and guests on projects of every VCS") {
             every { projectService.isMember(1L, "outsider") } returns false
             every { userRepository.findByLoginId("outsider") } returns Optional.of(User(id = 2L, loginId = "outsider"))
             every { userRepository.findByLoginId("guest") } returns Optional.of(User(id = 3L, loginId = "guest", isGuest = true))

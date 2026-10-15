@@ -115,9 +115,9 @@ class GitSmartHttpProtocolIntegrationSpec @Autowired constructor(
             lfsBaseDirHolder.deleteRecursively()
         }
 
-        describe("repository access validation") {
+        describe("Git HTTP transport by project VCS") {
             listOf("GIT", "SVN", "SUBVERSION", "HG", "MERCURIAL").forEachIndexed { index, vcs ->
-                it("case ${index + 1}") {
+                it("lazily creates, pushes and serves the wiki repository of a $vcs project") {
                     val owner = userRepository.save(User(
                         loginId = "access-owner-$index", email = "access-owner-$index@example.com",
                         password = hashPassword("pass123", "saltsalt"), passwordSalt = "saltsalt"
@@ -164,7 +164,7 @@ class GitSmartHttpProtocolIntegrationSpec @Autowired constructor(
             }
 
             listOf("SVN", "SUBVERSION", "HG", "MERCURIAL").forEachIndexed { index, vcs ->
-                it("case ${index + 6}") {
+                it("rejects clone, push and LFS on the code repository of a project changed to $vcs") {
                     val owner = userRepository.save(User(
                         loginId = "access-reader-$index", email = "access-reader-$index@example.com",
                         password = hashPassword("pass123", "saltsalt"), passwordSalt = "saltsalt"
